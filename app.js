@@ -31,6 +31,7 @@ const STARTER_PLAYLISTS=[
 ];
 let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),syncing=false;
 let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,currentReviewNote=null;
+let youtubeCatalogMeta={generatedAt:null,lastLoadedAt:null,error:null};
 const NOTE_TYPE_LABELS={literature:"Fichamento",permanent:"Permanente",concept:"Conceito",question:"Pergunta",insight:"Insight",quote:"Citação",reference:"Referência",next_action:"Ação",quick:"Rápida",session:"Sessão"};
 const $=id=>document.getElementById(id);
 
@@ -58,8 +59,10 @@ function normalize(s){
   s.starterContentVersion=Math.max(0,Number(s.starterContentVersion)||0);
   s.activeTrack=s.tracks.some(t=>t?.id===s.activeTrack)?s.activeTrack:(s.tracks[0]?.id||null);
   s.activePlaylist=s.playlists.some(p=>p?.id===s.activePlaylist)?s.activePlaylist:(s.playlists[0]?.id||null);
+  s.playlists.forEach(p=>{p.youtubePlaylistId=p.youtubePlaylistId||youtubePlaylistIdFromUrl(p.url)||"";p.catalogGeneratedAt=p.catalogGeneratedAt||null});
   s.tracks.forEach(t=>{if(t?.id&&!Object.prototype.hasOwnProperty.call(s.weeklyProgress,t.id)){s.weeklyProgress[t.id]=0}});
   s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=Array.isArray(i.modules)?i.modules:[];i.notes=typeof i.notes==="string"?i.notes:"";i.description=typeof i.description==="string"?i.description:"";i.catalogOrder=Number(i.catalogOrder)||0});
+  s.youtubeQueue.forEach(v=>{v.catalogManaged=v.catalogManaged!==false;v.activeInCatalog=v.activeInCatalog!==false;v.archivedAt=v.archivedAt||null});
   return s
 }
 function migrate(old){
@@ -217,6 +220,185 @@ function statusFromProgress(p){return p>=100?"concluido":p>0?"em_andamento":"nao
 function getDailyYT(){const k=dayKey();if(!state.youtubeDaily[k])state.youtubeDaily[k]={minutes:0,count:0};return state.youtubeDaily[k]}
 
 function isLocalBackend(){return ["localhost","127.0.0.1",""].includes(location.hostname)}
+function appBaseUrl(){
+  const fallback=`${location.origin||""}${location.pathname||"/"}`;
+  return document.baseURI||location.href||fallback
+}
+function youtubePlaylistIdFromUrl(raw){
+  if(!raw){
+    return ""
+  }
+  try{
+    const url=new URL(raw,appBaseUrl());
+    return (url.searchParams.get("list")||"").trim()
+  }catch{
+    return ""
+  }
+}
+function playlistCatalogId(playlist){
+  if(!playlist){
+    return ""
+  }
+  return String(playlist.youtubePlaylistId||youtubePlaylistIdFromUrl(playlist.url)||"").trim()
+}
+function publishedCatalogUrl(){
+  return new URL("./data/youtube/catalog.json",appBaseUrl()).toString()
+}
+function playlistPendingCount(playlist){
+  return state.youtubeQueue.filter(v=>v.playlistId===playlist?.id&&v.activeInCatalog!==false&&itemProgress(v)<100).length
+}
+function playlistArchivedCount(playlist){
+  return state.youtubeQueue.filter(v=>v.playlistId===playlist?.id&&v.activeInCatalog===false).length
+}
+function formatCatalogStamp(value){
+  if(!value){
+    return ""
+  }
+  const date=new Date(value);
+  if(Number.isNaN(date.getTime())){
+    return ""
+  }
+  return date.toLocaleString("pt-BR")
+}
+function catalogSyncNote(playlist){
+  const stamp=formatCatalogStamp(playlist?.catalogGeneratedAt||youtubeCatalogMeta.generatedAt);
+  if(!stamp){
+    return ""
+  }
+  return `Catálogo público atualizado em ${stamp}`
+}
+function normalizeCatalogVideo(entry,pos){
+  if(!entry||typeof entry!=="object"){
+    return null
+  }
+  const id=String(entry.id||entry.videoId||youtubeVideoId(entry.url)||"").trim();
+  const title=String(entry.title||"").trim();
+  if(!id||!title){
+    return null
+  }
+  const url=String(entry.url||`https://www.youtube.com/watch?v=${id}`).trim();
+  return {
+    id,
+    title,
+    url,
+    channel:String(entry.channel||"YouTube").trim()||"YouTube",
+    duration:Number(entry.duration)||0,
+    position:Number(entry.position)||pos+1,
+    thumbnail:String(entry.thumbnail||"").trim()
+  }
+}
+function normalizePublishedCatalog(data){
+  if(!data||typeof data!=="object"||!Array.isArray(data.playlists)){
+    throw new Error("Catálogo público inválido.")
+  }
+  const playlists=data.playlists.map((playlist,pos)=>{
+    if(!playlist||typeof playlist!=="object"){
+      return null
+    }
+    const id=String(playlist.id||"").trim();
+    if(!id){
+      throw new Error(`Playlist inválida na posição ${pos+1}.`)
+    }
+    const videos=Array.isArray(playlist.videos)?playlist.videos.map((entry,index)=>normalizeCatalogVideo(entry,index)).filter(Boolean):[];
+    return {
+      id,
+      name:String(playlist.name||playlist.title||`Playlist ${pos+1}`).trim()||`Playlist ${pos+1}`,
+      url:String(playlist.url||`https://www.youtube.com/playlist?list=${id}`).trim(),
+      videos
+    }
+  }).filter(Boolean);
+  return {
+    version:Number(data.version)||1,
+    generatedAt:data.generatedAt?String(data.generatedAt):null,
+    playlists
+  }
+}
+async function fetchPublishedCatalog(force=false){
+  const response=await fetch(publishedCatalogUrl(),{cache:force?"no-store":"default"});
+  const text=await response.text();
+  if(!response.ok){
+    throw new Error(`Catálogo público indisponível (${response.status}).`)
+  }
+  let data={};
+  try{
+    data=text?JSON.parse(text):{}
+  }catch{
+    throw new Error("Catálogo público retornou JSON inválido.")
+  }
+  const catalog=normalizePublishedCatalog(data);
+  youtubeCatalogMeta={generatedAt:catalog.generatedAt||null,lastLoadedAt:new Date().toISOString(),error:null};
+  return catalog
+}
+function catalogPlaylistStateId(catalogPlaylist){
+  const slug=String(catalogPlaylist?.id||"playlist").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"playlist";
+  return `playlist-${slug}`
+}
+function ensurePlaylistFromCatalog(catalogPlaylist){
+  const catalogId=String(catalogPlaylist.id||"").trim();
+  let local=state.playlists.find(p=>playlistCatalogId(p)===catalogId);
+  if(local){
+    if(!local.url){
+      local.url=catalogPlaylist.url
+    }
+    if(!local.name){
+      local.name=catalogPlaylist.name
+    }
+    local.youtubePlaylistId=catalogId;
+    return local
+  }
+  local={id:catalogPlaylistStateId(catalogPlaylist),name:catalogPlaylist.name,url:catalogPlaylist.url,youtubePlaylistId:catalogId,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null};
+  state.playlists.push(local);
+  if(!state.activePlaylist){
+    state.activePlaylist=local.id
+  }
+  return local
+}
+function catalogPlaylistToSyncData(playlist,catalog){
+  return {
+    title:playlist.name,
+    playlistId:playlist.id,
+    generatedAt:catalog.generatedAt||null,
+    items:playlist.videos.map(video=>({
+      videoId:video.id,
+      title:video.title,
+      url:video.url,
+      channel:video.channel,
+      thumbnail:video.thumbnail,
+      durationSeconds:Number(video.duration)||0,
+      position:Number(video.position)||0
+    }))
+  }
+}
+function applyPublishedCatalog(catalog,{targetPlaylist=null}={}){
+  if(targetPlaylist){
+    const catalogId=playlistCatalogId(targetPlaylist);
+    if(!catalogId){
+      throw new Error("Use uma URL de playlist do YouTube com o parâmetro list.")
+    }
+    const match=catalog.playlists.find(playlist=>playlist.id===catalogId);
+    if(!match){
+      throw new Error("Esta playlist ainda não está publicada no catálogo público.")
+    }
+    mergePlaylistData(catalogPlaylistToSyncData(match,catalog),targetPlaylist);
+    return 1
+  }
+  let merged=0;
+  for(const playlist of catalog.playlists){
+    const local=ensurePlaylistFromCatalog(playlist);
+    mergePlaylistData(catalogPlaylistToSyncData(playlist,catalog),local);
+    merged+=1
+  }
+  return merged
+}
+async function refreshPublishedCatalog(force=false){
+  const catalog=await fetchPublishedCatalog(force);
+  const merged=applyPublishedCatalog(catalog);
+  if(!merged){
+    throw new Error("Nenhuma playlist publicada foi encontrada no catálogo.")
+  }
+  await save(false,"youtube-catalog");
+  return merged
+}
 async function api(path,opts={}){
   const method=(opts.method||"GET").toUpperCase();
   if(window.ArcanaStorage?.ready&&ArcanaStorage.canHandle(path,method)){
@@ -347,7 +529,7 @@ async function saveTrack(e){e.preventDefault();const f=e.currentTarget,fields=f.
 function deleteTrack(){const id=$("trackForm").elements.id.value;if(!id||state.tracks.length<=1){return}if(!confirm("Excluir esta trilha e seus itens?")){return}state.tracks=state.tracks.filter(t=>t.id!==id);state.items=state.items.filter(i=>i.track!==id);state.activeTrack=state.tracks[0].id;save();$("trackDialog").close()}
 
 function renderYoutube(){
-  $("playlistTabs").innerHTML=state.playlists.map(p=>`<button class="playlist-tab ${p.id===state.activePlaylist?"active":""}" onclick="setPlaylist('${p.id}')"><strong>${esc(p.name)}</strong><span>${state.youtubeQueue.filter(v=>v.playlistId===p.id&&itemProgress(v)<100).length} pendentes</span></button>`).join("");
+  $("playlistTabs").innerHTML=state.playlists.map(p=>`<button class="playlist-tab ${p.id===state.activePlaylist?"active":""}" onclick="setPlaylist('${p.id}')"><strong>${esc(p.name)}</strong><span>${playlistPendingCount(p)} pendentes</span></button>`).join("");
   const p=activePlaylist();$("activePlaylistName").textContent=p?.name||"Sem playlist";
   const status=p?.lastSyncError?`Erro: ${p.lastSyncError}`:p?.lastSyncAt?`Sincronizada em ${new Date(p.lastSyncAt).toLocaleString("pt-BR")}`:"Ainda não sincronizada";
   $("playlistSyncStatus").className=`sync-status ${p?.lastSyncError?"error":p?.lastSyncAt?"ok":""}`;$("playlistSyncStatus").textContent=syncing?"Sincronizando…":status;
@@ -356,12 +538,26 @@ function renderYoutube(){
     syncBtn.disabled=syncing;
     syncBtn.textContent=syncing?"Sincronizando...":"↻ Sincronizar"
   }
-  $("activePlaylistPanel").innerHTML=p?`<div class="hint">${esc(p.url)}</div>`:"";
+  const archivedCount=playlistArchivedCount(p);
+  const panelLines=[];
+  if(p?.url){
+    panelLines.push(`<div class="hint">${esc(p.url)}</div>`)
+  }
+  if(p){
+    panelLines.push(`<div class="hint">${playlistPendingCount(p)} vídeos ativos na fila${archivedCount?` · ${archivedCount} preservados no histórico local`:""}</div>`)
+  }
+  const catalogNote=catalogSyncNote(p);
+  if(catalogNote){
+    panelLines.push(`<div class="hint">${esc(catalogNote)}</div>`)
+  }else if(youtubeCatalogMeta.error&&!isLocalBackend()){
+    panelLines.push(`<div class="hint">Catálogo público indisponível agora: ${esc(youtubeCatalogMeta.error)}</div>`)
+  }
+  $("activePlaylistPanel").innerHTML=p?panelLines.join(""):"";
   const d=getDailyYT(),s=state.youtubeSettings;$("youtubeBudget").innerHTML=`<div class="budget-big">${budgetText()}</div><p class="hint">${limitReached()?"Limite atingido por hoje.":"Você ainda pode assistir dentro da cota."}</p>`;
-  const today=todaysYoutube();$("dailyVideos").innerHTML=limitReached()&&s.hideAfterLimit?`<div class="hint">✦ Cota concluída por hoje.</div>`:today.length?today.map((v,n)=>videoRow(v,n,true)).join(""):`<div class="hint">Nenhum vídeo liberado. Sincronize a playlist.</div>`;
+  const today=todaysYoutube();$("dailyVideos").innerHTML=limitReached()&&s.hideAfterLimit?`<div class="hint">✦ Cota concluída por hoje.</div>`:today.length?today.map((v,n)=>videoRow(v,n,true)).join(""):`<div class="hint">${p?.lastSyncError?esc(p.lastSyncError):"Nenhum vídeo liberado agora."}</div>`;
   const queue=playlistQueue();$("youtubeQueue").innerHTML=queue.length?queue.slice(0,50).map((v,n)=>videoRow(v,n,false)).join(""):`<div class="hint">Fila vazia.</div>`
 }
-function playlistQueue(){const p=activePlaylist();return state.youtubeQueue.filter(v=>v.playlistId===p?.id&&itemProgress(v)<100).sort((a,b)=>(a.position||0)-(b.position||0))}
+function playlistQueue(){const p=activePlaylist();return state.youtubeQueue.filter(v=>v.playlistId===p?.id&&v.activeInCatalog!==false&&itemProgress(v)<100).sort((a,b)=>(a.position||0)-(b.position||0))}
 function limitReached(){const d=getDailyYT(),s=state.youtubeSettings;if(s.mode==="none")return false;if(s.mode==="minutes")return d.minutes>=s.minutes;if(s.mode==="count")return d.count>=s.count;return d.minutes>=s.minutes||d.count>=s.count}
 function budgetText(){const d=getDailyYT(),s=state.youtubeSettings;if(s.mode==="none")return `${d.count} vídeos · ${fmtMin(d.minutes)}`;if(s.mode==="minutes")return `${d.minutes}/${s.minutes} min`;if(s.mode==="count")return `${d.count}/${s.count} vídeos`;return `${d.minutes}/${s.minutes} min · ${d.count}/${s.count} vídeos`}
 function todaysYoutube(){
@@ -398,16 +594,28 @@ function mergePlaylistData(data,p){
   if(!Array.isArray(data.items)){
     throw new Error("Resposta sem lista de vídeos.")
   }
-  const old=new Map(state.youtubeQueue.filter(v=>v.playlistId===p.id).map(v=>[v.videoId||v.url,v]));
+  const existing=state.youtubeQueue.filter(v=>v.playlistId===p.id);
+  const old=new Map(existing.map(v=>[v.videoId||v.url,v]));
   const fresh=data.items.filter(v=>v&&v.title&&(v.videoId||v.url)).map((v,pos)=>{
     const videoId=v.videoId||youtubeVideoId(v.url)||v.id||v.url;
     const o=old.get(videoId)||old.get(v.url);
     const mins=v.durationSeconds?Math.max(1,Math.round(v.durationSeconds/60)):v.estimatedMinutes||o?.estimatedMinutes;
-    return {id:o?.id||crypto.randomUUID(),videoId,playlistId:p.id,youtubePlaylistId:data.playlistId||o?.youtubePlaylistId||"",kind:"youtube",title:v.title,url:v.url||`https://www.youtube.com/watch?v=${videoId}`,channel:v.channel||o?.channel||"YouTube",thumbnail:v.thumbnail||o?.thumbnail||"",estimatedMinutes:mins,progress:o?.progress??0,status:o?.status||statusFromProgress(o?.progress||0),notes:o?.notes||"",important:o?.important??true,urgent:o?.urgent??false,track:o?.track||null,createdAt:o?.createdAt||new Date().toISOString(),position:pos}
+    const position=Math.max(0,(Number(v.position)||pos+1)-1);
+    return {id:o?.id||crypto.randomUUID(),videoId,playlistId:p.id,youtubePlaylistId:data.playlistId||o?.youtubePlaylistId||"",kind:"youtube",title:v.title,url:v.url||`https://www.youtube.com/watch?v=${videoId}`,channel:v.channel||o?.channel||"YouTube",thumbnail:v.thumbnail||o?.thumbnail||"",estimatedMinutes:mins,progress:o?.progress??0,status:o?.status||statusFromProgress(o?.progress||0),notes:o?.notes||"",important:o?.important??true,urgent:o?.urgent??false,track:o?.track||null,createdAt:o?.createdAt||new Date().toISOString(),position,catalogManaged:true,activeInCatalog:true,archivedAt:null}
   });
-  state.youtubeQueue=state.youtubeQueue.filter(v=>v.playlistId!==p.id).concat(fresh);
+  const activeIds=new Set(fresh.map(v=>v.videoId||v.url));
+  let carryPosition=fresh.length;
+  const retained=existing.filter(v=>!activeIds.has(v.videoId||v.url)).map(v=>{
+    if(v.catalogManaged===false){
+      return {...v,activeInCatalog:v.activeInCatalog!==false,position:Number(v.position)>=0?Number(v.position):carryPosition++}
+    }
+    return {...v,activeInCatalog:false,archivedAt:v.archivedAt||new Date().toISOString(),position:Number(v.position)>=0?Number(v.position):carryPosition++}
+  });
+  state.youtubeQueue=state.youtubeQueue.filter(v=>v.playlistId!==p.id).concat(fresh,retained);
   p.name=data.title||p.name;
-  p.youtubePlaylistId=data.playlistId||p.youtubePlaylistId||"";
+  p.url=p.url||`https://www.youtube.com/playlist?list=${data.playlistId||playlistCatalogId(p)}`;
+  p.youtubePlaylistId=data.playlistId||p.youtubePlaylistId||playlistCatalogId(p)||"";
+  p.catalogGeneratedAt=data.generatedAt||p.catalogGeneratedAt||youtubeCatalogMeta.generatedAt||null;
   p.lastSyncAt=new Date().toISOString();
   p.lastSyncError=null
 }
@@ -422,7 +630,7 @@ function addYoutubeUrlToQueue(url,title="YouTube"){
   const p=activePlaylist(),videoId=youtubeVideoId(url)||url;
   if(!p){return}
   if(state.youtubeQueue.some(v=>v.playlistId===p.id&&(v.videoId===videoId||v.url===url))){return}
-  state.youtubeQueue.push({id:crypto.randomUUID(),videoId,playlistId:p.id,kind:"youtube",title,url,channel:"YouTube",thumbnail:"",estimatedMinutes:0,progress:0,status:"nao_iniciado",notes:"",important:true,urgent:false,track:null,createdAt:new Date().toISOString(),position:state.youtubeQueue.filter(v=>v.playlistId===p.id).length})
+  state.youtubeQueue.push({id:crypto.randomUUID(),videoId,playlistId:p.id,kind:"youtube",title,url,channel:"YouTube",thumbnail:"",estimatedMinutes:0,progress:0,status:"nao_iniciado",notes:"",important:true,urgent:false,track:null,createdAt:new Date().toISOString(),position:state.youtubeQueue.filter(v=>v.playlistId===p.id).length,catalogManaged:false,activeInCatalog:true,archivedAt:null})
 }
 function exportPlaylistFile(){
   const p=activePlaylist();
@@ -441,18 +649,23 @@ async function syncPlaylist(){
     return
   }
   if(!p?.url){
-    return alert("Defina a URL.")
-  }
-  if(!isLocalBackend()){
-    p.lastSyncError="A sincronização automática precisa do Arcana Local com yt-dlp. No GitHub Pages, importe um JSON de playlist ou capture links individuais.";
+    p.lastSyncError="Defina a URL.";
     save(false);
     renderAll();
-    return alert(p.lastSyncError)
+    return
   }
   syncing=true;renderYoutube();
-  try{const r=await fetch(`/api/playlist?url=${encodeURIComponent(p.url)}`),text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{throw new Error(`Resposta inválida do servidor (${r.status}).`)}if(!r.ok){throw new Error(data.error||`Falha (${r.status})`)}
-    mergePlaylistData(data,p);save(false)
-  }catch(e){p.lastSyncError=e.message||String(e);save(false)}finally{syncing=false;renderAll()}
+  try{
+    if(isLocalBackend()){
+      const r=await fetch(`/api/playlist?url=${encodeURIComponent(p.url)}`),text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{throw new Error(`Resposta inválida do servidor (${r.status}).`)}if(!r.ok){throw new Error(data.error||`Falha (${r.status})`)}
+      mergePlaylistData(data,p);
+      await save(false,"youtube-local-sync")
+    }else{
+      const catalog=await fetchPublishedCatalog(true);
+      applyPublishedCatalog(catalog,{targetPlaylist:p});
+      await save(false,"youtube-catalog-sync")
+    }
+  }catch(e){p.lastSyncError=e.message||String(e);await save(false,"youtube-sync-error")}finally{syncing=false;renderAll()}
 }
 
 function renderLibrary(){
@@ -689,6 +902,14 @@ async function initApp(){
   }
   renderAll();
   await loadVaultNotes();
+  if(!isLocalBackend()){
+    try{
+      await refreshPublishedCatalog(false);
+    }catch(e){
+      youtubeCatalogMeta.error=e.message||String(e);
+    }
+    renderAll()
+  }
   setTimeout(()=>{if(activePlaylist()?.url&&!activePlaylist()?.lastSyncAt&&isLocalBackend()){syncPlaylist()}if(!state.lastAutoBackup){autoBackup("initial")}},700)
 }
 

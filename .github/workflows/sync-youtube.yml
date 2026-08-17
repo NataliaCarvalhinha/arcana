@@ -1,0 +1,48 @@
+name: Sync YouTube Catalog
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "data/youtube/playlists.json"
+      - "scripts/sync-youtube.py"
+      - ".github/workflows/sync-youtube.yml"
+      - "requirements.txt"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install yt-dlp
+        run: python -m pip install --upgrade pip yt-dlp
+
+      - name: Generate public catalog
+        run: python scripts/sync-youtube.py
+
+      - name: Commit catalog changes
+        run: |
+          if git diff --quiet -- data/youtube/catalog.json; then
+            echo "No catalog changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/youtube/catalog.json
+          git commit -m "Update YouTube catalog"
+          git push

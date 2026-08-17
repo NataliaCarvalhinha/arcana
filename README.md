@@ -40,11 +40,18 @@ When running through `server.py`, Arcana attempts a one-time bridge from the old
 
 ## PWA And Offline
 
-The service worker caches only the static app shell. It does not cache YouTube media or external resources. IndexedDB data remains local to the browser/profile/device.
+The service worker caches the static app shell and keeps the latest successful `data/youtube/catalog.json` response available offline. It does not cache YouTube media or other external resources. IndexedDB data remains local to the browser/profile/device.
 
 ## YouTube
 
-Automatic playlist sync uses `yt-dlp` and therefore requires Arcana Local:
+Arcana supports two playlist sync modes:
+
+- `Arcana Local`: direct `yt-dlp` sync through `server.py`
+- `GitHub Pages`: a public static catalog generated ahead of time by GitHub Actions
+
+### Arcana Local
+
+Automatic playlist sync through the local backend still works with `yt-dlp`:
 
 ```bash
 ./start.sh
@@ -56,7 +63,29 @@ Then open:
 http://127.0.0.1:8765
 ```
 
-On GitHub Pages, browsers cannot run `yt-dlp`. Static alternatives:
+### GitHub Pages Catalog Sync
+
+Browsers on GitHub Pages still cannot run `yt-dlp` directly, so Arcana reads a pre-generated public catalog from `data/youtube/catalog.json`.
+
+Configuration lives in:
+
+- `data/youtube/playlists.json`
+- `scripts/sync-youtube.py`
+- `.github/workflows/sync-youtube.yml`
+
+The workflow runs daily and can also be triggered manually. It uses `yt-dlp` metadata only, writes public playlist/video metadata to `catalog.json`, and commits that file only when it changes.
+
+Important:
+
+- `data/youtube/catalog.json` is public on GitHub Pages
+- keep only public playlist metadata there
+- do not place notes, progress, exports, or private vault data under `data/youtube/`
+
+Arcana merges catalog updates into IndexedDB by stable video id, so local progress, notes, and history survive later catalog refreshes.
+
+### Manual Fallbacks
+
+You can still:
 
 - use `Exportar JSON` in the YouTube view to save the active queue;
 - import a playlist JSON exported from Arcana Local or another compatible `yt-dlp` JSON flow;
@@ -81,6 +110,6 @@ https://<your-user>.github.io/<repository-name>/
 
 ## Privacy
 
-The starter app ships empty. Do not commit personal exports, local vault data, cookies, tokens, `.env` files, `data/`, or `backups/`. `.gitignore` is configured for those paths.
+The starter app ships empty. Do not commit personal exports, local vault data, cookies, tokens, `.env` files, or `backups/`. The `data/youtube/` folder is now intended for public playlist catalog files only; keep private data elsewhere.
 
 GitHub Pages publishes the app code publicly, not your browser IndexedDB data. Any backup ZIP/JSON you commit or upload elsewhere can contain private notes.
