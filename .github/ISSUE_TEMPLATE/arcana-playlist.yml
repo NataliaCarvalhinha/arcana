@@ -1,0 +1,41 @@
+name: Arcana Playlist
+description: Registre uma playlist publica do YouTube no catalogo publico do Arcana.
+title: "[Arcana Playlist] "
+labels:
+  - arcana-playlist
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use este formulario para registrar uma playlist publica do YouTube no catalogo publico do Arcana.
+        Nao inclua dados privados, credenciais ou links que nao sejam publicos.
+  - type: input
+    id: playlist_name
+    attributes:
+      label: Playlist name
+      description: Nome da playlist como ela deve aparecer no catalogo publico.
+      placeholder: Espiritualidade, religiao e mitologia
+    validations:
+      required: true
+  - type: input
+    id: youtube_playlist_id
+    attributes:
+      label: YouTube playlist ID
+      description: Informe apenas o valor do parametro list.
+      placeholder: PLY2z-v4ZkvrY
+    validations:
+      required: true
+  - type: input
+    id: canonical_url
+    attributes:
+      label: Canonical URL
+      description: URL canonica no formato https://www.youtube.com/playlist?list=<ID>
+      placeholder: https://www.youtube.com/playlist?list=PLY2z-v4ZkvrY
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Observacoes opcionais para esta solicitacao.
+      placeholder: Comentarios opcionais.

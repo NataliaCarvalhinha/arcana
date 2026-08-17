@@ -1,0 +1,323 @@
+name: Register YouTube Playlist
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - labeled
+
+permissions:
+  contents: write
+  issues: write
+  pages: write
+  id-token: write
+
+jobs:
+  register:
+    if: contains(join(github.event.issue.labels.*.name, ','), 'arcana-playlist')
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.deploy_gate.outputs.deploy }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Authorize requester
+        id: authorize
+        run: |
+          if [ "${{ github.event.issue.user.login }}" = "NataliaCarvalhinha" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment unauthorized request
+        if: steps.authorize.outputs.allowed != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: "Playlist registration is restricted to the Arcana repository owner."
+            });
+
+      - name: Parse and validate request
+        if: steps.authorize.outputs.allowed == 'true'
+        id: request
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import parse_qs, urlparse
+
+          body = os.environ.get("ISSUE_BODY") or ""
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+
+          def parse_sections(text: str) -> dict[str, str]:
+              matches = list(re.finditer(r"^###\s+(.*?)\s*$", text, re.MULTILINE))
+              sections: dict[str, str] = {}
+              for index, match in enumerate(matches):
+                  start = match.end()
+                  end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+                  value = text[start:end].strip()
+                  lines = [line.strip() for line in value.splitlines() if line.strip()]
+                  normalized = "\n".join(lines).strip()
+                  if normalized in {"_No response_", "Sem resposta"}:
+                      normalized = ""
+                  sections[match.group(1).strip().lower()] = normalized
+              return sections
+
+          def section_value(sections: dict[str, str], *labels: str) -> str:
+              for label in labels:
+                  value = sections.get(label.lower(), "").strip()
+                  if value:
+                      return value
+              return ""
+
+          sections = parse_sections(body)
+          playlist_name = section_value(sections, "Playlist name", "Nome da playlist")
+          playlist_id = section_value(sections, "YouTube playlist ID", "ID da playlist do YouTube")
+          canonical_url = section_value(sections, "Canonical URL", "URL canônica", "URL canonica")
+
+          errors: list[str] = []
+          if not playlist_name:
+              errors.append("Playlist name is required.")
+          if not playlist_id:
+              errors.append("YouTube playlist ID is required.")
+          if playlist_id:
+              if re.search(r"[\s&?/]", playlist_id):
+                  errors.append("YouTube playlist ID cannot contain whitespace, &, ?, or /.")
+              if not re.fullmatch(r"[A-Za-z0-9_-]{8,}", playlist_id):
+                  errors.append("YouTube playlist ID is invalid.")
+          if not canonical_url:
+              errors.append("Canonical URL is required.")
+
+          if canonical_url:
+              parsed = urlparse(canonical_url)
+              if parsed.scheme != "https" or parsed.netloc != "www.youtube.com" or parsed.path != "/playlist":
+                  errors.append("Canonical URL must use https://www.youtube.com/playlist.")
+              if parsed.fragment:
+                  errors.append("Canonical URL cannot contain a fragment.")
+              query = parse_qs(parsed.query, keep_blank_values=True)
+              if set(query.keys()) != {"list"}:
+                  errors.append("Canonical URL must contain only the list query parameter.")
+              query_id = (query.get("list") or [""])[0].strip()
+              if not query_id:
+                  errors.append("Canonical URL is missing the playlist list parameter.")
+              if query_id and re.search(r"[\s&?/]", query_id):
+                  errors.append("Canonical URL contains an invalid playlist ID.")
+              if playlist_id and query_id and query_id != playlist_id:
+                  errors.append("Canonical URL list parameter must match the submitted playlist ID.")
+              expected = f"https://www.youtube.com/playlist?list={playlist_id}" if playlist_id else ""
+              if expected and canonical_url != expected:
+                  errors.append("Canonical URL must exactly match https://www.youtube.com/playlist?list=<ID>.")
+
+          with output_path.open("a", encoding="utf-8") as handle:
+              if errors:
+                  handle.write("valid=false\n")
+                  handle.write("error_message<<EOF\n")
+                  handle.write("\n".join(errors) + "\n")
+                  handle.write("EOF\n")
+              else:
+                  handle.write("valid=true\n")
+                  handle.write(f"playlist_name={playlist_name}\n")
+                  handle.write(f"playlist_id={playlist_id}\n")
+                  handle.write(f"canonical_url={canonical_url}\n")
+          PY
+
+      - name: Comment validation errors
+        if: steps.authorize.outputs.allowed == 'true' && steps.request.outputs.valid != 'true'
+        uses: actions/github-script@v7
+        env:
+          ARCANA_VALIDATION_ERROR: ${{ steps.request.outputs.error_message }}
+        with:
+          script: |
+            const details = process.env.ARCANA_VALIDATION_ERROR || "Invalid playlist registration request.";
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `Nao consegui registrar esta playlist.\n\n${details}`
+            });
+
+      - name: Update playlist registration
+        if: steps.request.outputs.valid == 'true'
+        id: config
+        env:
+          PLAYLIST_NAME: ${{ steps.request.outputs.playlist_name }}
+          PLAYLIST_ID: ${{ steps.request.outputs.playlist_id }}
+          CANONICAL_URL: ${{ steps.request.outputs.canonical_url }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          config_path = Path("data/youtube/playlists.json")
+          before = config_path.read_text(encoding="utf-8")
+          payload = json.loads(before)
+          playlists = payload.get("playlists")
+          if not isinstance(playlists, list):
+              raise SystemExit("data/youtube/playlists.json must contain a playlists array.")
+
+          target = None
+          for entry in playlists:
+              if isinstance(entry, dict) and str(entry.get("id") or "").strip() == os.environ["PLAYLIST_ID"]:
+                  target = entry
+                  break
+
+          if target is None:
+              playlists.append({
+                  "id": os.environ["PLAYLIST_ID"],
+                  "name": os.environ["PLAYLIST_NAME"],
+                  "url": os.environ["CANONICAL_URL"],
+                  "enabled": True,
+              })
+          else:
+              target["id"] = os.environ["PLAYLIST_ID"]
+              target["name"] = os.environ["PLAYLIST_NAME"]
+              target["url"] = os.environ["CANONICAL_URL"]
+              target["enabled"] = True
+
+          after = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+          config_path.write_text(after, encoding="utf-8")
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as handle:
+              handle.write(f"changed={'true' if before != after else 'false'}\n")
+          PY
+
+      - name: Back up current catalog
+        if: steps.request.outputs.valid == 'true'
+        run: cp data/youtube/catalog.json /tmp/arcana-catalog.json
+
+      - name: Set up Python
+        if: steps.request.outputs.valid == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install yt-dlp
+        if: steps.request.outputs.valid == 'true'
+        run: python -m pip install --upgrade pip yt-dlp
+
+      - name: Generate public catalog
+        if: steps.request.outputs.valid == 'true'
+        id: sync
+        continue-on-error: true
+        run: python scripts/sync-youtube.py
+
+      - name: Restore previous catalog after sync failure
+        if: steps.request.outputs.valid == 'true' && steps.sync.outcome != 'success'
+        run: cp /tmp/arcana-catalog.json data/youtube/catalog.json
+
+      - name: Read generated playlist summary
+        if: steps.request.outputs.valid == 'true' && steps.sync.outcome == 'success'
+        id: catalog
+        env:
+          PLAYLIST_ID: ${{ steps.request.outputs.playlist_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          catalog = json.loads(Path("data/youtube/catalog.json").read_text(encoding="utf-8"))
+          playlist = next((entry for entry in catalog.get("playlists", []) if str(entry.get("id") or "").strip() == os.environ["PLAYLIST_ID"]), None)
+          if playlist is None:
+              raise SystemExit("Registered playlist was not found in data/youtube/catalog.json after sync.")
+          video_count = len(playlist.get("videos") or [])
+          generated_at = str(catalog.get("generatedAt") or "").strip()
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as handle:
+              handle.write(f"video_count={video_count}\n")
+              handle.write(f"generated_at={generated_at}\n")
+          PY
+
+      - name: Commit repository changes
+        if: steps.request.outputs.valid == 'true'
+        id: commit
+        run: |
+          if git diff --quiet -- data/youtube/playlists.json data/youtube/catalog.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/youtube/playlists.json data/youtube/catalog.json
+          git commit -m "Register YouTube playlist ${{ steps.request.outputs.playlist_id }}"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Decide deployment
+        if: steps.request.outputs.valid == 'true'
+        id: deploy_gate
+        run: |
+          if [ "${{ steps.sync.outcome }}" = "success" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment sync failure
+        if: steps.request.outputs.valid == 'true' && steps.sync.outcome != 'success'
+        uses: actions/github-script@v7
+        env:
+          PLAYLIST_NAME: ${{ steps.request.outputs.playlist_name }}
+          PLAYLIST_ID: ${{ steps.request.outputs.playlist_id }}
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `A playlist foi registrada em \`data/youtube/playlists.json\`, mas a sincronizacao do catalogo falhou. O catalogo publico anterior foi preservado.\n\n- Playlist: ${process.env.PLAYLIST_NAME}\n- ID: ${process.env.PLAYLIST_ID}\n- Erro: ${{ steps.sync.outcome }}`
+            });
+
+      - name: Comment success and close issue
+        if: steps.request.outputs.valid == 'true' && steps.sync.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          PLAYLIST_NAME: ${{ steps.request.outputs.playlist_name }}
+          PLAYLIST_ID: ${{ steps.request.outputs.playlist_id }}
+          VIDEO_COUNT: ${{ steps.catalog.outputs.video_count }}
+          GENERATED_AT: ${{ steps.catalog.outputs.generated_at }}
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `Playlist registrada com sucesso.\n\n- Playlist: ${process.env.PLAYLIST_NAME}\n- ID: ${process.env.PLAYLIST_ID}\n- Videos no catalogo: ${process.env.VIDEO_COUNT}\n- Catalogo gerado em: ${process.env.GENERATED_AT}`
+            });
+            await github.rest.issues.update({
+              ...context.repo,
+              issue_number: context.issue.number,
+              state: "closed"
+            });
+
+  deploy:
+    needs: register
+    if: needs.register.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 
-for (const file of ["index.html", "app.js", "db.js", "manifest.webmanifest", "service-worker.js", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py"]) {
+for (const file of ["index.html", "app.js", "db.js", "manifest.webmanifest", "service-worker.js", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", ".github/workflows/register-youtube-playlist.yml", ".github/ISSUE_TEMPLATE/arcana-playlist.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py"]) {
   assert.ok(existsSync(file), `${file} exists`);
 }
 
@@ -17,7 +17,10 @@ assert.equal(manifest.display, "standalone");
 
 const app = readFileSync("app.js", "utf8");
 const db = readFileSync("db.js", "utf8");
+const pagesWorkflow = readFileSync(".github/workflows/pages.yml", "utf8");
 const syncWorkflow = readFileSync(".github/workflows/sync-youtube.yml", "utf8");
+const registerWorkflow = readFileSync(".github/workflows/register-youtube-playlist.yml", "utf8");
+const issueTemplate = readFileSync(".github/ISSUE_TEMPLATE/arcana-playlist.yml", "utf8");
 const youtubePlaylists = JSON.parse(readFileSync("data/youtube/playlists.json", "utf8"));
 const youtubeCatalog = JSON.parse(readFileSync("data/youtube/catalog.json", "utf8"));
 const youtubeSyncScript = readFileSync("scripts/sync-youtube.py", "utf8");
@@ -31,6 +34,8 @@ assert.match(app, /function applyPublishedCatalog/, "published catalog merge pat
 assert.match(app, /function normalizeYoutubePlaylistInput/, "playlist input normalization is present");
 assert.match(app, /function playlistStatusSummary/, "playlist status helper is present");
 assert.match(app, /function catalogRequestPayload/, "catalog request payload helper is present");
+assert.match(app, /function catalogRequestIssueUrl/, "catalog request issue URL helper is present");
+assert.match(app, /function scheduleYoutubeCatalogPolling/, "catalog polling helper is present");
 assert.match(app, /const DEFAULT_OBSIDIAN_STATE=/, "obsidian state defaults are declared");
 assert.match(app, /async function refreshObsidianStatus/, "obsidian status refresh exists");
 assert.match(app, /function queueObsidianAutoSync/, "obsidian autosync hook exists");
@@ -57,6 +62,8 @@ assert.match(index, /id="obsidianConnectBtn"/, "settings exposes the obsidian co
 assert.match(index, /id="obsidianSyncBtn"/, "settings exposes the obsidian sync action");
 assert.match(index, /id="obsidianAutoSync"/, "settings exposes autosync selection");
 assert.match(index, /id="requestCatalogBtn"/, "YouTube view exposes the catalog request action");
+assert.match(index, /id="requestCatalogBtn" class="mini-btn" href="#" target="_blank" rel="noopener noreferrer"/, "catalog request action opens a safe new tab");
+assert.match(index, /id="catalogOptionsBtn"/, "YouTube view exposes manual catalog fallback options");
 assert.match(index, /id="youtubeCatalogStatus"/, "settings exposes the YouTube catalog summary");
 assert.match(index, /id="youtubePlaylistDiagnostics"/, "settings exposes playlist diagnostics");
 assert.match(index, /id="refreshCatalogBtn"/, "settings exposes a catalog refresh action");
@@ -84,6 +91,19 @@ assert.match(syncWorkflow, /id-token: write/, "catalog workflow can authenticate
 assert.match(syncWorkflow, /python scripts\/sync-youtube\.py/, "catalog workflow executes the sync script");
 assert.match(syncWorkflow, /actions\/upload-pages-artifact@v3/, "catalog workflow uploads a Pages artifact after syncing");
 assert.match(syncWorkflow, /actions\/deploy-pages@v4/, "catalog workflow deploys Pages after syncing");
+assert.match(pagesWorkflow, /paths-ignore:/, "generic Pages deploy ignores catalog-only automation commits");
+assert.match(pagesWorkflow, /data\/youtube\/catalog\.json/, "generic Pages deploy ignores public catalog updates");
+assert.match(pagesWorkflow, /data\/youtube\/playlists\.json/, "generic Pages deploy ignores playlist registration updates");
+assert.match(registerWorkflow, /issues:/, "playlist registration workflow listens to issues");
+assert.match(registerWorkflow, /arcana-playlist/, "playlist registration workflow filters the Arcana label");
+assert.match(registerWorkflow, /NataliaCarvalhinha/, "playlist registration workflow restricts registration to the owner");
+assert.match(registerWorkflow, /python scripts\/sync-youtube\.py/, "playlist registration workflow reuses the sync script directly");
+assert.match(registerWorkflow, /actions\/deploy-pages@v4/, "playlist registration workflow deploys Pages in the same workflow");
+assert.match(issueTemplate, /title: "\[Arcana Playlist\] "/, "issue template seeds the Arcana playlist title");
+assert.match(issueTemplate, /id: playlist_name/, "issue template captures the playlist name");
+assert.match(issueTemplate, /id: youtube_playlist_id/, "issue template captures the playlist id");
+assert.match(issueTemplate, /id: canonical_url/, "issue template captures the canonical URL");
+assert.match(issueTemplate, /arcana-playlist/, "issue template auto-applies the Arcana playlist label");
 assert.match(youtubeSyncScript, /--flat-playlist/, "sync script fetches playlist metadata without downloads");
 assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/, "sync script avoids overwriting the catalog with empty results");
 
@@ -131,7 +151,7 @@ function makeElement(id) {
 }
 
 const elements = new Map();
-const ids = ["trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "dailyPlan", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianPullBtn", "obsidianPushBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn"];
+const ids = ["trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "dailyPlan", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianPullBtn", "obsidianPushBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }
@@ -173,6 +193,8 @@ const context = {
   structuredClone,
   setTimeout,
   clearTimeout,
+  setInterval,
+  clearInterval,
   URL,
   location: { hostname: "", origin: "https://example.test", href: "https://example.test/arcana/index.html", pathname: "/arcana/index.html" },
   navigator: {},
@@ -184,6 +206,7 @@ const context = {
   crypto: { randomUUID: () => `uuid-${savedStates.length}-${Math.random().toString(16).slice(2)}` },
   document: {
     baseURI: "https://example.test/arcana/index.html",
+    hidden: false,
     getElementById(id) {
       if (!elements.has(id)) {
         elements.set(id, makeElement(id));
@@ -197,7 +220,8 @@ const context = {
       return [];
     },
     querySelector() { return null; },
-    createElement: makeElement
+    createElement: makeElement,
+    addEventListener() {}
   }
 };
 context.window = context;
@@ -375,6 +399,17 @@ await vm.runInContext(`(async()=>{
   if(awaitingStatus.tone!=="pending"||awaitingStatus.label!=="Aguardando catálogo"){throw new Error("missing published playlists should surface the awaiting catalog status")}
   const requestPayload=catalogRequestPayload(activePlaylist());
   if(!requestPayload.includes('"id": "PL99999999"')||!requestPayload.includes('"url": "https://www.youtube.com/playlist?list=PL99999999"')){throw new Error("catalog request payload should be copy-ready with the canonical playlist URL")}
+  renderYoutube();
+  const issueUrl=new URL("https://github.com/NataliaCarvalhinha/arcana/issues/new");
+  issueUrl.searchParams.set("template","arcana-playlist.yml");
+  issueUrl.searchParams.set("title","[Arcana Playlist] Nova playlist");
+  issueUrl.searchParams.set("playlist_name","Nova playlist");
+  issueUrl.searchParams.set("youtube_playlist_id","PL99999999");
+  issueUrl.searchParams.set("canonical_url","https://www.youtube.com/playlist?list=PL99999999");
+  if($("requestCatalogBtn").href!==issueUrl.toString()){throw new Error("awaiting playlists should expose a prefilled GitHub issue URL")}
+  if($("requestCatalogBtn").style.display!=="inline-flex"){throw new Error("awaiting playlists should show the synchronization request action")}
+  if($("syncPlaylistBtn").textContent!=="↻ Verificar novamente"){throw new Error("awaiting playlists should offer a verify-again action")}
+  if($("playlistTabs").innerHTML.includes("Aguardando catálogo</span><span>Aguardando catálogo")){throw new Error("playlist tabs should not duplicate the status label beside the badge")}
   location.hostname="";
 
   state=normalize({...structuredClone(DEFAULT_STATE),activeTrack:null,tracks:[],items:[],weeklyProgress:{},dailyPlan:{date:null,minutes:60,items:[]}});

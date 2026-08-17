@@ -3,6 +3,13 @@ name: Deploy Arcana to GitHub Pages
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - "data/youtube/catalog.json"
+      - "data/youtube/playlists.json"
+      - "scripts/sync-youtube.py"
+      - ".github/workflows/sync-youtube.yml"
+      - ".github/workflows/register-youtube-playlist.yml"
+      - "requirements.txt"
   workflow_dispatch:
 
 permissions:

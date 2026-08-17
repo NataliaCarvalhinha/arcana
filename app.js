@@ -30,9 +30,11 @@ const STARTER_COURSES=[
 const STARTER_PLAYLISTS=[
   {id:"playlist-learning-main",youtubePlaylistId:"PLNur2Ccbfc5k",name:"Playlist de aprendizado",url:"https://www.youtube.com/playlist?list=PLNur2Ccbfc5k",enabled:true,createdAt:"2026-08-17T00:00:00.000Z",updatedAt:"2026-08-17T00:00:00.000Z",lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}
 ];
+const ARCANA_PLAYLIST_ISSUE_URL="https://github.com/NataliaCarvalhinha/arcana/issues/new";
 let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),syncing=false;
 let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,currentReviewNote=null;
 let youtubeCatalogMeta={version:null,generatedAt:null,lastLoadedAt:null,playlistIds:[],playlistCount:0,videoCount:0,error:null};
+let youtubeCatalogPollHandle=null;
 let obsidianAutoSyncHandle=null,obsidianSyncInFlight=false;
 const NOTE_TYPE_LABELS={literature:"Fichamento",permanent:"Permanente",concept:"Conceito",question:"Pergunta",insight:"Insight",quote:"Citação",reference:"Referência",next_action:"Ação",quick:"Rápida",session:"Sessão"};
 const $=id=>document.getElementById(id);
@@ -419,21 +421,21 @@ function playlistStatusSummary(playlist){
   }
   if(isLocalBackend()){
     if(playlist.lastSyncAt){
-      return {tone:"ok",label:"Arcana Local",message:`Sincronizada localmente em ${new Date(playlist.lastSyncAt).toLocaleString("pt-BR")}`,detail:"Este navegador pode atualizar a playlist direto com yt-dlp."}
+      return {tone:"ok",label:"Local",message:`Sincronizada localmente em ${new Date(playlist.lastSyncAt).toLocaleString("pt-BR")}`,detail:"Este navegador pode atualizar a playlist direto com yt-dlp."}
     }
-    return {tone:"local",label:"Arcana Local",message:"Pronta para sincronizar com yt-dlp.",detail:"No Arcana Local, a playlist pode ser atualizada imediatamente sem depender do catálogo público."}
+    return {tone:"local",label:"Local",message:"Pronta para sincronizar com yt-dlp.",detail:"No Arcana Local, a playlist pode ser atualizada imediatamente sem depender do catálogo público."}
   }
   if(playlistAwaitingCatalog(playlist)){
-    return {tone:"pending",label:"Aguardando catálogo",message:"Aguardando catálogo público.",detail:"A playlist já foi salva no seu IndexedDB, mas ainda não apareceu em data/youtube/catalog.json."}
+    return {tone:"pending",label:"Aguardando catálogo",message:"Aguardando catálogo público.",detail:"A playlist já foi salva no IndexedDB. Use “Solicitar sincronização” para registrá-la no catálogo público do Arcana."}
   }
   if(playlistPublishedInCatalog(playlist)){
     if(playlist.lastSyncAt){
-      return {tone:"ok",label:"Publicado",message:`Sincronizada em ${new Date(playlist.lastSyncAt).toLocaleString("pt-BR")}`,detail:"Os metadados públicos foram aplicados sem apagar seu progresso local."}
+      return {tone:"ok",label:"Publicada",message:`Sincronizada em ${new Date(playlist.lastSyncAt).toLocaleString("pt-BR")}`,detail:"Os metadados públicos foram aplicados sem apagar seu progresso local."}
     }
-    return {tone:"ok",label:"Catálogo disponível",message:"Catálogo público disponível para sincronizar.",detail:"Clique em sincronizar para trazer os vídeos publicados para esta playlist."}
+    return {tone:"ok",label:"Publicada",message:"Catálogo público disponível para sincronizar.",detail:"Clique em atualizar para trazer os vídeos publicados para esta playlist."}
   }
   if(youtubeCatalogMeta.error&&!playlist.lastSyncAt){
-    return {tone:"muted",label:"Sem catálogo",message:"Catálogo público indisponível agora.",detail:youtubeCatalogMeta.error}
+    return {tone:"error",label:"Erro",message:"Catálogo público indisponível agora.",detail:youtubeCatalogMeta.error}
   }
   return {tone:"muted",label:"Local",message:"Ainda não sincronizada.",detail:"Salve uma URL canônica de playlist para conectar esta fila ao catálogo público."}
 }
@@ -452,6 +454,77 @@ function catalogRequestPayload(playlist){
     url:playlist.url||canonicalYoutubePlaylistUrl(catalogId),
     enabled:playlist.enabled!==false
   },null,2)
+}
+function catalogRequestIssueUrl(playlist){
+  const catalogId=playlistCatalogId(playlist);
+  if(!catalogId){
+    return ""
+  }
+  const title=String(playlist?.name||"Nova playlist").trim()||"Nova playlist";
+  const canonicalUrl=playlist?.url||canonicalYoutubePlaylistUrl(catalogId);
+  const url=new URL(ARCANA_PLAYLIST_ISSUE_URL);
+  url.searchParams.set("template","arcana-playlist.yml");
+  url.searchParams.set("title",`[Arcana Playlist] ${title}`);
+  url.searchParams.set("playlist_name",title);
+  url.searchParams.set("youtube_playlist_id",catalogId);
+  url.searchParams.set("canonical_url",canonicalUrl);
+  return url.toString()
+}
+function syncPlaylistButtonLabel(playlist){
+  if(syncing){
+    return "Sincronizando..."
+  }
+  if(isLocalBackend()){
+    return "↻ Sincronizar"
+  }
+  if(playlistAwaitingCatalog(playlist)){
+    return "↻ Verificar novamente"
+  }
+  if(playlistPublishedInCatalog(playlist)){
+    return "↻ Atualizar"
+  }
+  return "↻ Verificar catálogo"
+}
+function updatePlaylistCatalogActions(playlist,status){
+  const requestBtn=$("requestCatalogBtn");
+  const optionsBtn=$("catalogOptionsBtn");
+  const issueUrl=catalogRequestIssueUrl(playlist);
+  const canRequest=status?.label==="Aguardando catálogo"&&!!issueUrl;
+  if(requestBtn){
+    requestBtn.href=canRequest?issueUrl:"#";
+    requestBtn.style.display=canRequest?"inline-flex":"none";
+  }
+  if(optionsBtn){
+    optionsBtn.style.display=playlist?"inline-flex":"none";
+  }
+}
+function shouldPollYoutubeCatalog(){
+  if(isLocalBackend()||currentView!=="youtube"||syncing){
+    return false
+  }
+  if(typeof document.hidden==="boolean"&&document.hidden){
+    return false
+  }
+  return playlistAwaitingCatalog(activePlaylist())
+}
+function stopYoutubeCatalogPolling(){
+  if(youtubeCatalogPollHandle){
+    clearInterval(youtubeCatalogPollHandle);
+    youtubeCatalogPollHandle=null;
+  }
+}
+function scheduleYoutubeCatalogPolling(){
+  stopYoutubeCatalogPolling();
+  if(!shouldPollYoutubeCatalog()){
+    return
+  }
+  youtubeCatalogPollHandle=setInterval(()=>{
+    if(!shouldPollYoutubeCatalog()){
+      stopYoutubeCatalogPolling();
+      return
+    }
+    syncPlaylist().catch(()=>{});
+  },60000)
 }
 function normalizeCatalogVideo(entry,pos){
   if(!entry||typeof entry!=="object"){
@@ -748,7 +821,21 @@ async function loadVaultNotes(){
   }
 }
 
-function showView(v){currentView=v;document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));$(v+"View").classList.add("active");document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===v));$("pageTitle").textContent={home:"Santuário",tracks:"Trilhas",youtube:"YouTube",library:"Biblioteca",fichamentos:"Fichamentos",notes:"Notas",review:"Revisão",calendar:"Calendário",inbox:"Inbox",settings:"Configurações"}[v]||"Arcana";if(["home","fichamentos","notes","review"].includes(v))loadVaultNotes()}
+function showView(v){
+  currentView=v;
+  document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+  $(v+"View").classList.add("active");
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
+  $("pageTitle").textContent={home:"Santuário",tracks:"Trilhas",youtube:"YouTube",library:"Biblioteca",fichamentos:"Fichamentos",notes:"Notas",review:"Revisão",calendar:"Calendário",inbox:"Inbox",settings:"Configurações"}[v]||"Arcana";
+  if(["home","fichamentos","notes","review"].includes(v)){
+    loadVaultNotes()
+  }
+  if(v==="youtube"){
+    scheduleYoutubeCatalogPolling()
+  }else{
+    stopYoutubeCatalogPolling()
+  }
+}
 document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 
 function renderHome(){
@@ -831,17 +918,17 @@ function deleteTrack(){const id=$("trackForm").elements.id.value;if(!id||state.t
 
 function renderYoutube(){
   $("playlistTabs").innerHTML=state.playlists.map(p=>{
-    const status=playlistStatusSummary(p);
-    return `<button class="playlist-tab ${p.id===state.activePlaylist?"active":""}" onclick="setPlaylist('${p.id}')"><strong>${esc(p.name)}</strong><span>${playlistPendingCount(p)} pendentes</span><div class="playlist-status-line">${playlistStatusChip(p)}<span>${esc(status.label)}</span></div></button>`
+    return `<button class="playlist-tab ${p.id===state.activePlaylist?"active":""}" onclick="setPlaylist('${p.id}')"><strong>${esc(p.name)}</strong><span>${playlistPendingCount(p)} pendentes</span><div class="playlist-status-line">${playlistStatusChip(p)}</div></button>`
   }).join("");
   const p=activePlaylist();$("activePlaylistName").textContent=p?.name||"Sem playlist";
   const status=playlistStatusSummary(p);
-  $("playlistSyncStatus").className=`sync-status ${syncing?"pending":status.tone}`;$("playlistSyncStatus").textContent=syncing?"Sincronizando…":status.message;
+  $("playlistSyncStatus").className=`sync-status ${syncing?"pending":status.tone}`;$("playlistSyncStatus").textContent=syncing?"Sincronizando":status.message;
   const syncBtn=$("syncPlaylistBtn");
   if(syncBtn){
     syncBtn.disabled=syncing;
-    syncBtn.textContent=syncing?"Sincronizando...":"↻ Sincronizar"
+    syncBtn.textContent=syncPlaylistButtonLabel(p)
   }
+  updatePlaylistCatalogActions(p,status);
   const archivedCount=playlistArchivedCount(p);
   const panelLines=[];
   if(p?.url){
@@ -863,6 +950,7 @@ function renderYoutube(){
   const d=getDailyYT(),s=state.youtubeSettings;$("youtubeBudget").innerHTML=`<div class="budget-big">${budgetText()}</div><p class="hint">${limitReached()?"Limite atingido por hoje.":"Você ainda pode assistir dentro da cota."}</p>`;
   const today=todaysYoutube();$("dailyVideos").innerHTML=limitReached()&&s.hideAfterLimit?`<div class="hint">✦ Cota concluída por hoje.</div>`:today.length?today.map((v,n)=>videoRow(v,n,true)).join(""):`<div class="hint">${p?.lastSyncError?esc(p.lastSyncError):"Nenhum vídeo liberado agora."}</div>`;
   const queue=playlistQueue();$("youtubeQueue").innerHTML=queue.length?queue.slice(0,50).map((v,n)=>videoRow(v,n,false)).join(""):`<div class="hint">Fila vazia.</div>`
+  scheduleYoutubeCatalogPolling()
 }
 function playlistQueue(){const p=activePlaylist();return state.youtubeQueue.filter(v=>v.playlistId===p?.id&&v.activeInCatalog!==false&&itemProgress(v)<100).sort((a,b)=>(a.position||0)-(b.position||0))}
 function limitReached(){const d=getDailyYT(),s=state.youtubeSettings;if(s.mode==="none")return false;if(s.mode==="minutes")return d.minutes>=s.minutes;if(s.mode==="count")return d.count>=s.count;return d.minutes>=s.minutes||d.count>=s.count}
@@ -1250,7 +1338,7 @@ function renderCatalogRequestDialog(){
   }
   const payload=catalogRequestPayload(playlist);
   if(dialogTitle){
-    dialogTitle.textContent=playlist.name||"Adicionar ao catálogo"
+    dialogTitle.textContent=playlist.name||"Mais opções de catálogo"
   }
   if(json){
     json.value=payload
@@ -1260,9 +1348,9 @@ function renderCatalogRequestDialog(){
   }
   if(help){
     if(payload){
-      help.innerHTML=`<p class="hint">1. Copie o JSON abaixo.</p><p class="hint">2. Cole o objeto dentro de <code>data/youtube/playlists.json</code>, em <code>playlists[]</code>.</p><p class="hint">3. Faça commit e rode o workflow <code>Sync YouTube Catalog</code>. Quando o <code>catalog.json</code> publicar esta playlist, o Arcana Online vai sair de “Aguardando catálogo”.</p>`
+      help.innerHTML=`<p class="hint">Fluxo principal: use <strong>Solicitar sincronização</strong> para abrir a issue pré-preenchida no GitHub.</p><p class="hint">Use o JSON abaixo apenas como fallback manual ou avançado.</p><p class="hint">Se precisar, copie a configuração para <code>data/youtube/playlists.json</code>, faça commit e rode o workflow <code>Sync YouTube Catalog</code>.</p>`
     }else{
-      help.innerHTML=`<p class="hint">Salve primeiro uma URL canônica de playlist do YouTube para gerar o bloco de catálogo.</p>`
+      help.innerHTML=`<p class="hint">Salve primeiro uma URL canônica de playlist do YouTube para gerar a configuração manual.</p>`
     }
   }
 }
@@ -1418,7 +1506,7 @@ $("regenPlanBtn").onclick=generatePlan;$("todayMinutes").onchange=generatePlan;
 $("newTrackBtn").onclick=()=>openTrackDialog();$("editTrackBtn").onclick=()=>openTrackDialog(state.activeTrack);$("trackForm").onsubmit=saveTrack;$("deleteTrackBtn").onclick=deleteTrack;$("addCourseBtn").onclick=()=>openItemDialog("course");
 $("newPlaylistBtn").onclick=()=>openPlaylistDialog();$("editPlaylistBtn").onclick=()=>openPlaylistDialog(state.activePlaylist);$("playlistForm").onsubmit=savePlaylist;$("deletePlaylistBtn").onclick=deletePlaylist;$("syncPlaylistBtn").onclick=syncPlaylist;
 $("exportPlaylistBtn").onclick=exportPlaylistFile;
-$("requestCatalogBtn").onclick=openCatalogRequestDialog;
+$("catalogOptionsBtn").onclick=openCatalogRequestDialog;
 $("copyCatalogRequestBtn").onclick=()=>copyCatalogRequestJson().catch(()=>{});
 $("searchInput").oninput=renderLibrary;$("libraryTypeFilter").onchange=renderLibrary;$("priorityFilter").onchange=renderLibrary;
 $("captureBtn").onclick=captureInbox;$("inboxInput").onkeydown=e=>{if(e.key==="Enter")captureInbox()};
@@ -1433,6 +1521,15 @@ $("reindexVaultBtn").onclick=async()=>{try{await api("/api/reindex",{method:"POS
 $("restoreSnapshotBtn").onclick=async()=>{const id=$("snapshotList").value;if(!id)return;try{state=normalize(await ArcanaStorage.restoreSnapshot(id));await loadVaultNotes();renderAll()}catch(e){alert(e.message)}};
 $("obsidianConnectBtn").onclick=()=>connectObsidianVault().catch(e=>alert(e.message||String(e)));
 $("obsidianSyncBtn").onclick=()=>runObsidianSync("sync").catch(()=>{});
+if(document.addEventListener){
+  document.addEventListener("visibilitychange",()=>{
+    if(document.hidden){
+      stopYoutubeCatalogPolling();
+    }else{
+      scheduleYoutubeCatalogPolling()
+    }
+  });
+}
 $("obsidianPullBtn").onclick=()=>runObsidianSync("pull").catch(()=>{});
 $("obsidianPushBtn").onclick=()=>runObsidianSync("push").catch(()=>{});
 $("obsidianDisconnectBtn").onclick=()=>disconnectObsidianVault().catch(e=>alert(e.message||String(e)));

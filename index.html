@@ -137,7 +137,7 @@
         <article class="card">
           <div class="card-head">
             <div><div class="kicker">PLAYLIST ATIVA</div><h2 id="activePlaylistName"></h2><div id="playlistSyncStatus" class="sync-status"></div></div>
-            <div class="youtube-actions"><button id="syncPlaylistBtn" class="ghost-btn">↻ Sincronizar</button><button id="exportPlaylistBtn" class="mini-btn">Exportar JSON</button><label class="mini-btn file-label">Importar JSON<input id="playlistImportInput" type="file" accept="application/json"></label><button id="requestCatalogBtn" class="mini-btn">Adicionar ao catálogo</button><button id="editPlaylistBtn" class="mini-btn">Editar</button></div>
+            <div class="youtube-actions"><button id="syncPlaylistBtn" class="ghost-btn">↻ Sincronizar</button><button id="exportPlaylistBtn" class="mini-btn">Exportar JSON</button><label class="mini-btn file-label">Importar JSON<input id="playlistImportInput" type="file" accept="application/json"></label><a id="requestCatalogBtn" class="mini-btn" href="#" target="_blank" rel="noopener noreferrer">Solicitar sincronização</a><button id="catalogOptionsBtn" class="mini-btn">Mais opções</button><button id="editPlaylistBtn" class="mini-btn">Editar</button></div>
           </div>
           <div id="activePlaylistPanel"></div>
         </article>
@@ -325,11 +325,11 @@
 </form></dialog>
 
 <dialog id="catalogRequestDialog"><div class="modal">
-  <div class="modal-head"><div><div class="kicker">CATÁLOGO</div><h2 id="catalogRequestTitle">Adicionar ao catálogo</h2></div><button type="button" class="x" data-close="catalogRequestDialog">×</button></div>
+  <div class="modal-head"><div><div class="kicker">CATÁLOGO</div><h2 id="catalogRequestTitle">Mais opções de catálogo</h2></div><button type="button" class="x" data-close="catalogRequestDialog">×</button></div>
   <div id="catalogRequestHelp"></div>
-  <label>Bloco JSON para <code>data/youtube/playlists.json</code><textarea id="catalogRequestJson" rows="10" readonly spellcheck="false"></textarea></label>
+  <label>Configuração manual para <code>data/youtube/playlists.json</code><textarea id="catalogRequestJson" rows="10" readonly spellcheck="false"></textarea></label>
   <div id="catalogRequestStatus" class="hint" role="status"></div>
-  <div class="modal-actions"><button type="button" class="ghost-btn" data-close="catalogRequestDialog">Fechar</button><button id="copyCatalogRequestBtn" type="button" class="gold-btn">Copiar JSON</button></div>
+  <div class="modal-actions"><button type="button" class="ghost-btn" data-close="catalogRequestDialog">Fechar</button><button id="copyCatalogRequestBtn" type="button" class="gold-btn">Copiar configuração</button></div>
 </div></dialog>
 
 <dialog id="itemDialog"><form id="itemForm" class="modal">
