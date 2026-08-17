@@ -52,7 +52,15 @@ assert.match(app, /setTrackSaving\(true\)/, "track save shows a saving state");
 assert.match(app, /function ensureActiveTrack/, "active track is normalized before render");
 assert.match(app, /state\.activeTrack=null/, "empty track state is represented explicitly");
 assert.match(app, /Crie sua primeira trilha/, "track screen has a first-track empty state");
-assert.match(app, /const STARTER_CONTENT_VERSION=1/, "starter content version is declared");
+assert.match(app, /const STARTER_CONTENT_VERSION=2/, "starter content version is declared");
+assert.match(app, /async function navigateTo/, "dashboard navigation is centralized");
+assert.match(index, /onclick="navigateTo\('youtube'\)"/, "home YouTube button uses centralized navigation");
+assert.match(index, /onclick="navigateTo\('tracks'\)"/, "home tracks button uses centralized navigation");
+assert.match(index, /onclick="navigateTo\('review'\)"/, "home review button uses centralized navigation");
+assert.match(index, /onclick="navigateTo\('notes'\)"/, "home notes button uses centralized navigation");
+assert.match(app, /onkeydown="activateRow\(event,this\)"/, "clickable rows support keyboard activation");
+assert.match(app, /event\.stopPropagation\(\);openNotes/, "nested note buttons do not trigger row navigation");
+assert.match(app, /function repairStarterTrackDuplicates/, "starter duplicate track repair is available");
 assert.match(app, /function applyStarterContentV1/, "starter content uses versioned migration functions");
 assert.match(app, /playlist-learning-main/, "starter playlist is present in the catalog");
 assert.match(app, /course-elec-01/, "starter electronics catalog is present");
@@ -109,7 +117,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v6/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v7/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -151,7 +159,7 @@ function makeElement(id) {
 }
 
 const elements = new Map();
-const ids = ["trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "dailyPlan", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianPullBtn", "obsidianPushBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "calendarView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "dailyPlan", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianPullBtn", "obsidianPushBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }
@@ -225,8 +233,12 @@ const context = {
   }
 };
 context.window = context;
+context.__notes = [];
 context.ArcanaStorage = {
   ready: true,
+  canHandle(path) {
+    return path.startsWith("/api/notes");
+  },
   async saveState(value) {
     savedStates.push(structuredClone(value));
   },
@@ -238,6 +250,20 @@ context.ArcanaStorage = {
       return savedStates.length ? [{ key: "main", value: structuredClone(savedStates.at(-1)) }] : [];
     }
     return [];
+  },
+  async route(path) {
+    if (path === "/api/notes?sort=updated") {
+      return { notes: structuredClone(context.__notes) };
+    }
+    const match = path.match(/^\/api\/notes\/([^/]+)$/);
+    if (match) {
+      const note = context.__notes.find(n => n.id === decodeURIComponent(match[1]));
+      if (!note) {
+        throw new Error("not found");
+      }
+      return { note: structuredClone(note) };
+    }
+    throw new Error(`Unexpected route: ${path}`);
   }
 };
 
@@ -248,7 +274,7 @@ await vm.runInContext(`(async()=>{
   scheduleAutoBackup=()=>{};
   renderAll=()=>{renderDailyPlan();renderHomeTracks();renderTracks();};
   const seededFresh=applyStarterContent(structuredClone(DEFAULT_STATE));
-  if(seededFresh.starterContentVersion!==1){throw new Error("starter content version was not stored")}
+  if(seededFresh.starterContentVersion!==2){throw new Error("starter content version was not stored")}
   if(seededFresh.tracks.length!==2){throw new Error("fresh seed should replace placeholders with exactly two starter tracks")}
   if(seededFresh.tracks.map(t=>t.id).join(",")!=="track-electronics,track-finance"){throw new Error("starter tracks did not keep the expected order")}
   if(seededFresh.items.filter(i=>i.kind==="course").length!==17){throw new Error("fresh seed should create exactly 17 starter courses")}
@@ -299,7 +325,56 @@ await vm.runInContext(`(async()=>{
   if(!state.dailyPlan.items.length||$("dailyPlan").innerHTML.includes("Nada pendente")){throw new Error("seeded courses did not generate a daily plan")}
   await ArcanaStorage.saveState(state);
   const storedSeed=await ArcanaStorage.loadState(DEFAULT_STATE);
-  if(storedSeed.starterContentVersion!==1||storedSeed.items.filter(i=>i.kind==="course").length!==17){throw new Error("seeded starter content did not persist through the canonical storage path")}
+  if(storedSeed.starterContentVersion!==2||storedSeed.items.filter(i=>i.kind==="course").length!==17){throw new Error("seeded starter content did not persist through the canonical storage path")}
+
+  if(!$("homeTracks").innerHTML.includes("navigateTo('tracks',{trackId:'track-finance'})")){throw new Error("home track rows should navigate with stable track ids")}
+  await navigateTo("tracks",{trackId:"track-finance"});
+  if(currentView!=="tracks"||state.activeTrack!=="track-finance"){throw new Error("track row navigation did not select and open the requested track")}
+  state.youtubeQueue.push({id:"queue-nav-1",videoId:"nav-1",playlistId:"playlist-learning-main",youtubePlaylistId:"PLNur2Ccbfc5k",kind:"youtube",title:"Video de teste",url:"https://www.youtube.com/watch?v=nav-1",channel:"Canal",thumbnail:"",estimatedMinutes:10,progress:0,status:"nao_iniciado",notes:"",important:true,urgent:false,track:null,createdAt:new Date().toISOString(),position:0,catalogManaged:false,activeInCatalog:true,archivedAt:null});
+  await navigateTo("youtube",{playlistId:"playlist-learning-main"});
+  if(currentView!=="youtube"||state.activePlaylist!=="playlist-learning-main"){throw new Error("YouTube navigation did not select the requested playlist")}
+  if(!$("youtubeQueue").innerHTML.includes("clickable-row")||!$("youtubeQueue").innerHTML.includes("event.stopPropagation();openNotes")){throw new Error("YouTube rows should be clickable while nested actions stay isolated")}
+
+  const duplicateState=applyStarterContent(normalize({
+    ...structuredClone(DEFAULT_STATE),
+    tracks:[
+      {id:"track-electronics",name:"Eletrônica",sigil:"E",subtitle:"A",description:"A",weeklyGoal:120},
+      {id:"dupe-elec",name:"Eletronica",sigil:"E2",subtitle:"B",description:"B",weeklyGoal:180},
+      {id:"track-finance",name:"Finanças",sigil:"F",subtitle:"A",description:"A",weeklyGoal:90},
+      {id:"dupe-fin",name:"Financas",sigil:"F2",subtitle:"B",description:"B",weeklyGoal:150}
+    ],
+    items:[{id:"custom-course",kind:"course",track:"dupe-elec",title:"Curso custom",progress:25,estimatedMinutes:30,status:"em_andamento",createdAt:"2026-08-17T00:00:00.000Z"}],
+    sessions:[{id:"session-custom",date:dayKey(),timestamp:"2026-08-17T10:00:00.000Z",minutes:20,title:"Sessão",type:"item",track:"dupe-fin"}],
+    dailyPlan:{date:dayKey(),minutes:60,items:[{type:"item",id:"custom-course",minutes:20,title:"Curso custom",track:"dupe-elec"}]},
+    weeklyProgress:{"track-electronics":10,"dupe-elec":15,"track-finance":5,"dupe-fin":7},
+    activeTrack:"dupe-fin",
+    starterContentVersion:1
+  }));
+  if(duplicateState.tracks.filter(t=>t.id==="track-electronics").length!==1||duplicateState.tracks.filter(t=>t.id==="track-finance").length!==1){throw new Error("starter duplicate repair should keep one stable track per starter identity")}
+  if(duplicateState.tracks.some(t=>t.id==="dupe-elec"||t.id==="dupe-fin")){throw new Error("starter duplicate repair should remove duplicate starter tracks")}
+  if(duplicateState.items.find(i=>i.id==="custom-course").track!=="track-electronics"){throw new Error("starter duplicate repair should repoint items to stable track ids")}
+  if(duplicateState.sessions.find(s=>s.id==="session-custom").track!=="track-finance"){throw new Error("starter duplicate repair should repoint sessions to stable track ids")}
+  if(duplicateState.dailyPlan.items[0].track!=="track-electronics"){throw new Error("starter duplicate repair should repoint daily plan entries")}
+  if(duplicateState.weeklyProgress["track-electronics"]!==25||duplicateState.weeklyProgress["track-finance"]!==12){throw new Error("starter duplicate repair should merge weekly progress")}
+  if(duplicateState.activeTrack!=="track-finance"){throw new Error("starter duplicate repair should preserve active track through the stable id")}
+
+  globalThis.__notes=[
+    {id:"note-perm",title:"Ideia permanente",type:"permanent",trackId:"track-finance",updatedAt:"2026-08-17T10:00:00.000Z",createdAt:"2026-08-17T09:00:00.000Z",links:[{title:"Fonte"}],status:"active",content:"# Ideia permanente"},
+    {id:"fic-1",title:"Livro de mercados",type:"literature",sourceType:"book",trackId:"track-finance",updatedAt:"2026-08-17T09:00:00.000Z",createdAt:"2026-08-17T08:00:00.000Z",links:[{},{title:"Outra"}],status:"active",content:"# Livro de mercados"},
+    {id:"review-1",title:"Revisar pergunta",type:"question",trackId:"track-electronics",updatedAt:"2026-08-17T08:00:00.000Z",createdAt:"2026-08-17T07:00:00.000Z",reviewAt:dayKey(),status:"active",content:"# Revisar pergunta"}
+  ];
+  vaultNotes=structuredClone(globalThis.__notes);
+  renderVaultHome();
+  if(!$("homeKnowledge").innerHTML.includes("navigateTo('notes',{noteId:'note-perm'})")){throw new Error("recent permanent notes should navigate to the notes view by stable id")}
+  if(!$("homeKnowledge").innerHTML.includes("navigateTo('fichamentos',{fichamentoId:'fic-1'})")){throw new Error("recent fichamentos should navigate to the fichamentos view by stable id")}
+  if(!$("homeKnowledge").innerHTML.includes("Finanças")||!$("homeKnowledge").innerHTML.includes("2 links")){throw new Error("recent notes should render type, track, updated time, and links metadata")}
+  if(!$("homeReviews").innerHTML.includes("navigateTo('review',{noteId:'review-1'})")){throw new Error("home review rows should navigate to review by stable id")}
+  await navigateTo("notes",{noteId:"note-perm"});
+  if(currentView!=="notes"||activeVaultNote?.id!=="note-perm"||!$("vaultEditorPane").innerHTML.includes("Ideia permanente")){throw new Error("recent note navigation did not open the exact note: view="+currentView+", active="+(activeVaultNote?.id||"none")+", editor="+$("vaultEditorPane").innerHTML.slice(0,80))}
+  await navigateTo("fichamentos",{fichamentoId:"fic-1"});
+  if(currentView!=="fichamentos"||activeVaultNote?.id!=="fic-1"||!$("fichamentoEditor").innerHTML.includes("Livro de mercados")){throw new Error("recent fichamento navigation did not open the exact fichamento")}
+  await navigateTo("review",{noteId:"review-1"});
+  if(currentView!=="review"||currentReviewNote?.id!=="review-1"||!$("reviewActive").innerHTML.includes("Revisar pergunta")){throw new Error("review navigation did not open the exact due note")}
 
   const catalogSample=normalizePublishedCatalog({
     version:1,
@@ -413,6 +488,7 @@ await vm.runInContext(`(async()=>{
   location.hostname="";
 
   state=normalize({...structuredClone(DEFAULT_STATE),activeTrack:null,tracks:[],items:[],weeklyProgress:{},dailyPlan:{date:null,minutes:60,items:[]}});
+  vaultNotes=[];
   renderDailyPlan();
   renderTracks();
   if(state.activeTrack!==null){throw new Error("empty state should not invent an active track")}
@@ -471,6 +547,6 @@ await vm.runInContext(`(async()=>{
 assert.ok(savedStates.some(s => s.tracks?.some(t => t.id === "tarot")), "IndexedDB save receives first track in appState");
 assert.ok(savedStates.some(s => s.tracks?.some(t => t.id === "astrologia")), "IndexedDB save receives second track in appState");
 assert.ok(savedStates.at(-1).items?.some(i => i.kind === "course" && i.track === "tarot"), "course creation persists with active track");
-assert.ok(savedStates.some(s => s.starterContentVersion === 1 && s.tracks?.some(t => t.id === "track-electronics") && s.playlists?.some(p => p.id === "playlist-learning-main")), "starter content persists through IndexedDB appState");
+assert.ok(savedStates.some(s => s.starterContentVersion === 2 && s.tracks?.some(t => t.id === "track-electronics") && s.playlists?.some(p => p.id === "playlist-learning-main")), "starter content persists through IndexedDB appState");
 
 console.log("static and track regression checks passed");

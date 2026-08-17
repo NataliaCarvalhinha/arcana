@@ -80,14 +80,14 @@
         </article>
 
         <article class="card">
-          <div class="card-head"><div><div class="kicker">PRÓXIMO VÍDEO</div><h2>YouTube de hoje</h2></div><button class="mini-btn" onclick="showView('youtube')">Ver fila</button></div>
+          <div class="card-head"><div><div class="kicker">PRÓXIMO VÍDEO</div><h2>YouTube de hoje</h2></div><button class="mini-btn" onclick="navigateTo('youtube')">Ver fila</button></div>
           <div id="homeYoutube"></div>
         </article>
       </div>
 
 	      <div class="layout-grid">
 	        <article class="card">
-	          <div class="card-head"><div><div class="kicker">TRILHAS</div><h2>Progresso dos caminhos</h2></div><button class="mini-btn" onclick="showView('tracks')">Abrir</button></div>
+	          <div class="card-head"><div><div class="kicker">TRILHAS</div><h2>Progresso dos caminhos</h2></div><button class="mini-btn" onclick="navigateTo('tracks')">Abrir</button></div>
 	          <div id="homeTracks"></div>
 	        </article>
 	        <article class="card">
@@ -98,11 +98,11 @@
 	
 	      <div class="layout-grid">
 	        <article class="card">
-	          <div class="card-head"><div><div class="kicker">VAULT</div><h2>Revisões e conexões</h2></div><button class="mini-btn" onclick="showView('review')">Revisar</button></div>
+	          <div class="card-head"><div><div class="kicker">VAULT</div><h2>Revisões e conexões</h2></div><button class="mini-btn" onclick="navigateTo('review')">Revisar</button></div>
 	          <div id="homeReviews"></div>
 	        </article>
 	        <article class="card">
-	          <div class="card-head"><div><div class="kicker">MEMÓRIA</div><h2>Notas recentes</h2></div><button class="mini-btn" onclick="showView('notes')">Abrir</button></div>
+	          <div class="card-head"><div><div class="kicker">MEMÓRIA</div><h2>Notas recentes</h2></div><button class="mini-btn" onclick="navigateTo('notes')">Abrir</button></div>
 	          <div id="homeKnowledge"></div>
 	        </article>
 	      </div>
@@ -363,7 +363,7 @@
 	<dialog id="focusDialog"><div class="modal focus-modal">
 	  <div class="modal-head"><div><div class="kicker">CÍRCULO DE FOCO</div><h2 id="focusTitle"></h2></div><button id="closeFocusBtn" class="x">×</button></div>
 	  <div class="focus-grid">
-	    <div>
+	    <div class="focus-resource">
 	      <div id="playerWrap"></div>
 	      <div class="timer-wrap"><div id="timerDisplay">00:00:00</div><div class="timer-controls"><button id="timerStartBtn" class="gold-btn">Iniciar</button><button id="timerPauseBtn" class="ghost-btn">Pausar</button><button id="timerResetBtn" class="ghost-btn">Zerar</button></div></div>
 	    </div>
@@ -374,7 +374,7 @@
 	      <div id="focusSaveState" class="hint">Rascunho local no vault.</div>
 	    </aside>
 	  </div>
-	  <div class="modal-actions"><a id="focusOpenLink" class="ghost-btn" target="_blank" rel="noopener noreferrer">Abrir recurso</a><button id="focusDoneBtn" class="gold-btn">Concluir sessão</button></div>
+	  <div class="modal-actions focus-footer"><span id="focusSessionStatus" class="hint">Sessão ainda não iniciada.</span><div><a id="focusOpenLink" class="ghost-btn" target="_blank" rel="noopener noreferrer">Abrir recurso</a><button id="focusDoneBtn" class="gold-btn">Concluir sessão</button></div></div>
 	</div></dialog>
 
 <script src="db.js"></script>

@@ -1,7 +1,7 @@
 
 const STORAGE_KEY="arcana-v5";
 const LEGACY_KEYS=["arcana-activity-hub-v4","arcana-activity-hub-v3","arcana-activity-hub-v2"];
-const STARTER_CONTENT_VERSION=1;
+const STARTER_CONTENT_VERSION=2;
 const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vaultPath:"",lastSyncAt:null,noteCount:0,fichamentoCount:0,attachmentCount:0,flashcardCount:0,conflicts:0,autoSync:"after_session",openUrl:"",error:null};
 const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]},starterContentVersion:0};
 const STARTER_TRACKS=[
@@ -122,6 +122,69 @@ function canReplaceDefaultTrackPlaceholder(s){
 function canReplaceDefaultPlaylistPlaceholder(s){
   return s.playlists.length===1&&isDefaultPlaylistPlaceholder(s.playlists[0])&&!s.youtubeQueue.some(v=>v.playlistId==="main-playlist")&&(s.activePlaylist==="main-playlist"||!s.activePlaylist)
 }
+function normalizedIdentity(value=""){
+  return String(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()
+}
+function starterTrackSeedFor(track){
+  return STARTER_TRACKS.find(seed=>track?.id===seed.id||normalizedIdentity(track?.name)===normalizedIdentity(seed.name))||null
+}
+function mergeDuplicateStarterTrack(existing,duplicate,seed){
+  const merged={...duplicate,...existing,id:seed.id};
+  for(const key of ["name","sigil","subtitle","description","weeklyGoal"]){
+    if((merged[key]===undefined||merged[key]===null||merged[key]==="")&&duplicate[key]!==undefined&&duplicate[key]!==null&&duplicate[key]!==""){
+      merged[key]=duplicate[key]
+    }
+  }
+  return mergeStarterTrack(merged,seed)
+}
+function repairStarterTrackDuplicates(s){
+  const tracks=[],indexById=new Map(),idMap=new Map();
+  for(const track of s.tracks){
+    if(!track?.id){
+      continue
+    }
+    const seed=starterTrackSeedFor(track),canonicalId=seed?.id||track.id;
+    if(seed&&track.id!==canonicalId){
+      idMap.set(track.id,canonicalId)
+    }
+    if(indexById.has(canonicalId)){
+      const index=indexById.get(canonicalId);
+      tracks[index]=seed?mergeDuplicateStarterTrack(tracks[index],track,seed):{...track,...tracks[index],id:canonicalId};
+      idMap.set(track.id,canonicalId);
+    }else{
+      indexById.set(canonicalId,tracks.length);
+      tracks.push(seed?mergeStarterTrack({...track,id:canonicalId},seed):{...track,id:canonicalId})
+    }
+  }
+  s.tracks=tracks;
+  for(const item of s.items){
+    if(idMap.has(item.track)){
+      item.track=idMap.get(item.track)
+    }
+  }
+  for(const session of s.sessions){
+    if(idMap.has(session.track)){
+      session.track=idMap.get(session.track)
+    }
+  }
+  if(Array.isArray(s.dailyPlan?.items)){
+    for(const item of s.dailyPlan.items){
+      if(idMap.has(item.track)){
+        item.track=idMap.get(item.track)
+      }
+    }
+  }
+  for(const [from,to] of idMap){
+    if(from!==to&&Object.prototype.hasOwnProperty.call(s.weeklyProgress,from)){
+      s.weeklyProgress[to]=(Number(s.weeklyProgress[to])||0)+(Number(s.weeklyProgress[from])||0);
+      delete s.weeklyProgress[from]
+    }
+  }
+  if(idMap.has(s.activeTrack)){
+    s.activeTrack=idMap.get(s.activeTrack)
+  }
+  return s
+}
 function applyStarterContentV1(s){
   if(canReplaceDefaultTrackPlaceholder(s)){
     s.tracks=[];
@@ -168,12 +231,24 @@ function applyStarterContentV1(s){
   s.starterContentVersion=1;
   return s
 }
+function applyStarterContentV2(s){
+  repairStarterTrackDuplicates(s);
+  if(!s.tracks.some(t=>t?.id===s.activeTrack)){
+    s.activeTrack=s.tracks[0]?.id||null
+  }
+  s.starterContentVersion=2;
+  return s
+}
 function applyStarterContent(input){
   const s=normalize(structuredClone(input));
   let version=s.starterContentVersion;
   if(version<1){
     applyStarterContentV1(s);
     version=1
+  }
+  if(version<2){
+    applyStarterContentV2(s);
+    version=2
   }
   s.starterContentVersion=version;
   return normalize(s)
@@ -200,6 +275,7 @@ function save(render=true,reason="change"){
 }
 function dayKey(d=new Date()){return d.toLocaleDateString("en-CA")}
 function esc(v=""){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+function jsArg(v=""){return `'${String(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\n/g,"\\n").replace(/\r/g,"\\r")}'`}
 function fmtMin(m){m=Math.round(Number(m)||0);return m<60?`${m} min`:`${Math.floor(m/60)}h${m%60?` ${m%60}m`:""}`}
 function trackById(id){return state.tracks.find(t=>t.id===id)}
 function ensureActiveTrack(){
@@ -836,7 +912,73 @@ function showView(v){
     stopYoutubeCatalogPolling()
   }
 }
-document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>showView(b.dataset.view));
+function notice(message){
+  let el=$("appNotice");
+  if(!el&&document.body){
+    el=document.createElement("div");
+    el.id="appNotice";
+    el.className="app-notice";
+    document.body.appendChild(el)
+  }
+  if(!el){
+    return
+  }
+  el.textContent=message;
+  el.classList.add("show");
+  clearTimeout(notice._timer);
+  notice._timer=setTimeout(()=>el.classList.remove("show"),2600)
+}
+function missingTarget(){
+  notice("Este item não existe mais.");
+  loadVaultNotes().catch(()=>{})
+}
+function activateRow(event,el){
+  if(event.key!=="Enter"&&event.key!==" "){
+    return
+  }
+  event.preventDefault();
+  el.click()
+}
+async function navigateTo(view,options={}){
+  if(!$(view+"View")){
+    missingTarget();
+    return
+  }
+  if(view==="tracks"&&options.trackId){
+    if(!trackById(options.trackId)){
+      missingTarget();
+      renderHomeTracks();
+      return
+    }
+    state.activeTrack=options.trackId;
+    await save(false,"navigation");
+    renderTracks()
+  }
+  if(view==="youtube"&&options.playlistId){
+    if(!state.playlists.some(p=>p.id===options.playlistId)){
+      missingTarget();
+      return
+    }
+    state.activePlaylist=options.playlistId;
+    await save(false,"navigation");
+    renderYoutube()
+  }
+  showView(view);
+  try{
+    if(options.fichamentoId){
+      await selectFichamento(options.fichamentoId)
+    }else if(options.noteId&&view==="review"){
+      await openReviewNote(options.noteId)
+    }else if(options.noteId&&view==="fichamentos"){
+      await selectFichamento(options.noteId)
+    }else if(options.noteId){
+      await selectVaultNote(options.noteId)
+    }
+  }catch(e){
+    missingTarget()
+  }
+}
+document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>navigateTo(b.dataset.view));
 
 function renderHome(){
   const h=new Date().getHours(),sal=h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";
@@ -872,7 +1014,10 @@ function renderDailyPlan(){
     return
   }
   $("todayMinutes").value=String(state.dailyPlan.minutes||60);
-  $("dailyPlan").innerHTML=state.dailyPlan.items.length?state.dailyPlan.items.map((p,n)=>`<div class="plan-item"><div class="num">${n+1}</div><div class="grow"><strong>${esc(p.title)}</strong><span>${p.minutes} min ${p.track?`· ${esc(trackById(p.track)?.name||"")}`:p.type==="review"?"· Revisão":"· YouTube"}</span></div><button class="mini-btn" onclick="${p.type==="review"?"showView('review')":`openFocus('${p.id}','${p.type}')`}">${p.type==="review"?"Revisar":"Focar"}</button></div>`).join(""):`<div class="hint">Nada pendente para hoje.</div>`
+  $("dailyPlan").innerHTML=state.dailyPlan.items.length?state.dailyPlan.items.map((p,n)=>{
+    const action=p.type==="review"?"navigateTo('review')":`openFocus(${jsArg(p.id)},${jsArg(p.type)})`;
+    return `<div class="plan-item clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="num">${n+1}</div><div class="grow"><strong>${esc(p.title)}</strong><span>${p.minutes} min ${p.track?`· ${esc(trackById(p.track)?.name||"")}`:p.type==="review"?"· Revisão":"· YouTube"}</span></div><button class="mini-btn" onclick="event.stopPropagation();${action}">${p.type==="review"?"Revisar":"Focar"}</button></div>`
+  }).join(""):`<div class="hint">Nada pendente para hoje.</div>`
 }
 function renderHomeYoutube(){
   const v=todaysYoutube()[0];$("homeYoutube").innerHTML=v?videoRow(v,0,true):`<div class="hint">Sem vídeo liberado agora.</div>`
@@ -883,11 +1028,11 @@ function renderHomeTracks(){
     $("homeTracks").innerHTML=`<div class="hint">Crie sua primeira trilha para organizar cursos e estudos.</div>`;
     return
   }
-  $("homeTracks").innerHTML=state.tracks.map(t=>{const arr=state.items.filter(i=>i.track===t.id),avg=arr.length?Math.round(arr.reduce((a,b)=>a+itemProgress(b),0)/arr.length):0;return `<div class="track-row"><div class="num">${esc(t.sigil||"☽")}</div><div class="grow"><strong>${esc(t.name)}</strong><span>${avg}% concluído</span><div class="progress"><div style="width:${avg}%"></div></div></div></div>`}).join("")
+  $("homeTracks").innerHTML=state.tracks.map(t=>{const arr=state.items.filter(i=>i.track===t.id),avg=arr.length?Math.round(arr.reduce((a,b)=>a+itemProgress(b),0)/arr.length):0;return `<div class="track-row clickable-row" role="button" tabindex="0" onclick="navigateTo('tracks',{trackId:${jsArg(t.id)}})" onkeydown="activateRow(event,this)"><div class="num">${esc(t.sigil||"☽")}</div><div class="grow"><strong>${esc(t.name)}</strong><span>${avg}% concluído</span><div class="progress"><div style="width:${avg}%"></div></div></div></div>`}).join("")
 }
 function renderHomePriority(){
   const arr=state.items.filter(i=>itemProgress(i)<100).sort((a,b)=>score(b)-score(a)).slice(0,5);
-  $("homePriority").innerHTML=arr.map(i=>`<div class="plan-item"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><div class="grow"><strong>${esc(i.title)}</strong><span>${esc(trackById(i.track)?.name||"Sem trilha")}</span></div></div>`).join("")
+  $("homePriority").innerHTML=arr.length?arr.map(i=>`<div class="plan-item clickable-row" role="button" tabindex="0" onclick="openFocus(${jsArg(i.id)},'item')" onkeydown="activateRow(event,this)"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><div class="grow"><strong>${esc(i.title)}</strong><span>${esc(trackById(i.track)?.name||"Sem trilha")}</span></div></div>`).join(""):`<div class="hint">Nada priorizado agora.</div>`
 }
 
 function renderTracks(){
@@ -906,9 +1051,9 @@ function renderTracks(){
   $("trackProfile").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Cursos</span><strong>${courses.length}</strong></div><div class="profile-stat"><span>Concluídos</span><strong>${done}</strong></div><div class="profile-stat"><span>Progresso</span><strong>${avg}%</strong></div><div class="profile-stat"><span>Meta semanal</span><strong>${t.weeklyGoal||0}m</strong></div></div>`
 }
 function courseRow(i){
-  const p=itemProgress(i),nc=noteCount(i.id);return `<div class="course-row"><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${priorityLabel(i)} · ${nc} notas</span><div class="progress"><div style="width:${p}%"></div></div>${i.modules?.length?`<div class="module-list">${i.modules.map(m=>`<div class="module ${m.done?"done":""}"><span>${m.done?"✓":"○"} ${esc(m.title)}</span><span>${m.minutes||0}m</span></div>`).join("")}</div>`:""}</div><button class="mini-btn" onclick="editItem('${i.id}')">Editar</button><button class="mini-btn" onclick="openFichamentoForSource('${i.id}','item')">Fichamento</button><button class="mini-btn" onclick="openNotes('${i.id}','item')">Notas</button></div>`
+  const p=itemProgress(i),nc=noteCount(i.id);return `<div class="course-row clickable-row" role="button" tabindex="0" onclick="openFocus(${jsArg(i.id)},'item')" onkeydown="activateRow(event,this)"><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${priorityLabel(i)} · ${nc} notas</span><div class="progress"><div style="width:${p}%"></div></div>${i.modules?.length?`<div class="module-list">${i.modules.map(m=>`<div class="module ${m.done?"done":""}"><span>${m.done?"✓":"○"} ${esc(m.title)}</span><span>${m.minutes||0}m</span></div>`).join("")}</div>`:""}</div><button class="mini-btn" onclick="event.stopPropagation();editItem(${jsArg(i.id)})">Editar</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(i.id)},'item')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(i.id)},'item')">Notas</button></div>`
 }
-function setTrack(id){if(!trackById(id)){return}state.activeTrack=id;save();renderTracks()}
+function setTrack(id){if(!trackById(id)){missingTarget();return}state.activeTrack=id;save();renderTracks()}
 function setTrackFormError(message=""){const el=$("trackFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
 function setTrackSaving(saving){const btn=$("trackSaveBtn");if(!btn){return}btn.disabled=saving;btn.textContent=saving?"Salvando...":"Salvar"}
 function makeTrackId(name,tracks=state.tracks){let base=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"trilha",nid=base,n=2;while(tracks.some(t=>t.id===nid)){nid=`${base}-${n++}`}return nid}
@@ -979,9 +1124,9 @@ function todaysYoutube(){
 }
 function videoRow(v,n,today){
   const dur=Number(v.estimatedMinutes||0)>0?fmtMin(v.estimatedMinutes):"duração desconhecida";
-  return `<div class="video-row">${v.thumbnail?`<img class="video-thumb" src="${esc(v.thumbnail)}">`:"<div class='num'>▶</div>"}<div class="grow"><strong>${esc(v.title)}</strong><span>${esc(v.channel||"YouTube")} · ${dur} ${today?`· vídeo ${n+1} de hoje`:""} · ${noteCount(v.id)} notas</span></div><button class="mini-btn" onclick="openFocus('${v.id}','youtube')">Assistir</button><button class="mini-btn" onclick="openFichamentoForSource('${v.id}','youtube')">Fichamento</button><button class="mini-btn" onclick="openNotes('${v.id}','youtube')">Notas</button></div>`
+  return `<div class="video-row clickable-row" role="button" tabindex="0" onclick="openFocus(${jsArg(v.id)},'youtube')" onkeydown="activateRow(event,this)">${v.thumbnail?`<img class="video-thumb" src="${esc(v.thumbnail)}">`:"<div class='num'>▶</div>"}<div class="grow"><strong>${esc(v.title)}</strong><span>${esc(v.channel||"YouTube")} · ${dur} ${today?`· vídeo ${n+1} de hoje`:""} · ${noteCount(v.id)} notas</span></div><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(v.id)},'youtube')">Assistir</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(v.id)},'youtube')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(v.id)},'youtube')">Notas</button></div>`
 }
-function setPlaylist(id){state.activePlaylist=id;save();renderYoutube()}
+function setPlaylist(id){if(!state.playlists.some(p=>p.id===id)){missingTarget();return}state.activePlaylist=id;save();renderYoutube()}
 function setPlaylistFormError(message=""){const el=$("playlistFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
 function setPlaylistSaving(saving){const btn=$("playlistSaveBtn");if(!btn){return}btn.disabled=saving;btn.textContent=saving?"Salvando...":"Salvar"}
 function openPlaylistDialog(id=null){
@@ -1170,11 +1315,11 @@ function renderLibrary(){
   const list=state.items.filter(i=>(tf==="all"||i.kind===tf)&&(pf==="all"||priorityCode(i)===pf)&&(!q||[i.title,i.source,i.notes].join(" ").toLowerCase().includes(q)));
   $("libraryGrid").innerHTML=list.length?list.map(i=>libraryCard(i)).join(""):`<div class="hint">Nada encontrado.</div>`
 }
-function libraryCard(i){const p=itemProgress(i),tr=trackById(i.track);return `<article class="library-item"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><h3>${esc(i.title)}</h3><div class="meta"><span>${esc(tr?.name||"Sem trilha")}</span><span>${esc(i.source||i.kind)}</span><span>${p}%</span><span>${noteCount(i.id)} notas</span></div><div class="progress"><div style="width:${p}%"></div></div>${i.notes?`<p class="hint">${esc(i.notes).slice(0,180)}</p>`:""}<div class="item-actions"><button class="mini-btn" onclick="openFocus('${i.id}','item')">Focar</button><button class="mini-btn" onclick="editItem('${i.id}')">Editar</button><button class="mini-btn" onclick="openFichamentoForSource('${i.id}','item')">Fichamento</button><button class="mini-btn" onclick="openNotes('${i.id}','item')">Notas</button></div></article>`}
+function libraryCard(i){const p=itemProgress(i),tr=trackById(i.track);return `<article class="library-item clickable-row" role="button" tabindex="0" onclick="openFocus(${jsArg(i.id)},'item')" onkeydown="activateRow(event,this)"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><h3>${esc(i.title)}</h3><div class="meta"><span>${esc(tr?.name||"Sem trilha")}</span><span>${esc(i.source||i.kind)}</span><span>${p}%</span><span>${noteCount(i.id)} notas</span></div><div class="progress"><div style="width:${p}%"></div></div>${i.notes?`<p class="hint">${esc(i.notes).slice(0,180)}</p>`:""}<div class="item-actions"><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(i.id)},'item')">Focar</button><button class="mini-btn" onclick="event.stopPropagation();editItem(${jsArg(i.id)})">Editar</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(i.id)},'item')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(i.id)},'item')">Notas</button></div></article>`}
 function openItemDialog(kind="course",id=null){
   const active=ensureActiveTrack();
   const f=$("itemForm"),fields=f.elements;f.reset();fields.id.value=id||"";fields.track.innerHTML=state.tracks.length?state.tracks.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join(""):`<option value="">Sem trilha</option>`;fields.track.value=active?.id||"";fields.kind.value=kind;renderModuleEditor();
-  if(id){const i=state.items.find(x=>x.id===id);if(!i){return}["kind","track","title","url","source","estimatedMinutes","progress","notes"].forEach(k=>{if(fields[k]){fields[k].value=i[k]??""}});fields.important.value=String(i.important!==false);fields.urgent.value=String(!!i.urgent);renderModuleEditor(i.modules||[])}
+  if(id){const i=state.items.find(x=>x.id===id);if(!i){missingTarget();return}["kind","track","title","url","source","estimatedMinutes","progress","notes"].forEach(k=>{if(fields[k]){fields[k].value=i[k]??""}});fields.important.value=String(i.important!==false);fields.urgent.value=String(!!i.urgent);renderModuleEditor(i.modules||[])}
   $("itemDialog").showModal()
 }
 function editItem(id){openItemDialog("course",id)}
@@ -1193,7 +1338,7 @@ function removeInbox(id){state.inbox=state.inbox.filter(x=>x.id!==id);save()}
 function promoteInbox(id){const x=state.inbox.find(a=>a.id===id);if(!x){return}if(x.type==="youtube"){addYoutubeUrlToQueue(x.url,x.title);showView("youtube")}else{openItemDialog(x.type);const fields=$("itemForm").elements;fields.title.value=x.title;fields.url.value=x.url}state.inbox=state.inbox.filter(a=>a.id!==id);save(false)}
 
 async function openNotes(id,scope){
-  notesRef={id,scope};const i=resourceByScope(id,scope);if(!i)return;
+  notesRef={id,scope};const i=resourceByScope(id,scope);if(!i){missingTarget();return}
   $("notesTitle").textContent=i.title||"Notas";
   if(i.vaultNoteId){
     try{const data=await api(`/api/notes/${encodeURIComponent(i.vaultNoteId)}`);$("notesText").value=data.note.content||"";notesRef.noteId=i.vaultNoteId}catch{$("notesText").value=i.notes||noteTemplate("quick",`Notas - ${i.title}`)}
@@ -1213,16 +1358,16 @@ async function saveNotes(){
 
 function findFocus(id,scope){if(scope==="youtube")return state.youtubeQueue.find(i=>i.id===id);return state.items.find(i=>i.id===id)}
 async function openFocus(id,scope){
-  const i=findFocus(id,scope);if(!i)return;focusRef={id,scope};focusNoteId=i.focusDraftNoteId||null;timer=0;updateTimer();$("focusTitle").textContent=i.title;$("focusOpenLink").href=i.url||"#";let vid=null;try{const u=new URL(i.url);vid=u.hostname.includes("youtu.be")?u.pathname.slice(1):u.searchParams.get("v")}catch{};$("playerWrap").innerHTML=scope==="youtube"&&vid?`<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0" allowfullscreen></iframe>`:`<div class="player-placeholder">Abra o recurso e use o cronômetro para registrar a sessão.</div>`;
+  const i=findFocus(id,scope);if(!i){missingTarget();return}focusRef={id,scope};focusNoteId=i.focusDraftNoteId||null;timer=0;updateTimer();$("focusTitle").textContent=i.title;$("focusOpenLink").href=i.url||"#";let vid=null;try{const u=new URL(i.url);vid=u.hostname.includes("youtu.be")?u.pathname.slice(1):u.searchParams.get("v")}catch{};$("playerWrap").innerHTML=scope==="youtube"&&vid?`<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0" allowfullscreen></iframe>`:`<div class="player-placeholder">Abra o recurso e use o cronômetro para registrar a sessão.</div>`;
   $("focusTimestamp").value="";$("focusSaveState").textContent="Rascunho ainda não salvo.";
   if(focusNoteId){try{const data=await api(`/api/notes/${encodeURIComponent(focusNoteId)}`);$("focusNotesText").value=data.note.content||"";$("focusSaveState").textContent="Rascunho recuperado do vault."}catch{$("focusNotesText").value=noteTemplate("session",`Sessão - ${i.title}`)}}
   else{$("focusNotesText").value=noteTemplate("session",`Sessão - ${i.title}`)}
   $("focusDialog").showModal()
 }
-function startTimer(){if(timerHandle)return;timerHandle=setInterval(()=>{timer++;updateTimer()},1000)}
-function pauseTimer(){if(timerHandle){clearInterval(timerHandle);timerHandle=null}}
+function startTimer(){if(timerHandle){return}timerHandle=setInterval(()=>{timer++;updateTimer()},1000);updateTimer()}
+function pauseTimer(){if(timerHandle){clearInterval(timerHandle);timerHandle=null;updateTimer()}}
 function resetTimer(){pauseTimer();timer=0;updateTimer()}
-function updateTimer(){const h=String(Math.floor(timer/3600)).padStart(2,"0"),m=String(Math.floor(timer%3600/60)).padStart(2,"0"),s=String(timer%60).padStart(2,"0");$("timerDisplay").textContent=`${h}:${m}:${s}`}
+function updateTimer(){const h=String(Math.floor(timer/3600)).padStart(2,"0"),m=String(Math.floor(timer%3600/60)).padStart(2,"0"),s=String(timer%60).padStart(2,"0"),label=`${h}:${m}:${s}`;$("timerDisplay").textContent=label;if($("timerPauseBtn")){$("timerPauseBtn").disabled=!timerHandle}if($("focusSessionStatus")){$("focusSessionStatus").textContent=timer?`Duração da sessão: ${label}`:"Sessão ainda não iniciada."}}
 async function closeFocus(saveDraft=true){clearTimeout(focusSaveTimer);if(saveDraft){await saveFocusDraft(false)}pauseTimer();$("focusDialog").close()}
 async function completeFocus(){
   if(!focusRef)return;const i=findFocus(focusRef.id,focusRef.scope);if(!i)return;const mins=Math.max(1,Math.round(timer/60));
@@ -1254,10 +1399,33 @@ function insertFocusBlock(kind){
 function renderVaultHome(){
   if(!$("homeReviews"))return;
   const due=vaultNotes.filter(n=>n.reviewAt&&n.reviewAt<=dayKey()&&n.status!=="archived");
-  $("homeReviews").innerHTML=due.length?due.slice(0,4).map(n=>noteRow(n,"review")).join(""):`<div class="hint">Nada vencido para revisar.</div>`;
-  $("homeKnowledge").innerHTML=vaultNotes.length?vaultNotes.filter(n=>n.status!=="archived").slice(0,5).map(n=>noteRow(n,"notes")).join(""):`<div class="hint">Crie notas, fichamentos ou sessões de foco para alimentar o vault.</div>`
+  $("homeReviews").innerHTML=due.length?due.slice(0,4).map(n=>noteRow(n,"homeReview")).join(""):`<div class="hint">Nada vencido para revisar.</div>`;
+  $("homeKnowledge").innerHTML=vaultNotes.length?vaultNotes.filter(n=>n.status!=="archived").slice(0,5).map(n=>noteRow(n,"home")).join(""):`<div class="hint">Crie notas, fichamentos ou sessões de foco para alimentar o vault.</div>`
 }
-function noteRow(n,mode="notes"){return `<div class="vault-row ${activeVaultNote?.id===n.id?"active":""}" onclick="${mode==="fichamentos"?`selectFichamento('${n.id}')`:mode==="review"?`openReviewNote('${n.id}')`:`selectVaultNote('${n.id}')`}"><div class="grow"><strong>${esc(n.title)}</strong><span>${esc(NOTE_TYPE_LABELS[n.type]||n.type)}${n.reviewAt?` · revisar ${esc(n.reviewAt.slice(0,10))}`:""}${n.links?.length?` · ${n.links.length} links`:""}</span></div>${n.favorite?"<span class='tag'>★</span>":""}</div>`}
+function noteIsFichamento(n){return n.type==="literature"||n.type==="fichamento"}
+function noteUpdatedLabel(n){
+  const stamp=n.updatedAt||n.createdAt;
+  if(!stamp){return ""}
+  try{return new Date(stamp).toLocaleString("pt-BR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}catch{return ""}
+}
+function noteMeta(n){
+  const parts=[NOTE_TYPE_LABELS[n.type]||n.type||"Nota"];
+  const tr=trackById(n.trackId);
+  const updated=noteUpdatedLabel(n);
+  if(tr){parts.push(tr.name)}
+  if(updated){parts.push(updated)}
+  if(n.reviewAt){parts.push(`revisar ${n.reviewAt.slice(0,10)}`)}
+  if(n.links?.length){parts.push(`${n.links.length} link${n.links.length>1?"s":""}`)}
+  return parts.join(" · ")
+}
+function noteRowAction(n,mode="notes"){
+  if(mode==="homeReview"){return `navigateTo('review',{noteId:${jsArg(n.id)}})`}
+  if(mode==="home"){return noteIsFichamento(n)?`navigateTo('fichamentos',{fichamentoId:${jsArg(n.id)}})`:`navigateTo('notes',{noteId:${jsArg(n.id)}})`}
+  if(mode==="fichamentos"){return `selectFichamento(${jsArg(n.id)})`}
+  if(mode==="review"){return `openReviewNote(${jsArg(n.id)})`}
+  return `selectVaultNote(${jsArg(n.id)})`
+}
+function noteRow(n,mode="notes"){const action=noteRowAction(n,mode);return `<div class="vault-row clickable-row ${activeVaultNote?.id===n.id?"active":""}" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="grow"><strong>${esc(n.title)}</strong><span>${esc(noteMeta(n))}</span></div>${n.favorite?"<span class='tag'>★</span>":""}</div>`}
 function renderNotes(){
   if(!$("vaultList"))return;
   let list=[...vaultNotes],q=($("vaultSearchInput")?.value||"").toLowerCase().trim(),type=$("vaultTypeFilter")?.value||"all",track=$("vaultTrackFilter")?.value||"all",tag=($("vaultTagFilter")?.value||"").replace(/^#/,""),fav=$("vaultFavoriteFilter")?.value||"all",review=$("vaultReviewFilter")?.value||"all",sort=$("vaultSortFilter")?.value||"updated";
@@ -1279,8 +1447,8 @@ function renderReviews(){
   $("reviewQueue").innerHTML=due.length?due.map(n=>noteRow(n,"review")).join(""):`<div class="hint">Fila limpa. Agende revisões a partir de uma nota.</div>`;
   if(!currentReviewNote){$("reviewActive").innerHTML=`<div class="hint">Selecione uma nota vencida para revisar.</div>`}
 }
-async function selectVaultNote(id){activeVaultMode="notes";if($("fichamentoEditor")){$("fichamentoEditor").innerHTML=`<div class="hint">Selecione um fichamento.</div>`}await loadFullNote(id);renderVaultEditor("vaultEditorPane")}
-async function selectFichamento(id){activeVaultMode="fichamentos";if($("vaultEditorPane")){$("vaultEditorPane").innerHTML=`<div class="hint">Selecione uma nota.</div>`}await loadFullNote(id);renderVaultEditor("fichamentoEditor")}
+async function selectVaultNote(id){try{activeVaultMode="notes";if($("fichamentoEditor")){$("fichamentoEditor").innerHTML=`<div class="hint">Selecione um fichamento.</div>`}await loadFullNote(id);renderVaultEditor("vaultEditorPane")}catch(e){missingTarget()}}
+async function selectFichamento(id){try{activeVaultMode="fichamentos";if($("vaultEditorPane")){$("vaultEditorPane").innerHTML=`<div class="hint">Selecione uma nota.</div>`}await loadFullNote(id);renderVaultEditor("fichamentoEditor")}catch(e){missingTarget()}}
 async function loadFullNote(id){const data=await api(`/api/notes/${encodeURIComponent(id)}`);activeVaultNote=data.note;currentReviewNote=activeVaultMode==="review"?data.note:currentReviewNote}
 function renderVaultEditor(targetId){
   const n=activeVaultNote;if(!n)return;
@@ -1305,7 +1473,7 @@ async function newFichamento(source=null){
   const data=await api("/api/notes",{method:"POST",body:JSON.stringify({title,type:"literature",content:literatureTemplate(title,sourceType),trackId:source?.track||state.activeTrack,sourceType,sourceId:source?.id||null,tags:["fichamento"],source:source||{}})});
   activeVaultNote=data.note;if($("vaultEditorPane")){$("vaultEditorPane").innerHTML=`<div class="hint">Selecione uma nota.</div>`}showView("fichamentos");renderVaultEditor("fichamentoEditor");await loadVaultNotes()
 }
-function openFichamentoForSource(id,scope){const i=resourceByScope(id,scope);if(!i)return;newFichamento({id:i.id,title:i.title,url:i.url||"",track:i.track||null,sourceType:scope==="youtube"?"video":i.kind==="course"?"course":i.kind||"resource",channel:i.channel||"",source:i.source||""})}
+function openFichamentoForSource(id,scope){const i=resourceByScope(id,scope);if(!i){missingTarget();return}newFichamento({id:i.id,title:i.title,url:i.url||"",track:i.track||null,sourceType:scope==="youtube"?"video":i.kind==="course"?"course":i.kind||"resource",channel:i.channel||"",source:i.source||""})}
 async function promoteActiveSelection(){
   const ta=document.querySelector(".view.active #vaultContent")||$("notesText");const selected=ta.value.slice(ta.selectionStart,ta.selectionEnd).trim();const title=(selected.split("\n")[0]||prompt("Título da nota permanente")||"Ideia permanente").slice(0,90);
   const data=await api("/api/notes",{method:"POST",body:JSON.stringify({title,type:"permanent",content:noteTemplate("permanent",title)+(selected?`\n\n> ${selected}\n`:""),trackId:activeVaultNote?.trackId||state.activeTrack,relatedNoteIds:activeVaultNote?[activeVaultNote.id]:[],tags:["ideia"]})});
@@ -1319,7 +1487,7 @@ async function createFlashcardFromActive(){
 }
 async function scheduleActiveReview(days){if(!$("vaultReviewAt"))return;$("vaultReviewAt").value=isoDate(days);await saveActiveVaultNote()}
 async function archiveActiveNote(){if(!activeVaultNote||!confirm("Arquivar esta nota?"))return;const targetId=activeVaultMode==="fichamentos"?"fichamentoEditor":"vaultEditorPane";await api(`/api/notes/${encodeURIComponent(activeVaultNote.id)}`,{method:"DELETE"});activeVaultNote=null;await loadVaultNotes();if($(targetId)){$(targetId).innerHTML=`<div class="hint">Nota arquivada.</div>`}}
-async function openReviewNote(id){activeVaultMode="review";await loadFullNote(id);currentReviewNote=activeVaultNote;$("reviewActive").innerHTML=`<h2>${esc(currentReviewNote.title)}</h2><div class="markdown-preview">${mdToHtml(currentReviewNote.content||"")}</div><div class="editor-actions"><button class="mini-btn" onclick="reviewAction(1)">Difícil</button><button class="mini-btn" onclick="reviewAction(7)">Bom</button><button class="mini-btn" onclick="reviewAction(30)">Fácil</button><button class="mini-btn danger" onclick="reviewAction(null)">Arquivar</button></div>`}
+async function openReviewNote(id){try{activeVaultMode="review";await loadFullNote(id);currentReviewNote=activeVaultNote;$("reviewActive").innerHTML=`<h2>${esc(currentReviewNote.title)}</h2><div class="markdown-preview">${mdToHtml(currentReviewNote.content||"")}</div><div class="editor-actions"><button class="mini-btn" onclick="reviewAction(1)">Difícil</button><button class="mini-btn" onclick="reviewAction(7)">Bom</button><button class="mini-btn" onclick="reviewAction(30)">Fácil</button><button class="mini-btn danger" onclick="reviewAction(null)">Arquivar</button></div>`}catch(e){missingTarget()}}
 async function reviewAction(days){if(!currentReviewNote)return;if(days===null){await api(`/api/notes/${encodeURIComponent(currentReviewNote.id)}`,{method:"DELETE"})}else{await api(`/api/notes/${encodeURIComponent(currentReviewNote.id)}`,{method:"PUT",body:JSON.stringify({...currentReviewNote,reviewAt:isoDate(days),tags:[...(currentReviewNote.tags||[]).filter(t=>t!=="due"),"reviewed"]})});state.xp+=5;save(false)}currentReviewNote=null;await loadVaultNotes()}
 
 function renderCalendar(){
