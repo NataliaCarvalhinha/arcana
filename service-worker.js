@@ -1,4 +1,4 @@
-const CACHE_NAME="arcana-shell-v3";
+const CACHE_NAME="arcana-shell-v4";
 const APP_SHELL=["./","./index.html","./styles.css","./db.js","./app.js","./manifest.webmanifest","./assets/icons/arcana.svg"];
 
 self.addEventListener("install",event=>{

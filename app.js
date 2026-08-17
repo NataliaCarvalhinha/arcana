@@ -1,7 +1,34 @@
 
 const STORAGE_KEY="arcana-v5";
 const LEGACY_KEYS=["arcana-activity-hub-v4","arcana-activity-hub-v3","arcana-activity-hub-v2"];
-const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120}],items:[],playlists:[{id:"main-playlist",name:"Playlist de foco",url:"",lastSyncAt:null,lastSyncError:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]}};
+const STARTER_CONTENT_VERSION=1;
+const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120}],items:[],playlists:[{id:"main-playlist",name:"Playlist de foco",url:"",lastSyncAt:null,lastSyncError:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]},starterContentVersion:0};
+const STARTER_TRACKS=[
+  {id:"track-electronics",name:"Eletrônica",sigil:"☿",subtitle:"Circuitos · FPGA · RISC-V · Verificação",description:"Trilha técnica de sistemas embarcados, lógica digital, FPGA, arquitetura de computadores, RISC-V, SystemVerilog, UVM e VLSI.",weeklyGoal:240},
+  {id:"track-finance",name:"Finanças",sigil:"♃",subtitle:"Planejamento · Mercados · Investimentos · Portfólio",description:"Trilha para construir uma base sólida de finanças pessoais, mercados financeiros, investimentos, portfólio e finanças corporativas.",weeklyGoal:120}
+];
+const STARTER_COURSES=[
+  {id:"course-elec-01",track:"track-electronics",title:"Microcontrollers: Basic Architecture and Design",source:"Coursera",url:"https://www.coursera.org/learn/microcontrollers-basic-architecture-and-design",estimatedMinutes:900,important:true,urgent:false,description:"Arquitetura de MCU, processador, memória, interfaces, desempenho, energia e custo.",catalogOrder:1},
+  {id:"course-elec-02",track:"track-electronics",title:"Introduction to FPGA Design for Embedded Systems",source:"Coursera · University of Colorado Boulder",url:"https://www.coursera.org/learn/intro-fpga-design-embedded-systems",estimatedMinutes:900,important:true,urgent:false,description:"Introdução prática a FPGA, arquiteturas, ferramentas e primeiros projetos.",catalogOrder:2},
+  {id:"course-elec-03",track:"track-electronics",title:"Hardware Description Languages for FPGA Design",source:"Coursera · University of Colorado Boulder",url:"https://www.coursera.org/learn/fpga-hardware-description-languages",estimatedMinutes:900,important:true,urgent:false,description:"VHDL e Verilog para projeto lógico e FPGA. Base antes de SystemVerilog e UVM.",catalogOrder:3},
+  {id:"course-elec-04",track:"track-electronics",title:"FPGA Design for Embedded Systems Specialization",source:"Coursera · University of Colorado Boulder",url:"https://www.coursera.org/specializations/fpga-design",estimatedMinutes:7200,important:true,urgent:false,description:"Trilha principal de FPGA. Usar o progresso deste item como progresso global da especialização.",catalogOrder:4},
+  {id:"course-elec-05",track:"track-electronics",title:"Computer Architecture",source:"Coursera · Princeton University",url:"https://www.coursera.org/learn/comparch",estimatedMinutes:1800,important:true,urgent:false,description:"Arquitetura de microprocessadores modernos.",catalogOrder:5},
+  {id:"course-elec-06",track:"track-electronics",title:"Introduction to RISC-V (LFD110)",source:"Linux Foundation",url:"https://training.linuxfoundation.org/training/introduction-to-riscv-lfd110/",estimatedMinutes:480,important:true,urgent:false,description:"Introdução à ISA RISC-V, arquitetura, ecossistema e prática inicial.",catalogOrder:6},
+  {id:"course-elec-07",track:"track-electronics",title:"Building a RISC-V CPU Core (LFD111x)",source:"Linux Foundation",url:"https://training.linuxfoundation.org/training/building-a-riscv-cpu-core-lfd111x/",estimatedMinutes:960,important:true,urgent:false,description:"Projeto hands-on de um core RISC-V. Fazer depois da base de HDL/FPGA e arquitetura.",catalogOrder:7},
+  {id:"course-elec-08",track:"track-electronics",title:"SystemVerilog Tutorials: Hardware Design & Verification",source:"Coursera",url:"https://www.coursera.org/learn/systemverilog-tutorials-hardware-design--verification",estimatedMinutes:720,important:true,urgent:false,description:"SystemVerilog aplicado a RTL e verificação. Preparação para UVM.",catalogOrder:8},
+  {id:"course-elec-09",track:"track-electronics",title:"Introduction to the UVM",source:"Siemens Verification Academy",url:"https://verificationacademy.com/topics/uvm-universal-verification-methodology/introduction-to-the-uvm/",estimatedMinutes:720,important:true,urgent:false,description:"Introdução progressiva a Universal Verification Methodology até a construção de um testbench UVM.",catalogOrder:9},
+  {id:"course-elec-10",track:"track-electronics",title:"Chip based VLSI design for Industrial Applications",source:"Coursera",url:"https://www.coursera.org/specializations/chip-based-vlsi-design-for-industrial-applications",estimatedMinutes:5400,important:true,urgent:false,description:"Etapa complementar de VLSI, chip design, HDL e sistemas baseados em FPGA.",catalogOrder:10},
+  {id:"course-fin-01",track:"track-finance",title:"Personal & Family Financial Planning",source:"Coursera · University of Florida",url:"https://www.coursera.org/learn/family-planning",estimatedMinutes:1080,important:true,urgent:false,description:"Base prática de orçamento, fluxo de caixa, crédito, impostos, seguros e planejamento financeiro pessoal.",catalogOrder:1},
+  {id:"course-fin-02",track:"track-finance",title:"Financial Markets",source:"Coursera · Yale University",url:"https://www.coursera.org/learn/financial-markets-global",estimatedMinutes:1980,important:true,urgent:false,description:"Mercados financeiros, risco, behavioral finance, securities, seguros e sistema bancário.",catalogOrder:2},
+  {id:"course-fin-03",track:"track-finance",title:"Understanding Financial Markets",source:"Coursera · University of Geneva",url:"https://www.coursera.org/learn/understanding-financial-markets",estimatedMinutes:600,important:true,urgent:false,description:"Instrumentos, mercados e fundamentos do processo de investimento.",catalogOrder:3},
+  {id:"course-fin-04",track:"track-finance",title:"Meeting Investors' Goals",source:"Coursera · University of Geneva",url:"https://www.coursera.org/learn/meeting-investors-goals",estimatedMinutes:600,important:true,urgent:false,description:"Objetivos, restrições, perfil de risco e construção do processo de investimento.",catalogOrder:4},
+  {id:"course-fin-05",track:"track-finance",title:"Portfolio and Risk Management",source:"Coursera · University of Geneva",url:"https://www.coursera.org/learn/portfolio-risk-management",estimatedMinutes:600,important:true,urgent:false,description:"Construção de portfólio, diversificação, risco e avaliação de carteiras.",catalogOrder:5},
+  {id:"course-fin-06",track:"track-finance",title:"Securing Investment Returns in the Long Run",source:"Coursera · University of Geneva",url:"https://www.coursera.org/learn/investment-returns-long-run",estimatedMinutes:600,important:true,urgent:false,description:"Investimento ativo e passivo, performance ajustada ao risco, estratégia de longo prazo, sustainable finance e fintech.",catalogOrder:6},
+  {id:"course-fin-07",track:"track-finance",title:"Fundamentals of Finance",source:"Coursera · University of Pennsylvania (Wharton)",url:"https://www.coursera.org/learn/finance-fundamentals",estimatedMinutes:600,important:true,urgent:false,description:"Juros simples e compostos, NPV, anuidades, perpetuidades e fundamentos de corporate finance.",catalogOrder:7}
+];
+const STARTER_PLAYLISTS=[
+  {id:"playlist-learning-main",name:"Playlist de aprendizado",url:"https://youtube.com/playlist?list=PLNur2Ccbfc5k&si=NshejZYaJ3tQjxPF",lastSyncAt:null,lastSyncError:null}
+];
 let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),syncing=false;
 let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,currentReviewNote=null;
 const NOTE_TYPE_LABELS={literature:"Fichamento",permanent:"Permanente",concept:"Conceito",question:"Pergunta",insight:"Insight",quote:"Citação",reference:"Referência",next_action:"Ação",quick:"Rápida",session:"Sessão"};
@@ -28,8 +55,11 @@ function normalize(s){
   s.youtubeSettings={...d.youtubeSettings,...(s.youtubeSettings||{})};
   s.dailyPlan=s.dailyPlan||d.dailyPlan;
   s.weeklyProgress=s.weeklyProgress&&typeof s.weeklyProgress==="object"?s.weeklyProgress:{};
+  s.starterContentVersion=Math.max(0,Number(s.starterContentVersion)||0);
   s.activeTrack=s.tracks.some(t=>t?.id===s.activeTrack)?s.activeTrack:(s.tracks[0]?.id||null);
+  s.activePlaylist=s.playlists.some(p=>p?.id===s.activePlaylist)?s.activePlaylist:(s.playlists[0]?.id||null);
   s.tracks.forEach(t=>{if(t?.id&&!Object.prototype.hasOwnProperty.call(s.weeklyProgress,t.id)){s.weeklyProgress[t.id]=0}});
+  s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=Array.isArray(i.modules)?i.modules:[];i.notes=typeof i.notes==="string"?i.notes:"";i.description=typeof i.description==="string"?i.description:"";i.catalogOrder=Number(i.catalogOrder)||0});
   return s
 }
 function migrate(old){
@@ -41,6 +71,103 @@ function migrate(old){
   if(old.youtube)s.youtubeSettings={...s.youtubeSettings,mode:old.youtube.mode||"either",minutes:old.youtube.minutes||45,count:old.youtube.count||3,hideAfterLimit:old.youtube.hideAfterLimit!==false};
   s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=i.modules||[];i.notes=i.notes||""});
   return s
+}
+function starterCourse(seed){
+  return {id:seed.id,kind:"course",track:seed.track,title:seed.title,url:seed.url,source:seed.source,description:seed.description,estimatedMinutes:seed.estimatedMinutes,progress:0,status:"nao_iniciado",important:seed.important!==false,urgent:!!seed.urgent,modules:[],notes:"",catalogOrder:seed.catalogOrder,createdAt:new Date().toISOString()}
+}
+function mergeStarterCourse(existing,seed){
+  const base=starterCourse(seed);
+  const merged={...existing,...base};
+  merged.progress=Number(existing.progress??base.progress)||0;
+  merged.status=existing.status||statusFromProgress(merged.progress);
+  merged.modules=Array.isArray(existing.modules)?existing.modules:[...base.modules];
+  merged.notes=typeof existing.notes==="string"?existing.notes:base.notes;
+  merged.important=existing.important??base.important;
+  merged.urgent=existing.urgent??base.urgent;
+  merged.createdAt=existing.createdAt||base.createdAt;
+  return merged
+}
+function mergeStarterTrack(existing,seed){
+  return {
+    ...existing,
+    id:seed.id,
+    name:existing.name||seed.name,
+    sigil:existing.sigil||seed.sigil,
+    subtitle:existing.subtitle||seed.subtitle,
+    description:existing.description||seed.description,
+    weeklyGoal:existing.weeklyGoal??seed.weeklyGoal
+  }
+}
+function mergeStarterPlaylist(existing,seed){
+  return {...existing,...seed,lastSyncAt:existing.lastSyncAt??seed.lastSyncAt??null,lastSyncError:existing.lastSyncError??seed.lastSyncError??null}
+}
+function isDefaultTrackPlaceholder(track){
+  return !!track&&track.id==="default"&&track.name==="Principal"&&track.sigil==="☽"&&track.subtitle==="Seu caminho inicial"&&track.description==="Uma trilha vazia para começar sem publicar dados pessoais."&&Number(track.weeklyGoal||0)===120
+}
+function isDefaultPlaylistPlaceholder(playlist){
+  return !!playlist&&playlist.id==="main-playlist"&&playlist.name==="Playlist de foco"&&!playlist.url&&!playlist.lastSyncAt&&!playlist.lastSyncError
+}
+function canReplaceDefaultTrackPlaceholder(s){
+  return s.tracks.length===1&&isDefaultTrackPlaceholder(s.tracks[0])&&!s.items.some(i=>i.track==="default")&&Object.keys(s.weeklyProgress||{}).every(key=>key==="default")&&Number(s.weeklyProgress?.default||0)===0&&(s.activeTrack==="default"||!s.activeTrack)
+}
+function canReplaceDefaultPlaylistPlaceholder(s){
+  return s.playlists.length===1&&isDefaultPlaylistPlaceholder(s.playlists[0])&&!s.youtubeQueue.some(v=>v.playlistId==="main-playlist")&&(s.activePlaylist==="main-playlist"||!s.activePlaylist)
+}
+function applyStarterContentV1(s){
+  if(canReplaceDefaultTrackPlaceholder(s)){
+    s.tracks=[];
+    delete s.weeklyProgress.default;
+    s.activeTrack=null
+  }
+  if(canReplaceDefaultPlaylistPlaceholder(s)){
+    s.playlists=[];
+    s.activePlaylist=null
+  }
+  for(const seed of STARTER_TRACKS){
+    const index=s.tracks.findIndex(t=>t?.id===seed.id);
+    if(index>=0){
+      s.tracks[index]=mergeStarterTrack(s.tracks[index],seed)
+    }else{
+      s.tracks.push({...seed})
+    }
+    if(!Object.prototype.hasOwnProperty.call(s.weeklyProgress,seed.id)){
+      s.weeklyProgress[seed.id]=0
+    }
+  }
+  for(const seed of STARTER_COURSES){
+    const index=s.items.findIndex(i=>i?.id===seed.id);
+    if(index>=0){
+      s.items[index]=mergeStarterCourse(s.items[index],seed)
+    }else{
+      s.items.push(starterCourse(seed))
+    }
+  }
+  for(const seed of STARTER_PLAYLISTS){
+    const index=s.playlists.findIndex(p=>p?.id===seed.id);
+    if(index>=0){
+      s.playlists[index]=mergeStarterPlaylist(s.playlists[index],seed)
+    }else{
+      s.playlists.push({...seed})
+    }
+  }
+  if(!s.tracks.some(t=>t?.id===s.activeTrack)){
+    s.activeTrack=s.tracks[0]?.id||null
+  }
+  if(!s.playlists.some(p=>p?.id===s.activePlaylist)){
+    s.activePlaylist=STARTER_PLAYLISTS[0]?.id||s.playlists[0]?.id||null
+  }
+  s.starterContentVersion=1;
+  return s
+}
+function applyStarterContent(input){
+  const s=normalize(structuredClone(input));
+  let version=s.starterContentVersion;
+  if(version<1){
+    applyStarterContentV1(s);
+    version=1
+  }
+  s.starterContentVersion=version;
+  return normalize(s)
 }
 function save(render=true,reason="change"){
   let persisted;
@@ -81,6 +208,7 @@ function ensureActiveTrack(){
 }
 function track(){return ensureActiveTrack()}
 function activePlaylist(){return state.playlists.find(p=>p.id===state.activePlaylist)||state.playlists[0]}
+function courseOrderValue(item){const order=Number(item?.catalogOrder);return order>0?order:Number.MAX_SAFE_INTEGER}
 function priorityCode(i){return i.important?(i.urgent?"IU":"I"):(i.urgent?"U":"N")}
 function priorityLabel(i){return i.important?(i.urgent?"Importante + urgente":"Importante"):(i.urgent?"Urgente":"Baixa prioridade")}
 function score(i){const p=priorityCode(i);let s=p==="IU"?100:p==="I"?70:p==="U"?55:20;if(i.status==="em_andamento")s+=15;if((i.estimatedMinutes||999)<=30)s+=6;return s-(i.progress||0)/10}
@@ -202,7 +330,7 @@ function renderTracks(){
     return
   }
   $("trackHero").innerHTML=`<h2>${esc(t.sigil||"☽")} ${esc(t.name)}</h2><div class="kicker">${esc(t.subtitle||"")}</div><p>${esc(t.description||"")}</p>`;
-  const courses=state.items.filter(i=>i.track===t.id&&i.kind==="course");
+  const courses=state.items.filter(i=>i.track===t.id&&i.kind==="course").sort((a,b)=>courseOrderValue(a)-courseOrderValue(b)||String(a.createdAt||"").localeCompare(String(b.createdAt||""))||a.title.localeCompare(b.title,"pt-BR"));
   $("trackCourses").innerHTML=courses.length?courses.map(i=>courseRow(i)).join(""):`<div class="hint">Nenhum curso ainda.</div>`;
   const avg=courses.length?Math.round(courses.reduce((a,b)=>a+itemProgress(b),0)/courses.length):0,done=courses.filter(i=>itemProgress(i)>=100).length;
   $("trackProfile").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Cursos</span><strong>${courses.length}</strong></div><div class="profile-stat"><span>Concluídos</span><strong>${done}</strong></div><div class="profile-stat"><span>Progresso</span><strong>${avg}%</strong></div><div class="profile-stat"><span>Meta semanal</span><strong>${t.weeklyGoal||0}m</strong></div></div>`
@@ -547,15 +675,17 @@ async function initApp(){
   }
   try{
     if(window.ArcanaStorage){
-      state=normalize(await ArcanaStorage.init({storageKey:STORAGE_KEY,legacyKeys:LEGACY_KEYS,defaultState:DEFAULT_STATE,normalize,migrate}));
+      state=applyStarterContent(await ArcanaStorage.init({storageKey:STORAGE_KEY,legacyKeys:LEGACY_KEYS,defaultState:DEFAULT_STATE,normalize,migrate}));
       await ArcanaStorage.saveState(state);
       await migrateLocalVaultFromBackend()
     }else{
-      state=loadState()
+      state=applyStarterContent(loadState());
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
     }
   }catch(e){
     console.warn("[Arcana] IndexedDB unavailable, falling back to localStorage",e);
-    state=loadState()
+    state=applyStarterContent(loadState());
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
   }
   renderAll();
   await loadVaultNotes();

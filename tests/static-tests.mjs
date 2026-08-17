@@ -31,6 +31,12 @@ assert.match(app, /setTrackSaving\(true\)/, "track save shows a saving state");
 assert.match(app, /function ensureActiveTrack/, "active track is normalized before render");
 assert.match(app, /state\.activeTrack=null/, "empty track state is represented explicitly");
 assert.match(app, /Crie sua primeira trilha/, "track screen has a first-track empty state");
+assert.match(app, /const STARTER_CONTENT_VERSION=1/, "starter content version is declared");
+assert.match(app, /function applyStarterContentV1/, "starter content uses versioned migration functions");
+assert.match(app, /playlist-learning-main/, "starter playlist is present in the catalog");
+assert.match(app, /course-elec-01/, "starter electronics catalog is present");
+assert.match(app, /course-fin-07/, "starter finance catalog is present");
+assert.match(app, /state=applyStarterContent\(await ArcanaStorage\.init/, "starter content is applied during IndexedDB startup");
 assert.doesNotMatch(app, /state\.dailyPlan\.date!==dayKey\(\)\|\|!state\.dailyPlan\.items\.length/, "empty daily plans do not recursively regenerate");
 assert.doesNotMatch(app, /\$\("trackForm"\)\.id\.value|const f=e\.currentTarget,id=f\.id\.value/, "track flow does not read colliding form properties");
 assert.match(db, /async function list\(name\)/, "storage exposes a store inspection helper");
@@ -38,7 +44,7 @@ assert.match(db, /tracks","courses","modules"/, "IndexedDB schema still contains
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v3/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v4/, "service worker cache version invalidates old app shell");
 assert.ok(!/youtube\.com|youtu\.be/.test(worker), "service worker does not cache YouTube");
 
 function makeElement(id) {
@@ -154,6 +160,60 @@ vm.runInContext(app.slice(0, app.indexOf("async function initApp")), context, { 
 await vm.runInContext(`(async()=>{
   scheduleAutoBackup=()=>{};
   renderAll=()=>{renderDailyPlan();renderHomeTracks();renderTracks();};
+  const seededFresh=applyStarterContent(structuredClone(DEFAULT_STATE));
+  if(seededFresh.starterContentVersion!==1){throw new Error("starter content version was not stored")}
+  if(seededFresh.tracks.length!==2){throw new Error("fresh seed should replace placeholders with exactly two starter tracks")}
+  if(seededFresh.tracks.map(t=>t.id).join(",")!=="track-electronics,track-finance"){throw new Error("starter tracks did not keep the expected order")}
+  if(seededFresh.items.filter(i=>i.kind==="course").length!==17){throw new Error("fresh seed should create exactly 17 starter courses")}
+  if(seededFresh.playlists.length!==1||seededFresh.playlists[0].id!=="playlist-learning-main"){throw new Error("fresh seed should replace the placeholder playlist")}
+  if(seededFresh.activeTrack!=="track-electronics"){throw new Error("fresh seed should activate electronics first")}
+  if(seededFresh.activePlaylist!=="playlist-learning-main"){throw new Error("fresh seed should activate the learning playlist")}
+
+  const seededTwice=structuredClone(seededFresh);
+  seededTwice.starterContentVersion=0;
+  const rerunSeed=applyStarterContent(seededTwice);
+  if(rerunSeed.tracks.filter(t=>t.id==="track-electronics").length!==1||rerunSeed.tracks.filter(t=>t.id==="track-finance").length!==1){throw new Error("rerunning the seed duplicated starter tracks")}
+  if(rerunSeed.items.filter(i=>i.id.startsWith("course-elec-")).length!==10||rerunSeed.items.filter(i=>i.id.startsWith("course-fin-")).length!==7){throw new Error("rerunning the seed duplicated starter courses")}
+  if(rerunSeed.playlists.filter(p=>p.id==="playlist-learning-main").length!==1){throw new Error("rerunning the seed duplicated the starter playlist")}
+
+  const existingProfile=normalize({...structuredClone(DEFAULT_STATE),tracks:[{id:"frances",name:"Francês",sigil:"F",subtitle:"Idioma",description:"Curso pessoal",weeklyGoal:90}],activeTrack:"frances",items:[],playlists:[{id:"playlist-custom",name:"Outra playlist",url:"https://youtube.com/playlist?list=custom",lastSyncAt:null,lastSyncError:null}],activePlaylist:"playlist-custom",youtubeQueue:[],weeklyProgress:{frances:12},starterContentVersion:0});
+  const mergedProfile=applyStarterContent(existingProfile);
+  if(mergedProfile.tracks.map(t=>t.id).join(",")!=="frances,track-electronics,track-finance"){throw new Error("starter tracks should append after existing custom tracks")}
+  if(mergedProfile.activeTrack!=="frances"){throw new Error("existing active track should be preserved")}
+  if(mergedProfile.activePlaylist!=="playlist-custom"){throw new Error("existing active playlist should be preserved")}
+
+  const preservedState=applyStarterContent(structuredClone(DEFAULT_STATE));
+  const preservedCourse=preservedState.items.find(i=>i.id==="course-elec-01");
+  preservedCourse.progress=35;
+  preservedCourse.status="em_andamento";
+  preservedCourse.modules=[{title:"Módulo 1",minutes:30,done:true}];
+  preservedCourse.notes="Notas preservadas";
+  preservedCourse.important=false;
+  preservedCourse.urgent=true;
+  preservedCourse.createdAt="2026-08-01T00:00:00.000Z";
+  preservedState.youtubeSettings.minutes=20;
+  preservedState.playlists.unshift({id:"playlist-alt",name:"Outra playlist",url:"https://youtube.com/playlist?list=alt",lastSyncAt:null,lastSyncError:null});
+  preservedState.activePlaylist="playlist-alt";
+  preservedState.starterContentVersion=0;
+  const preservedRerun=applyStarterContent(preservedState);
+  const rerunCourse=preservedRerun.items.find(i=>i.id==="course-elec-01");
+  if(rerunCourse.progress!==35||rerunCourse.status!=="em_andamento"){throw new Error("starter rerun should preserve course progress and status")}
+  if(rerunCourse.modules.length!==1||rerunCourse.modules[0].title!=="Módulo 1"){throw new Error("starter rerun should preserve existing course modules")}
+  if(rerunCourse.notes!=="Notas preservadas"||rerunCourse.important!==false||rerunCourse.urgent!==true){throw new Error("starter rerun should preserve user course fields")}
+  if(rerunCourse.createdAt!=="2026-08-01T00:00:00.000Z"){throw new Error("starter rerun should preserve createdAt")}
+  if(preservedRerun.youtubeSettings.minutes!==20){throw new Error("starter rerun should preserve YouTube settings")}
+  if(preservedRerun.activePlaylist!=="playlist-alt"){throw new Error("starter rerun should not override the selected playlist")}
+
+  state=structuredClone(seededFresh);
+  renderAll();
+  generatePlan();
+  if(!$("homeTracks").innerHTML.includes("Eletrônica")||!$("homeTracks").innerHTML.includes("Finanças")){throw new Error("seeded tracks did not render in the Sanctuary")}
+  if(!$("trackTabs").innerHTML.includes("Eletrônica")||!$("trackCourses").innerHTML.includes("Microcontrollers: Basic Architecture and Design")){throw new Error("seeded track catalog did not render")}
+  if(!state.dailyPlan.items.length||$("dailyPlan").innerHTML.includes("Nada pendente")){throw new Error("seeded courses did not generate a daily plan")}
+  await ArcanaStorage.saveState(state);
+  const storedSeed=await ArcanaStorage.loadState(DEFAULT_STATE);
+  if(storedSeed.starterContentVersion!==1||storedSeed.items.filter(i=>i.kind==="course").length!==17){throw new Error("seeded starter content did not persist through the canonical storage path")}
+
   state=normalize({...structuredClone(DEFAULT_STATE),activeTrack:null,tracks:[],items:[],weeklyProgress:{},dailyPlan:{date:null,minutes:60,items:[]}});
   renderDailyPlan();
   renderTracks();
@@ -213,5 +273,6 @@ await vm.runInContext(`(async()=>{
 assert.ok(savedStates.some(s => s.tracks?.some(t => t.id === "tarot")), "IndexedDB save receives first track in appState");
 assert.ok(savedStates.some(s => s.tracks?.some(t => t.id === "astrologia")), "IndexedDB save receives second track in appState");
 assert.ok(savedStates.at(-1).items?.some(i => i.kind === "course" && i.track === "tarot"), "course creation persists with active track");
+assert.ok(savedStates.some(s => s.starterContentVersion === 1 && s.tracks?.some(t => t.id === "track-electronics") && s.playlists?.some(p => p.id === "playlist-learning-main")), "starter content persists through IndexedDB appState");
 
 console.log("static and track regression checks passed");
