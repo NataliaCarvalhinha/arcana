@@ -2,8 +2,10 @@
 const STORAGE_KEY="arcana-v5";
 const LEGACY_KEYS=["arcana-activity-hub-v4","arcana-activity-hub-v3","arcana-activity-hub-v2"];
 const STARTER_CONTENT_VERSION=2;
+const STARTER_CURRICULUM_VERSION=1;
+const CURRICULUM_FETCHED_AT="2026-08-17T00:00:00.000Z";
 const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vaultPath:"",lastSyncAt:null,noteCount:0,fichamentoCount:0,attachmentCount:0,flashcardCount:0,conflicts:0,autoSync:"after_session",openUrl:"",error:null};
-const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]},starterContentVersion:0};
+const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]},starterContentVersion:0,starterCurriculumVersion:0};
 const STARTER_TRACKS=[
   {id:"track-electronics",name:"Eletrônica",sigil:"☿",subtitle:"Circuitos · FPGA · RISC-V · Verificação",description:"Trilha técnica de sistemas embarcados, lógica digital, FPGA, arquitetura de computadores, RISC-V, SystemVerilog, UVM e VLSI.",weeklyGoal:240},
   {id:"track-finance",name:"Finanças",sigil:"♃",subtitle:"Planejamento · Mercados · Investimentos · Portfólio",description:"Trilha para construir uma base sólida de finanças pessoais, mercados financeiros, investimentos, portfólio e finanças corporativas.",weeklyGoal:120}
@@ -27,11 +29,194 @@ const STARTER_COURSES=[
   {id:"course-fin-06",track:"track-finance",title:"Securing Investment Returns in the Long Run",source:"Coursera · University of Geneva",url:"https://www.coursera.org/learn/investment-returns-long-run",estimatedMinutes:600,important:true,urgent:false,description:"Investimento ativo e passivo, performance ajustada ao risco, estratégia de longo prazo, sustainable finance e fintech.",catalogOrder:6},
   {id:"course-fin-07",track:"track-finance",title:"Fundamentals of Finance",source:"Coursera · University of Pennsylvania (Wharton)",url:"https://www.coursera.org/learn/finance-fundamentals",estimatedMinutes:600,important:true,urgent:false,description:"Juros simples e compostos, NPV, anuidades, perpetuidades e fundamentos de corporate finance.",catalogOrder:7}
 ];
+function starterLesson(id,title,order,type="video",estimatedMinutes=0,description=""){
+  return {id,title,order,type,estimatedMinutes,minutes:estimatedMinutes,description,progress:0,status:"nao_iniciado",done:false}
+}
+function starterModule(id,title,order,estimatedMinutes=0,description="",lessons=[]){
+  return {id,title,order,estimatedMinutes,minutes:estimatedMinutes,description,progress:0,status:"nao_iniciado",done:false,lessons}
+}
+function starterCurriculum(source,sourceUrl,modules,extra={}){
+  return {curriculumSource:source,curriculumSourceUrl:sourceUrl,modules,...extra}
+}
+const STARTER_CURRICULUM={
+  "course-elec-01":starterCurriculum("Coursera","https://www.coursera.org/learn/microcontrollers-basic-architecture-and-design",[
+    starterModule("module-elec-01-01","MCU Background and Analysis",1,300,"Microcontroller background, constraints, and analysis."),
+    starterModule("module-elec-01-02","MCU Components",2,180,"Core components and how they fit together."),
+    starterModule("module-elec-01-03","MCU Power Control and Timing",3,180,"Power behavior, timing, and control concerns."),
+    starterModule("module-elec-01-04","MCU Processors",4,180,"Processor organization and processor-facing design tradeoffs."),
+    starterModule("module-elec-01-05","MCU Processor Details",5,540,"Detailed processor behavior for microcontroller design.")
+  ]),
+  "course-elec-02":starterCurriculum("Coursera","https://www.coursera.org/learn/intro-fpga-design-embedded-systems",[
+    starterModule("module-elec-02-01","What's this programmable logic stuff anyway? History and Architecture",1,300,"Programmable logic history and architecture."),
+    starterModule("module-elec-02-02","FPGA Design Tool Flow; An Example Design",2,240,"FPGA design tools and an example design flow."),
+    starterModule("module-elec-02-03","FPGA Architectures: SRAM, FLASH, and Anti-fuse",3,240,"SRAM, FLASH, and anti-fuse FPGA architectures."),
+    starterModule("module-elec-02-04","Programmable logic design using schematic entry design tools",4,360,"Programmable logic design with schematic entry tools.")
+  ]),
+  "course-elec-03":starterCurriculum("Coursera","https://www.coursera.org/learn/fpga-hardware-description-languages",[
+    starterModule("module-elec-03-01","Basics of VHDL",1,540,"VHDL fundamentals for FPGA design."),
+    starterModule("module-elec-03-02","VHDL Logic Design Techniques",2,720,"Logic design techniques with VHDL."),
+    starterModule("module-elec-03-03","Basics of Verilog",3,420,"Verilog fundamentals."),
+    starterModule("module-elec-03-04","Verilog and System Verilog Design Techniques",4,600,"Verilog and SystemVerilog design techniques.")
+  ]),
+  "course-elec-04":starterCurriculum("Coursera","https://www.coursera.org/specializations/fpga-design",[
+    starterModule("module-elec-04-01","Introduction to FPGA Design for Embedded Systems",1,1140,"Course 1 in the FPGA Design for Embedded Systems Specialization."),
+    starterModule("module-elec-04-02","Hardware Description Languages for FPGA Design",2,2220,"Course 2 in the FPGA Design for Embedded Systems Specialization."),
+    starterModule("module-elec-04-03","FPGA Softcore Processors and IP Acquisition",3,660,"Course 3 in the FPGA Design for Embedded Systems Specialization."),
+    starterModule("module-elec-04-04","FPGA Capstone: Building FPGA Projects",4,1800,"Course 4 in the FPGA Design for Embedded Systems Specialization.")
+  ],{programType:"specialization",childCourseIds:["course-elec-02","course-elec-03"],childCourses:[
+    {id:"program-elec-04-course-03",title:"FPGA Softcore Processors and IP Acquisition",order:3,estimatedMinutes:660,sourceUrl:"https://www.coursera.org/specializations/fpga-design",progress:0,status:"nao_iniciado"},
+    {id:"program-elec-04-course-04",title:"FPGA Capstone: Building FPGA Projects",order:4,estimatedMinutes:1800,sourceUrl:"https://www.coursera.org/specializations/fpga-design",progress:0,status:"nao_iniciado"}
+  ]}),
+  "course-elec-05":starterCurriculum("Coursera","https://www.coursera.org/learn/comparch",[
+    starterModule("module-elec-05-01","Introduction, Instruction Set Architecture, and Microcode",1,240,"Architecture foundations, ISA, and microcode."),
+    starterModule("module-elec-05-02","Pipelining Review",2,180,"Pipeline concepts review."),
+    starterModule("module-elec-05-03","Cache Review",3,180,"Cache concepts review."),
+    starterModule("module-elec-05-04","Superscalar 1",4,180,"Superscalar processor concepts."),
+    starterModule("module-elec-05-05","Superscalar 2 & Exceptions",5,120,"Superscalar execution and exceptions."),
+    starterModule("module-elec-05-06","Superscalar 3",6,120,"Further superscalar design."),
+    starterModule("module-elec-05-07","Superscalar 4",7,60,"Final superscalar topics."),
+    starterModule("module-elec-05-08","VLIW 1",8,120,"Very long instruction word architectures."),
+    starterModule("module-elec-05-09","VLIW2",9,180,"Additional VLIW topics."),
+    starterModule("module-elec-05-10","Branch Prediction",10,120,"Branch prediction techniques."),
+    starterModule("module-elec-05-11","Advanced Caches 1",11,180,"Advanced cache design."),
+    starterModule("module-elec-05-12","Advanced Caches 2",12,120,"Additional advanced cache design."),
+    starterModule("module-elec-05-13","Memory Protection",13,180,"Memory protection mechanisms."),
+    starterModule("module-elec-05-14","Vector Processors and GPUs",14,180,"Vector processors and GPU architecture."),
+    starterModule("module-elec-05-15","Multithreading",15,120,"Hardware multithreading."),
+    starterModule("module-elec-05-16","Parallel Programming 1",16,60,"Parallel programming foundations."),
+    starterModule("module-elec-05-17","Parallel Programming 2",17,60,"Additional parallel programming topics."),
+    starterModule("module-elec-05-18","Small Multiprocessors",18,120,"Small multiprocessor systems."),
+    starterModule("module-elec-05-19","Multiprocessor Interconnect 1",19,180,"Multiprocessor interconnects."),
+    starterModule("module-elec-05-20","Multiprocessor Interconnect 2",20,180,"Additional interconnect topics."),
+    starterModule("module-elec-05-21","Large Multiprocessors (Directory Protocols)",21,180,"Large multiprocessors and directory protocols.")
+  ]),
+  "course-elec-06":starterCurriculum("Linux Foundation","https://training.linuxfoundation.org/training/introduction-to-riscv-lfd110/",[
+    starterModule("module-elec-06-01","Welcome!",1,30,"Course welcome and orientation."),
+    starterModule("module-elec-06-02","Chapter 1. Getting to Know RISC-V",2,150,"RISC-V origins, goals, and ecosystem."),
+    starterModule("module-elec-06-03","Chapter 2. Exploring the RISC-V Instruction Set Architecture",3,180,"RISC-V ISA structure and concepts."),
+    starterModule("module-elec-06-04","Chapter 3. Hands-On RISC-V Assembly Language",4,180,"Hands-on RISC-V assembly language."),
+    starterModule("module-elec-06-05","Chapter 4. RISC-V Development Tools",5,180,"RISC-V tools and development workflow."),
+    starterModule("module-elec-06-06","Chapter 5. Meeting the Demands of Today's Computing",6,180,"How RISC-V addresses modern computing demands.")
+  ]),
+  "course-elec-07":starterCurriculum("Linux Foundation","https://training.linuxfoundation.org/training/building-a-riscv-cpu-core-lfd111x/",[
+    starterModule("module-elec-07-01","Welcome!",1,20,"Course welcome and orientation."),
+    starterModule("module-elec-07-02","Chapter 1. Learning Platform",2,60,"Learning platform setup and usage."),
+    starterModule("module-elec-07-03","Chapter 2. Digital Logic",3,60,"Digital logic foundations for the CPU core."),
+    starterModule("module-elec-07-04","Chapter 3. The Role of RISC-V",4,60,"RISC-V's role in the CPU design."),
+    starterModule("module-elec-07-05","Chapter 4. RISC-V-Subset CPU",5,120,"Build a RISC-V-subset CPU."),
+    starterModule("module-elec-07-06","Chapter 5. Completing Your RISC-V CPU",6,90,"Complete the CPU core."),
+    starterModule("module-elec-07-07","Final Exam",7,30,"Final verified-track assessment.")
+  ]),
+  "course-elec-08":starterCurriculum("Coursera","https://www.coursera.org/learn/systemverilog-tutorials-hardware-design--verification",[
+    starterModule("module-elec-08-01","SystemVerilog Foundations & Basic Modules",1,60,"Foundations, modules, ports, types, arrays, and iteration.",[
+      starterLesson("lesson-elec-08-01-01","Quartus Prime Installation and Testing",1),
+      starterLesson("lesson-elec-08-01-02","Understanding Modules, Ports, and Instantiation",2),
+      starterLesson("lesson-elec-08-01-03","Introduction to SystemVerilog's Data and Numeric Types",3),
+      starterLesson("lesson-elec-08-01-04","Practical Guide to SystemVerilog Arrays for FPGA Design",4),
+      starterLesson("lesson-elec-08-01-05","SystemVerilog Arrays and Iteration",5)
+    ]),
+    starterModule("module-elec-08-02","Dynamic Data Structures, Custom Types & Operators",2,60,"Dynamic arrays, queues, associative arrays, operators, and custom types.",[
+      starterLesson("lesson-elec-08-02-01","Dynamic Arrays, Queues & Associative Arrays",1),
+      starterLesson("lesson-elec-08-02-02","SystemVerilog Operators",2),
+      starterLesson("lesson-elec-08-02-03","Custom Types: Typedef, Enum, Struct",3),
+      starterLesson("lesson-elec-08-02-04","Custom Data Types in SystemVerilog",4),
+      starterLesson("lesson-elec-08-02-05","Combinational Logic: Continuous Assignment",5),
+      starterLesson("lesson-elec-08-02-06","Continuous Assignments and Multiplexers in SystemVerilog",6)
+    ]),
+    starterModule("module-elec-08-03","Sequential Logic and State Machine",3,180,"Sequential logic, decision logic, state machines, loops, and functions.",[
+      starterLesson("lesson-elec-08-03-01","Sequential Logic: Modeling sequential logic",1),
+      starterLesson("lesson-elec-08-03-02","Combinational Decision Logic, State Machines, and Priority Encoders",2),
+      starterLesson("lesson-elec-08-03-03","Loops in SystemVerilog",3),
+      starterLesson("lesson-elec-08-03-04","Functions in SystemVerilog",4),
+      starterLesson("lesson-elec-08-03-05","SystemVerilog Functions and Recursion",5),
+      starterLesson("lesson-elec-08-03-06","Course Wrap-Up",6)
+    ])
+  ]),
+  "course-elec-09":starterCurriculum("Siemens Verification Academy","https://verificationacademy.com/topics/uvm-universal-verification-methodology/introduction-to-the-uvm/",[
+    starterModule("module-elec-09-01","Introduction to the UVM",1,720,"Official Siemens Verification Academy session sequence.",[
+      starterLesson("lesson-elec-09-01-01","Overview and Welcome",1),
+      starterLesson("lesson-elec-09-01-02","SystemVerilog Primer for VHDL Engineers",2),
+      starterLesson("lesson-elec-09-01-03","Object Oriented Programming",3),
+      starterLesson("lesson-elec-09-01-04","SystemVerilog Interfaces",4),
+      starterLesson("lesson-elec-09-01-05","Packages, Includes and Macros",5),
+      starterLesson("lesson-elec-09-01-06","UVM Components and Tests",6),
+      starterLesson("lesson-elec-09-01-07","UVM Environments",7),
+      starterLesson("lesson-elec-09-01-08","Connecting Objects",8),
+      starterLesson("lesson-elec-09-01-09","Transaction-Level Testing",9),
+      starterLesson("lesson-elec-09-01-10","The Analysis Layer",10),
+      starterLesson("lesson-elec-09-01-11","UVM Reporting",11),
+      starterLesson("lesson-elec-09-01-12","Functional Coverage with Covergroups",12),
+      starterLesson("lesson-elec-09-01-13","Introduction to Sequences",13)
+    ])
+  ]),
+  "course-elec-10":starterCurriculum("Coursera","https://www.coursera.org/specializations/chip-based-vlsi-design-for-industrial-applications",[
+    starterModule("module-elec-10-01","Fundamentals of Digital Design for VLSI Chip Design",1,1080,"Course 1 in the Chip based VLSI design for Industrial Applications Specialization."),
+    starterModule("module-elec-10-02","VLSI Chip Design and Simulation with Electric VLSI EDA Tool",2,840,"Course 2 in the specialization."),
+    starterModule("module-elec-10-03","Design of Digital Circuits with VHDL Programming",3,840,"Course 3 in the specialization."),
+    starterModule("module-elec-10-04","FPGA Architecture Based System for Industrial Application Using Vivado",4,1080,"Course 4 in the specialization.")
+  ],{programType:"specialization",childCourseIds:[],childCourses:[
+    {id:"program-elec-10-course-01",title:"Fundamentals of Digital Design for VLSI Chip Design",order:1,estimatedMinutes:1080,sourceUrl:"https://www.coursera.org/specializations/chip-based-vlsi-design-for-industrial-applications",progress:0,status:"nao_iniciado"},
+    {id:"program-elec-10-course-02",title:"VLSI Chip Design and Simulation with Electric VLSI EDA Tool",order:2,estimatedMinutes:840,sourceUrl:"https://www.coursera.org/specializations/chip-based-vlsi-design-for-industrial-applications",progress:0,status:"nao_iniciado"},
+    {id:"program-elec-10-course-03",title:"Design of Digital Circuits with VHDL Programming",order:3,estimatedMinutes:840,sourceUrl:"https://www.coursera.org/specializations/chip-based-vlsi-design-for-industrial-applications",progress:0,status:"nao_iniciado"},
+    {id:"program-elec-10-course-04",title:"FPGA Architecture Based System for Industrial Application Using Vivado",order:4,estimatedMinutes:1080,sourceUrl:"https://www.coursera.org/specializations/chip-based-vlsi-design-for-industrial-applications",progress:0,status:"nao_iniciado"}
+  ]}),
+  "course-fin-01":starterCurriculum("Coursera","https://www.coursera.org/learn/family-planning",[
+    starterModule("module-fin-01-01","Understanding Personal Finance",1,120,"Introduction to the basic concepts of personal finance."),
+    starterModule("module-fin-01-02","Financial Statements, Tools, and Budgets",2,120,"Financial statements, personal finance tools, and budgeting."),
+    starterModule("module-fin-01-03","Managing Income Taxes",3,120,"Income tax management in personal financial planning."),
+    starterModule("module-fin-01-04","Building and Maintaining Good Credit",4,120,"Credit reports, credit scores, and maintaining good credit."),
+    starterModule("module-fin-01-05","Managing Risk",5,120,"Risk management and insurance planning."),
+    starterModule("module-fin-01-06","Investment Fundamentals",6,120,"Investment fundamentals for personal finance."),
+    starterModule("module-fin-01-07","Investing Through Mutual Funds",7,120,"Mutual funds and fund-based investing."),
+    starterModule("module-fin-01-08","Personal Plan of Action",8,18,"Build a personal financial plan of action."),
+    starterModule("module-fin-01-09","Bonus Module",9,10,"Bonus reading module.")
+  ]),
+  "course-fin-02":starterCurriculum("Coursera","https://www.coursera.org/learn/financial-markets-global",[
+    starterModule("module-fin-02-01","Module 1",1,360,"Basics of financial markets, insurance, and CAPM."),
+    starterModule("module-fin-02-02","Module 2",2,240,"Behavioral finance, forecasting, pricing, debt, and inflation."),
+    starterModule("module-fin-02-03","Module 3",3,240,"Stocks, bonds, dividends, shares, market capitalization, and corporation history."),
+    starterModule("module-fin-02-04","Module 4",4,420,"Recent financial history, recessions, bubbles, mortgage crisis, and regulation."),
+    starterModule("module-fin-02-05","Module 5",5,240,"Options and bond markets."),
+    starterModule("module-fin-02-06","Module 6",6,240,"Investment banking, underwriting, brokers, dealers, exchanges, and innovations."),
+    starterModule("module-fin-02-07","Module 7",7,300,"Nonprofits, corporations, and career paths in finance.")
+  ]),
+  "course-fin-03":starterCurriculum("Coursera","https://www.coursera.org/learn/understanding-financial-markets",[
+    starterModule("module-fin-03-01","General Introduction and Key Concepts",1,180,"General introduction and key concepts."),
+    starterModule("module-fin-03-02","Major Financial Markets",2,180,"Major financial markets."),
+    starterModule("module-fin-03-03","Other Financial Markets",3,180,"Other financial markets."),
+    starterModule("module-fin-03-04","Financial Markets and the Economy",4,120,"Financial markets and the economy.")
+  ]),
+  "course-fin-04":starterCurriculum("Coursera","https://www.coursera.org/learn/meeting-investors-goals",[
+    starterModule("module-fin-04-01","General Introduction and Key Concepts",1,60,"General introduction and key concepts."),
+    starterModule("module-fin-04-02","How Individuals Make Financial Decisions",2,120,"How individuals make financial decisions."),
+    starterModule("module-fin-04-03","Market Efficiency, Bubbles & Crises",3,180,"Market efficiency, bubbles, and crises."),
+    starterModule("module-fin-04-04","Portfolio Construction and Investment Styles",4,120,"Portfolio construction and investment styles.")
+  ]),
+  "course-fin-05":starterCurriculum("Coursera","https://www.coursera.org/learn/portfolio-risk-management",[
+    starterModule("module-fin-05-01","General Introduction and Key Concepts",1,60,"General introduction and key concepts."),
+    starterModule("module-fin-05-02","Modern Portfolio Theory and Beyond",2,120,"Modern Portfolio Theory and beyond."),
+    starterModule("module-fin-05-03","Asset Allocation",3,180,"Asset allocation."),
+    starterModule("module-fin-05-04","Risk Management",4,120,"Risk management.")
+  ]),
+  "course-fin-06":starterCurriculum("Coursera","https://www.coursera.org/learn/investment-returns-long-run",[
+    starterModule("module-fin-06-01","General Introduction and Key Concepts",1,120,"General introduction and key concepts."),
+    starterModule("module-fin-06-02","Assessing Performance",2,120,"Assessing investment performance."),
+    starterModule("module-fin-06-03","Investment Vehicles",3,120,"Investment vehicles."),
+    starterModule("module-fin-06-04","Future Trends",4,120,"Future trends.")
+  ]),
+  "course-fin-07":starterCurriculum("Coursera","https://www.coursera.org/learn/finance-fundamentals",[
+    starterModule("module-fin-07-01","Module 1 - Introduction and Net Present Value (NPV)",1,180,"Introduction and net present value."),
+    starterModule("module-fin-07-02","Module 2 - Fixed Income Valuation",2,180,"Fixed income valuation."),
+    starterModule("module-fin-07-03","Module 3 - Equity Valuation",3,120,"Equity valuation."),
+    starterModule("module-fin-07-04","Module 4 - NPV vs. Internal Rate of Return",4,120,"NPV versus internal rate of return."),
+    starterModule("module-fin-07-05","Module 5",5,120,"Additional course topics related to finance fundamentals.")
+  ])
+};
 const STARTER_PLAYLISTS=[
   {id:"playlist-learning-main",youtubePlaylistId:"PLNur2Ccbfc5k",name:"Playlist de aprendizado",url:"https://www.youtube.com/playlist?list=PLNur2Ccbfc5k",enabled:true,createdAt:"2026-08-17T00:00:00.000Z",updatedAt:"2026-08-17T00:00:00.000Z",lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}
 ];
 const ARCANA_PLAYLIST_ISSUE_URL="https://github.com/NataliaCarvalhinha/arcana/issues/new";
-let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),syncing=false;
+let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),syncing=false,expandedCourseId=null;
 let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,currentReviewNote=null;
 let youtubeCatalogMeta={version:null,generatedAt:null,lastLoadedAt:null,playlistIds:[],playlistCount:0,videoCount:0,error:null};
 let youtubeCatalogPollHandle=null;
@@ -63,11 +248,12 @@ function normalize(s){
   s.dailyPlan=s.dailyPlan||d.dailyPlan;
   s.weeklyProgress=s.weeklyProgress&&typeof s.weeklyProgress==="object"?s.weeklyProgress:{};
   s.starterContentVersion=Math.max(0,Number(s.starterContentVersion)||0);
+  s.starterCurriculumVersion=Math.max(0,Number(s.starterCurriculumVersion)||0);
   s.activeTrack=s.tracks.some(t=>t?.id===s.activeTrack)?s.activeTrack:(s.tracks[0]?.id||null);
   s.playlists=s.playlists.map((playlist,index)=>normalizePlaylistRecord(playlist,index));
   s.activePlaylist=s.playlists.some(p=>p?.id===s.activePlaylist)?s.activePlaylist:(s.playlists[0]?.id||null);
   s.tracks.forEach(t=>{if(t?.id&&!Object.prototype.hasOwnProperty.call(s.weeklyProgress,t.id)){s.weeklyProgress[t.id]=0}});
-  s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=Array.isArray(i.modules)?i.modules:[];i.notes=typeof i.notes==="string"?i.notes:"";i.description=typeof i.description==="string"?i.description:"";i.catalogOrder=Number(i.catalogOrder)||0});
+  s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=Array.isArray(i.modules)?i.modules:[];i.modules.forEach(m=>{m.lessons=Array.isArray(m.lessons)?m.lessons:[];m.progress=Number(m.progress)||0;m.status=m.status||statusFromProgress(m.progress)});i.notes=typeof i.notes==="string"?i.notes:"";i.description=typeof i.description==="string"?i.description:"";i.catalogOrder=Number(i.catalogOrder)||0});
   s.youtubeQueue.forEach(v=>{v.catalogManaged=v.catalogManaged!==false;v.activeInCatalog=v.activeInCatalog!==false;v.archivedAt=v.archivedAt||null;const playlistId=youtubePlaylistIdFromUrl(v.youtubePlaylistId);if(playlistId){v.youtubePlaylistId=playlistId}});
   return s
 }
@@ -109,6 +295,83 @@ function mergeStarterTrack(existing,seed){
 }
 function mergeStarterPlaylist(existing,seed){
   return {...existing,...seed,lastSyncAt:existing.lastSyncAt??seed.lastSyncAt??null,lastSyncError:existing.lastSyncError??seed.lastSyncError??null}
+}
+function curriculumMetadata(course,curriculum){
+  return {starterManaged:true,curriculumSource:curriculum.curriculumSource,curriculumSourceUrl:curriculum.curriculumSourceUrl||course.url||"",curriculumFetchedAt:CURRICULUM_FETCHED_AT,curriculumVersion:STARTER_CURRICULUM_VERSION}
+}
+function preserveManagedFields(merged,existing={}){
+  for(const key of ["progress","status","done","notes","vaultNoteId","focusDraftNoteId","completedAt","startedAt","important","urgent","custom","metadata","sessions","fichamentos","fichamentoIds"]){
+    if(Object.prototype.hasOwnProperty.call(existing,key)){
+      merged[key]=existing[key]
+    }
+  }
+  return merged
+}
+function mergeOfficialLesson(existing,lesson,module,course,curriculum){
+  const meta=curriculumMetadata(course,curriculum);
+  const merged=preserveManagedFields({...existing,...lesson,...meta,sourceUrl:lesson.sourceUrl||module.sourceUrl||curriculum.curriculumSourceUrl||course.url||"",courseId:course.id,moduleId:module.id,kind:"lesson"},existing||{});
+  merged.order=Number(lesson.order)||Number(existing?.order)||0;
+  merged.estimatedMinutes=Number(lesson.estimatedMinutes)||Number(existing?.estimatedMinutes)||0;
+  merged.minutes=Number(lesson.minutes)||merged.estimatedMinutes;
+  merged.progress=Math.max(0,Math.min(100,Number(merged.done?100:merged.progress)||0));
+  merged.status=merged.status||statusFromProgress(merged.progress);
+  merged.done=!!merged.done||merged.progress>=100;
+  return merged
+}
+function mergeOfficialModule(existing,module,course,curriculum){
+  const meta=curriculumMetadata(course,curriculum);
+  const existingLessons=Array.isArray(existing?.lessons)?existing.lessons:[];
+  const officialLessons=Array.isArray(module.lessons)?module.lessons:[];
+  const officialIds=new Set(officialLessons.map(lesson=>lesson.id));
+  const oldById=new Map(existingLessons.filter(lesson=>lesson?.id).map(lesson=>[lesson.id,lesson]));
+  const lessons=officialLessons.map(lesson=>mergeOfficialLesson(oldById.get(lesson.id),lesson,module,course,curriculum));
+  for(const lesson of existingLessons){
+    if(!lesson?.id||!officialIds.has(lesson.id)){
+      lessons.push(lesson)
+    }
+  }
+  const merged=preserveManagedFields({...existing,...module,...meta,sourceUrl:module.sourceUrl||curriculum.curriculumSourceUrl||course.url||"",courseId:course.id,kind:"module",lessons},existing||{});
+  merged.order=Number(module.order)||Number(existing?.order)||0;
+  merged.estimatedMinutes=Number(module.estimatedMinutes)||Number(existing?.estimatedMinutes)||0;
+  merged.minutes=Number(module.minutes)||merged.estimatedMinutes;
+  merged.progress=moduleProgress(merged);
+  merged.status=statusFromProgress(merged.progress);
+  merged.done=moduleDone(merged);
+  return merged
+}
+function mergeOfficialChildCourse(existing,child,course,curriculum){
+  const meta=curriculumMetadata(course,curriculum);
+  const merged=preserveManagedFields({...existing,...child,...meta,sourceUrl:child.sourceUrl||curriculum.curriculumSourceUrl||course.url||"",kind:"program-course",parentCourseId:course.id},existing||{});
+  merged.progress=Math.max(0,Math.min(100,Number(merged.progress)||0));
+  merged.status=merged.status||statusFromProgress(merged.progress);
+  return merged
+}
+function applyCourseCurriculum(course,curriculum){
+  const meta=curriculumMetadata(course,curriculum);
+  Object.assign(course,meta);
+  if(curriculum.programType){
+    course.programType=curriculum.programType
+  }
+  if(Array.isArray(curriculum.childCourseIds)){
+    course.childCourseIds=[...curriculum.childCourseIds]
+  }
+  const existingChildren=Array.isArray(course.childCourses)?course.childCourses:[];
+  const oldChildren=new Map(existingChildren.filter(child=>child?.id).map(child=>[child.id,child]));
+  course.childCourses=Array.isArray(curriculum.childCourses)?curriculum.childCourses.map(child=>mergeOfficialChildCourse(oldChildren.get(child.id),child,course,curriculum)):[...existingChildren];
+  const existingModules=Array.isArray(course.modules)?course.modules:[];
+  const officialModules=Array.isArray(curriculum.modules)?curriculum.modules:[];
+  const officialIds=new Set(officialModules.map(module=>module.id));
+  const oldById=new Map(existingModules.filter(module=>module?.id).map(module=>[module.id,module]));
+  course.modules=officialModules.map(module=>mergeOfficialModule(oldById.get(module.id),module,course,curriculum));
+  for(const module of existingModules){
+    if(!module?.id||!officialIds.has(module.id)){
+      course.modules.push(module)
+    }
+  }
+  if(course.status===undefined||course.status===null||course.status===""){
+    course.status=statusFromProgress(course.progress)
+  }
+  return course
 }
 function isDefaultTrackPlaceholder(track){
   return !!track&&track.id==="default"&&track.name==="Principal"&&track.sigil==="☽"&&track.subtitle==="Seu caminho inicial"&&track.description==="Uma trilha vazia para começar sem publicar dados pessoais."&&Number(track.weeklyGoal||0)===120
@@ -239,6 +502,16 @@ function applyStarterContentV2(s){
   s.starterContentVersion=2;
   return s
 }
+function applyStarterCurriculumV1(s){
+  for(const [courseId,curriculum] of Object.entries(STARTER_CURRICULUM)){
+    const course=s.items.find(i=>i?.id===courseId);
+    if(course){
+      applyCourseCurriculum(course,curriculum)
+    }
+  }
+  s.starterCurriculumVersion=STARTER_CURRICULUM_VERSION;
+  return s
+}
 function applyStarterContent(input){
   const s=normalize(structuredClone(input));
   let version=s.starterContentVersion;
@@ -251,6 +524,10 @@ function applyStarterContent(input){
     version=2
   }
   s.starterContentVersion=version;
+  if(s.starterCurriculumVersion<STARTER_CURRICULUM_VERSION){
+    applyStarterCurriculumV1(s)
+  }
+  s.starterCurriculumVersion=STARTER_CURRICULUM_VERSION;
   return normalize(s)
 }
 function save(render=true,reason="change"){
@@ -296,8 +573,49 @@ function activePlaylist(){return state.playlists.find(p=>p.id===state.activePlay
 function courseOrderValue(item){const order=Number(item?.catalogOrder);return order>0?order:Number.MAX_SAFE_INTEGER}
 function priorityCode(i){return i.important?(i.urgent?"IU":"I"):(i.urgent?"U":"N")}
 function priorityLabel(i){return i.important?(i.urgent?"Importante + urgente":"Importante"):(i.urgent?"Urgente":"Baixa prioridade")}
-function score(i){const p=priorityCode(i);let s=p==="IU"?100:p==="I"?70:p==="U"?55:20;if(i.status==="em_andamento")s+=15;if((i.estimatedMinutes||999)<=30)s+=6;return s-(i.progress||0)/10}
-function itemProgress(i){if(i.kind==="course"&&i.modules?.length){return Math.round(i.modules.filter(m=>m.done).length/i.modules.length*100)}return Number(i.progress||0)}
+function score(i){const p=priorityCode(i);let s=p==="IU"?100:p==="I"?70:p==="U"?55:20;if(i.status==="em_andamento"){s+=15}if((i.estimatedMinutes||999)<=30){s+=6}return s-itemProgress(i)/10}
+function boundedProgress(value){return Math.max(0,Math.min(100,Number(value)||0))}
+function lessonProgress(lesson){return boundedProgress(lesson?.done?100:lesson?.progress)}
+function moduleProgress(module){
+  if(module?.lessons?.length){
+    return Math.round(module.lessons.reduce((sum,lesson)=>sum+lessonProgress(lesson),0)/module.lessons.length)
+  }
+  return boundedProgress(module?.done?100:module?.progress)
+}
+function moduleDone(module){return moduleProgress(module)>=100}
+function childCourseProgress(child){
+  if(child?.modules?.length){
+    return Math.round(child.modules.reduce((sum,module)=>sum+moduleProgress(module),0)/child.modules.length)
+  }
+  return boundedProgress(child?.progress)
+}
+function specializationProgress(course){
+  const children=[];
+  for(const id of course?.childCourseIds||[]){
+    const child=state.items.find(item=>item?.id===id);
+    if(child){
+      children.push(child)
+    }
+  }
+  for(const child of course?.childCourses||[]){
+    if(!children.some(item=>item.id===child.id)){
+      children.push(child)
+    }
+  }
+  if(children.length){
+    return Math.round(children.reduce((sum,child)=>sum+childCourseProgress(child),0)/children.length)
+  }
+  return boundedProgress(course?.progress)
+}
+function itemProgress(i){
+  if(i?.programType==="specialization"){
+    return specializationProgress(i)
+  }
+  if(i?.kind==="course"&&i.modules?.length){
+    return Math.round(i.modules.reduce((sum,module)=>sum+moduleProgress(module),0)/i.modules.length)
+  }
+  return boundedProgress(i?.progress)
+}
 function statusFromProgress(p){return p>=100?"concluido":p>0?"em_andamento":"nao_iniciado"}
 function getDailyYT(){const k=dayKey();if(!state.youtubeDaily[k])state.youtubeDaily[k]={minutes:0,count:0};return state.youtubeDaily[k]}
 
@@ -860,7 +1178,40 @@ async function updateObsidianAutoSync(value){
     applyObsidianStatus({available:true,...(data.obsidian||{})})
   }
 }
-function resourceByScope(id,scope){return scope==="youtube"?state.youtubeQueue.find(x=>x.id===id):state.items.find(x=>x.id===id)}
+function courseForModuleId(moduleId){
+  return state.items.find(course=>course?.kind==="course"&&Array.isArray(course.modules)&&course.modules.some(module=>module?.id===moduleId))||null
+}
+function courseForLessonId(lessonId){
+  return state.items.find(course=>course?.kind==="course"&&Array.isArray(course.modules)&&course.modules.some(module=>Array.isArray(module.lessons)&&module.lessons.some(lesson=>lesson?.id===lessonId)))||null
+}
+function decorateModuleResource(course,module){
+  if(!course||!module){
+    return null
+  }
+  Object.assign(module,{kind:"module",sourceType:"module",courseId:course.id,track:course.track,url:module.sourceUrl||course.url||"",source:course.source||module.source||""});
+  return module
+}
+function decorateLessonResource(course,module,lesson){
+  if(!course||!module||!lesson){
+    return null
+  }
+  Object.assign(lesson,{kind:"lesson",sourceType:"lesson",courseId:course.id,moduleId:module.id,track:course.track,url:lesson.sourceUrl||module.sourceUrl||course.url||"",source:course.source||lesson.source||""});
+  return lesson
+}
+function resourceByScope(id,scope){
+  if(scope==="youtube"){
+    return state.youtubeQueue.find(x=>x.id===id)
+  }
+  if(scope==="module"){
+    const course=courseForModuleId(id),module=course?.modules?.find(x=>x.id===id);
+    return decorateModuleResource(course,module)
+  }
+  if(scope==="lesson"){
+    const course=courseForLessonId(id),module=course?.modules?.find(m=>m.lessons?.some(lesson=>lesson.id===id)),lesson=module?.lessons?.find(x=>x.id===id);
+    return decorateLessonResource(course,module,lesson)
+  }
+  return state.items.find(x=>x.id===id)
+}
 function noteCount(sourceId){return vaultNotes.filter(n=>n.sourceId===sourceId&&n.status!=="archived").length}
 function splitTags(v){return String(v||"").split(/[,\s]+/).map(x=>x.trim().replace(/^#/,"")).filter(Boolean)}
 function isoDate(days=0){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
@@ -991,15 +1342,33 @@ function renderHome(){
   ].map(([a,b])=>`<div class="stat"><span>${a}</span><strong>${b}</strong></div>`).join("");
   renderDailyPlan();renderHomeYoutube();renderHomeTracks();renderHomePriority();renderVaultHome()
 }
+function nextCurriculumFocus(course){
+  if(course?.kind!=="course"||!Array.isArray(course.modules)){
+    return null
+  }
+  const module=course.modules.find(candidate=>moduleProgress(candidate)<100);
+  if(!module){
+    return null
+  }
+  const lesson=Array.isArray(module.lessons)?module.lessons.find(candidate=>lessonProgress(candidate)<100):null;
+  if(lesson){
+    return {type:"lesson",id:lesson.id,title:lesson.title,detail:module.title,estimatedMinutes:lesson.estimatedMinutes||module.estimatedMinutes||course.estimatedMinutes||30}
+  }
+  return {type:"module",id:module.id,title:module.title,detail:course.title,estimatedMinutes:module.estimatedMinutes||course.estimatedMinutes||30}
+}
 function generatePlan(){
   const mins=Number($("todayMinutes")?.value||state.dailyPlan.minutes||60);
   state.dailyPlan.minutes=mins;state.dailyPlan.date=dayKey();
   let candidates=state.items.filter(i=>itemProgress(i)<100).sort((a,b)=>score(b)-score(a));
   let remaining=mins,chosen=[];
   for(const i of candidates){
-    if(remaining<=0)break;
-    const chunk=Math.min(remaining,Math.max(15,Math.min(45,Number(i.estimatedMinutes||30))));
-    chosen.push({type:"item",id:i.id,minutes:chunk,title:i.title,track:i.track});remaining-=chunk
+    if(remaining<=0){
+      break
+    }
+    const next=nextCurriculumFocus(i);
+    const estimate=Number(next?.estimatedMinutes||i.estimatedMinutes||30);
+    const chunk=Math.min(remaining,Math.max(15,Math.min(45,estimate)));
+    chosen.push({type:next?.type||"item",id:next?.id||i.id,minutes:chunk,title:next?.title||i.title,detail:next?.detail||"",track:i.track});remaining-=chunk
   }
   const due=vaultNotes.filter(n=>n.reviewAt&&n.reviewAt<=dayKey()&&n.status!=="archived").length;
   if(due&&mins>=30){const rm=Math.min(20,Math.max(10,Math.floor(mins*.25)));chosen.unshift({type:"review",id:"review",minutes:rm,title:`Revisar ${due} nota${due>1?"s":""}`});remaining-=rm}
@@ -1016,7 +1385,8 @@ function renderDailyPlan(){
   $("todayMinutes").value=String(state.dailyPlan.minutes||60);
   $("dailyPlan").innerHTML=state.dailyPlan.items.length?state.dailyPlan.items.map((p,n)=>{
     const action=p.type==="review"?"navigateTo('review')":`openFocus(${jsArg(p.id)},${jsArg(p.type)})`;
-    return `<div class="plan-item clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="num">${n+1}</div><div class="grow"><strong>${esc(p.title)}</strong><span>${p.minutes} min ${p.track?`· ${esc(trackById(p.track)?.name||"")}`:p.type==="review"?"· Revisão":"· YouTube"}</span></div><button class="mini-btn" onclick="event.stopPropagation();${action}">${p.type==="review"?"Revisar":"Focar"}</button></div>`
+    const context=p.detail?` · ${esc(p.detail)}`:p.track?` · ${esc(trackById(p.track)?.name||"")}`:p.type==="review"?" · Revisão":" · YouTube";
+    return `<div class="plan-item clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="num">${n+1}</div><div class="grow"><strong>${esc(p.title)}</strong><span>${p.minutes} min${context}</span></div><button class="mini-btn" onclick="event.stopPropagation();${action}">${p.type==="review"?"Revisar":"Focar"}</button></div>`
   }).join(""):`<div class="hint">Nada pendente para hoje.</div>`
 }
 function renderHomeYoutube(){
@@ -1050,8 +1420,37 @@ function renderTracks(){
   const avg=courses.length?Math.round(courses.reduce((a,b)=>a+itemProgress(b),0)/courses.length):0,done=courses.filter(i=>itemProgress(i)>=100).length;
   $("trackProfile").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Cursos</span><strong>${courses.length}</strong></div><div class="profile-stat"><span>Concluídos</span><strong>${done}</strong></div><div class="profile-stat"><span>Progresso</span><strong>${avg}%</strong></div><div class="profile-stat"><span>Meta semanal</span><strong>${t.weeklyGoal||0}m</strong></div></div>`
 }
+function curriculumCounts(course){
+  const modules=Array.isArray(course.modules)?course.modules.length:0;
+  const lessons=Array.isArray(course.modules)?course.modules.reduce((sum,module)=>sum+(Array.isArray(module.lessons)?module.lessons.length:0),0):0;
+  return {modules,lessons}
+}
+function toggleCourseCurriculum(event,id){
+  if(event?.target?.closest("button,a")){
+    return
+  }
+  expandedCourseId=expandedCourseId===id?null:id;
+  renderTracks()
+}
+function lessonRow(course,module,lesson){
+  const progress=lessonProgress(lesson),done=progress>=100;
+  return `<div class="lesson-row ${done?"done":""}"><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(lesson.id)},'lesson')">${done?"Concluída":"Focar"}</button><div class="grow"><strong>${esc(lesson.title)}</strong><span>${progress}%${lesson.estimatedMinutes?` · ${fmtMin(lesson.estimatedMinutes)}`:""}</span></div><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(lesson.id)},'lesson')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(lesson.id)},'lesson')">Notas</button></div>`
+}
+function moduleRow(course,module){
+  const progress=moduleProgress(module),done=progress>=100,lessons=Array.isArray(module.lessons)?module.lessons:[];
+  const lessonLabel=lessons.length?` · ${lessons.length} aula${lessons.length>1?"s":""}`:"";
+  return `<div class="module ${done?"done":""}" id="${esc(module.id||"")}"><div class="module-main"><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(module.id)},'module')">${done?"Concluído":"Focar"}</button><div class="grow"><strong>${esc(module.title)}</strong><span>${progress}%${module.estimatedMinutes?` · ${fmtMin(module.estimatedMinutes)}`:""}${lessonLabel}</span><div class="progress"><div style="width:${progress}%"></div></div></div><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(module.id)},'module')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(module.id)},'module')">Notas</button></div>${lessons.length?`<div class="lesson-list">${lessons.map(lesson=>lessonRow(course,module,lesson)).join("")}</div>`:""}</div>`
+}
+function childCourseRow(child){
+  const progress=childCourseProgress(child);
+  return `<div class="module child-course"><div class="module-main"><div class="grow"><strong>${esc(child.title)}</strong><span>${progress}%${child.estimatedMinutes?` · ${fmtMin(child.estimatedMinutes)}`:""}</span><div class="progress"><div style="width:${progress}%"></div></div></div>${child.sourceUrl?`<a class="mini-btn" href="${esc(child.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Fonte</a>`:""}</div></div>`
+}
 function courseRow(i){
-  const p=itemProgress(i),nc=noteCount(i.id);return `<div class="course-row clickable-row" role="button" tabindex="0" onclick="openFocus(${jsArg(i.id)},'item')" onkeydown="activateRow(event,this)"><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${priorityLabel(i)} · ${nc} notas</span><div class="progress"><div style="width:${p}%"></div></div>${i.modules?.length?`<div class="module-list">${i.modules.map(m=>`<div class="module ${m.done?"done":""}"><span>${m.done?"✓":"○"} ${esc(m.title)}</span><span>${m.minutes||0}m</span></div>`).join("")}</div>`:""}</div><button class="mini-btn" onclick="event.stopPropagation();editItem(${jsArg(i.id)})">Editar</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(i.id)},'item')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(i.id)},'item')">Notas</button></div>`
+  const p=itemProgress(i),nc=noteCount(i.id),counts=curriculumCounts(i),expanded=expandedCourseId===i.id;
+  const lessonMeta=counts.lessons?` · ${counts.lessons} aula${counts.lessons>1?"s":""}`:"";
+  const curriculumMeta=counts.modules?`${counts.modules} módulo${counts.modules>1?"s":""}${lessonMeta}`:"currículo oficial";
+  const children=Array.isArray(i.childCourses)?i.childCourses:[];
+  return `<div class="course-row clickable-row ${expanded?"expanded":""}" role="button" tabindex="0" onclick="toggleCourseCurriculum(event,${jsArg(i.id)})" onkeydown="activateRow(event,this)"><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${priorityLabel(i)} · ${nc} notas · ${curriculumMeta}</span><div class="progress"><div style="width:${p}%"></div></div>${expanded?`<div class="module-list">${children.length?children.map(childCourseRow).join(""):""}${i.modules?.length?i.modules.map(module=>moduleRow(i,module)).join(""):`<div class="hint">Currículo oficial sem aulas detalhadas.</div>`}</div>`:""}</div><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(i.id)},'item')">${p>=100?"Rever":"Focar"}</button><button class="mini-btn" onclick="event.stopPropagation();editItem(${jsArg(i.id)})">Editar</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(i.id)},'item')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(i.id)},'item')">Notas</button></div>`
 }
 function setTrack(id){if(!trackById(id)){missingTarget();return}state.activeTrack=id;save();renderTracks()}
 function setTrackFormError(message=""){const el=$("trackFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
@@ -1347,16 +1746,25 @@ async function openNotes(id,scope){
   }
   $("notesDialog").showModal()
 }
+function sourceTypeForResource(resource,scope){
+  if(scope==="youtube"){
+    return "video"
+  }
+  return resource?.sourceType||resource?.kind||scope||"resource"
+}
+function sourcePayloadForResource(resource,scope,extra={}){
+  return {title:resource.title,url:resource.url||"",kind:resource.kind||scope,courseId:resource.courseId||null,moduleId:resource.moduleId||null,lessonId:scope==="lesson"?resource.id:resource.lessonId||null,timestamp:extra.timestamp||"",minutes:extra.minutes||0}
+}
 async function saveNotes(){
   if(!notesRef)return;const i=resourceByScope(notesRef.id,notesRef.scope);if(!i)return;
-  const payload={title:`Notas - ${i.title}`,type:"quick",content:$("notesText").value,trackId:i.track||null,sourceType:notesRef.scope==="youtube"?"video":i.kind||"resource",sourceId:i.id,tags:["nota"],source:{title:i.title,url:i.url||"",kind:i.kind||notesRef.scope}};
+  const payload={title:`Notas - ${i.title}`,type:"quick",content:$("notesText").value,trackId:i.track||null,sourceType:sourceTypeForResource(i,notesRef.scope),sourceId:i.id,tags:["nota"],source:sourcePayloadForResource(i,notesRef.scope)};
   try{
     const data=notesRef.noteId?await api(`/api/notes/${encodeURIComponent(notesRef.noteId)}`,{method:"PUT",body:JSON.stringify(payload)}):await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
     i.vaultNoteId=data.note.id;i.notes=(data.note.excerpt||"").slice(0,180);save(false);await loadVaultNotes();$("notesDialog").close();queueObsidianAutoSync("after_note_save")
   }catch(e){alert(e.message)}
 }
 
-function findFocus(id,scope){if(scope==="youtube")return state.youtubeQueue.find(i=>i.id===id);return state.items.find(i=>i.id===id)}
+function findFocus(id,scope){return resourceByScope(id,scope)}
 async function openFocus(id,scope){
   const i=findFocus(id,scope);if(!i){missingTarget();return}focusRef={id,scope};focusNoteId=i.focusDraftNoteId||null;timer=0;updateTimer();$("focusTitle").textContent=i.title;$("focusOpenLink").href=i.url||"#";let vid=null;try{const u=new URL(i.url);vid=u.hostname.includes("youtu.be")?u.pathname.slice(1):u.searchParams.get("v")}catch{};$("playerWrap").innerHTML=scope==="youtube"&&vid?`<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0" allowfullscreen></iframe>`:`<div class="player-placeholder">Abra o recurso e use o cronômetro para registrar a sessão.</div>`;
   $("focusTimestamp").value="";$("focusSaveState").textContent="Rascunho ainda não salvo.";
@@ -1371,20 +1779,46 @@ function updateTimer(){const h=String(Math.floor(timer/3600)).padStart(2,"0"),m=
 async function closeFocus(saveDraft=true){clearTimeout(focusSaveTimer);if(saveDraft){await saveFocusDraft(false)}pauseTimer();$("focusDialog").close()}
 async function completeFocus(){
   if(!focusRef)return;const i=findFocus(focusRef.id,focusRef.scope);if(!i)return;const mins=Math.max(1,Math.round(timer/60));
-  const session={id:crypto.randomUUID(),date:dayKey(),timestamp:new Date().toISOString(),minutes:mins,title:i.title,type:focusRef.scope,track:i.track||null};
+  const session={id:crypto.randomUUID(),date:dayKey(),timestamp:new Date().toISOString(),minutes:mins,title:i.title,type:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,courseId:i.courseId||null,moduleId:i.moduleId||(focusRef.scope==="module"?i.id:null),lessonId:focusRef.scope==="lesson"?i.id:null,track:i.track||null};
   state.sessions.push(session);
   clearTimeout(focusSaveTimer);
   await saveFocusDraft(true,session.id,mins);
   i.focusDraftNoteId=null;focusNoteId=null;
   state.xp+=Math.max(10,mins*2);updateStreak();
-  if(focusRef.scope==="youtube"){const d=getDailyYT();d.count++;d.minutes+=i.estimatedMinutes||mins;i.progress=100;i.status="concluido"}else{i.progress=Math.min(100,Number(i.progress||0)+Math.max(5,Math.round(mins/Math.max(1,Number(i.estimatedMinutes||60))*100)));i.status=statusFromProgress(i.progress);if(i.track)state.weeklyProgress[i.track]=(state.weeklyProgress[i.track]||0)+mins}
+  if(focusRef.scope==="youtube"){
+    const d=getDailyYT();d.count++;d.minutes+=i.estimatedMinutes||mins;i.progress=100;i.status="concluido"
+  }else if(focusRef.scope==="lesson"){
+    i.progress=100;i.done=true;i.status="concluido";
+    const module=resourceByScope(i.moduleId,"module"),course=state.items.find(item=>item.id===i.courseId);
+    if(module){
+      module.progress=moduleProgress(module);module.done=moduleDone(module);module.status=statusFromProgress(module.progress)
+    }
+    if(course){
+      course.progress=itemProgress(course);course.status=statusFromProgress(course.progress)
+    }
+    if(i.track){state.weeklyProgress[i.track]=(state.weeklyProgress[i.track]||0)+mins}
+  }else if(focusRef.scope==="module"){
+    if(Array.isArray(i.lessons)&&i.lessons.length){
+      for(const lesson of i.lessons){
+        lesson.progress=100;lesson.done=true;lesson.status="concluido"
+      }
+    }
+    i.progress=100;i.done=true;i.status="concluido";
+    const course=state.items.find(item=>item.id===i.courseId);
+    if(course){
+      course.progress=itemProgress(course);course.status=statusFromProgress(course.progress)
+    }
+    if(i.track){state.weeklyProgress[i.track]=(state.weeklyProgress[i.track]||0)+mins}
+  }else{
+    i.progress=Math.min(100,Number(i.progress||0)+Math.max(5,Math.round(mins/Math.max(1,Number(i.estimatedMinutes||60))*100)));i.status=statusFromProgress(i.progress);if(i.track){state.weeklyProgress[i.track]=(state.weeklyProgress[i.track]||0)+mins}
+  }
   await save();await closeFocus(false);queueObsidianAutoSync("after_session")
 }
 function updateStreak(){const today=dayKey(),y=new Date();y.setDate(y.getDate()-1);const yd=dayKey(y);if(state.lastStudyDate===today)return;if(state.lastStudyDate===yd)state.streak++;else state.streak=1;state.lastStudyDate=today}
 
 async function saveFocusDraft(done=false,sessionId=null,minutes=0){
   if(!focusRef||!$("focusNotesText"))return;const i=findFocus(focusRef.id,focusRef.scope);if(!i)return;
-  const payload={title:`Sessão - ${i.title}`,type:"session",content:$("focusNotesText").value,trackId:i.track||null,sourceType:focusRef.scope==="youtube"?"video":i.kind||"resource",sourceId:i.id,sessionId:sessionId||null,tags:done?["sessao","concluida"]:["sessao","rascunho"],source:{title:i.title,url:i.url||"",timestamp:$("focusTimestamp").value||"",minutes}};
+  const payload={title:`Sessão - ${i.title}`,type:"session",content:$("focusNotesText").value,trackId:i.track||null,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,sessionId:sessionId||null,tags:done?["sessao","concluida"]:["sessao","rascunho"],source:sourcePayloadForResource(i,focusRef.scope,{timestamp:$("focusTimestamp").value||"",minutes})};
   try{
     const data=focusNoteId?await api(`/api/notes/${encodeURIComponent(focusNoteId)}`,{method:"PUT",body:JSON.stringify(payload)}):await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
     focusNoteId=data.note.id;i.focusDraftNoteId=focusNoteId;$("focusSaveState").textContent=done?"Sessão salva no vault.":"Rascunho salvo no vault.";save(false);loadVaultNotes()
@@ -1473,7 +1907,7 @@ async function newFichamento(source=null){
   const data=await api("/api/notes",{method:"POST",body:JSON.stringify({title,type:"literature",content:literatureTemplate(title,sourceType),trackId:source?.track||state.activeTrack,sourceType,sourceId:source?.id||null,tags:["fichamento"],source:source||{}})});
   activeVaultNote=data.note;if($("vaultEditorPane")){$("vaultEditorPane").innerHTML=`<div class="hint">Selecione uma nota.</div>`}showView("fichamentos");renderVaultEditor("fichamentoEditor");await loadVaultNotes()
 }
-function openFichamentoForSource(id,scope){const i=resourceByScope(id,scope);if(!i){missingTarget();return}newFichamento({id:i.id,title:i.title,url:i.url||"",track:i.track||null,sourceType:scope==="youtube"?"video":i.kind==="course"?"course":i.kind||"resource",channel:i.channel||"",source:i.source||""})}
+function openFichamentoForSource(id,scope){const i=resourceByScope(id,scope);if(!i){missingTarget();return}newFichamento({id:i.id,title:i.title,url:i.url||"",track:i.track||null,sourceType:sourceTypeForResource(i,scope),channel:i.channel||"",source:i.source||"",courseId:i.courseId||null,moduleId:i.moduleId||(scope==="module"?i.id:null),lessonId:scope==="lesson"?i.id:null})}
 async function promoteActiveSelection(){
   const ta=document.querySelector(".view.active #vaultContent")||$("notesText");const selected=ta.value.slice(ta.selectionStart,ta.selectionEnd).trim();const title=(selected.split("\n")[0]||prompt("Título da nota permanente")||"Ideia permanente").slice(0,90);
   const data=await api("/api/notes",{method:"POST",body:JSON.stringify({title,type:"permanent",content:noteTemplate("permanent",title)+(selected?`\n\n> ${selected}\n`:""),trackId:activeVaultNote?.trackId||state.activeTrack,relatedNoteIds:activeVaultNote?[activeVaultNote.id]:[],tags:["ideia"]})});

@@ -62,6 +62,10 @@ assert.match(app, /onkeydown="activateRow\(event,this\)"/, "clickable rows suppo
 assert.match(app, /event\.stopPropagation\(\);openNotes/, "nested note buttons do not trigger row navigation");
 assert.match(app, /function repairStarterTrackDuplicates/, "starter duplicate track repair is available");
 assert.match(app, /function applyStarterContentV1/, "starter content uses versioned migration functions");
+assert.match(app, /const STARTER_CURRICULUM_VERSION=1/, "starter curriculum version is declared");
+assert.match(app, /function applyStarterCurriculumV1/, "starter curriculum uses a versioned migration");
+assert.match(app, /sourceTypeForResource/, "module and lesson source metadata is normalized");
+assert.match(app, /openFocus\(\$\{jsArg\(lesson\.id\)\},'lesson'\)/, "lessons can open the focus modal");
 assert.match(app, /playlist-learning-main/, "starter playlist is present in the catalog");
 assert.match(app, /course-elec-01/, "starter electronics catalog is present");
 assert.match(app, /course-fin-07/, "starter finance catalog is present");
@@ -117,7 +121,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v7/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v8/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -275,15 +279,32 @@ await vm.runInContext(`(async()=>{
   renderAll=()=>{renderDailyPlan();renderHomeTracks();renderTracks();};
   const seededFresh=applyStarterContent(structuredClone(DEFAULT_STATE));
   if(seededFresh.starterContentVersion!==2){throw new Error("starter content version was not stored")}
+  if(seededFresh.starterCurriculumVersion!==1){throw new Error("starter curriculum version was not stored")}
   if(seededFresh.tracks.length!==2){throw new Error("fresh seed should replace placeholders with exactly two starter tracks")}
   if(seededFresh.tracks.map(t=>t.id).join(",")!=="track-electronics,track-finance"){throw new Error("starter tracks did not keep the expected order")}
   if(seededFresh.items.filter(i=>i.kind==="course").length!==17){throw new Error("fresh seed should create exactly 17 starter courses")}
+  if(seededFresh.items.filter(i=>i.kind==="course"&&i.starterManaged).length!==17){throw new Error("all starter courses should carry official curriculum metadata")}
+  if(seededFresh.items.filter(i=>i.kind==="course").some(i=>!Array.isArray(i.modules)||!i.modules.length)){throw new Error("all starter courses should include module structures")}
+  const seededModuleCount=seededFresh.items.filter(i=>i.kind==="course").reduce((sum,course)=>sum+course.modules.length,0);
+  if(seededModuleCount<96){throw new Error("starter curricula should include the expected module coverage")}
+  const familyPlanning=seededFresh.items.find(i=>i.id==="course-fin-01");
+  if(familyPlanning.modules.length!==9||familyPlanning.modules[0].title!=="Understanding Personal Finance"){throw new Error("family planning curriculum should use official module titles")}
+  const portfolioRisk=seededFresh.items.find(i=>i.id==="course-fin-05");
+  if(portfolioRisk.modules.map(m=>m.title).join("|")!=="General Introduction and Key Concepts|Modern Portfolio Theory and Beyond|Asset Allocation|Risk Management"){throw new Error("portfolio risk curriculum should use official module titles")}
+  const financeFundamentals=seededFresh.items.find(i=>i.id==="course-fin-07");
+  if(financeFundamentals.modules.length!==5||financeFundamentals.modules.at(-1).title!=="Module 5"){throw new Error("finance fundamentals curriculum should preserve the official module labels")}
+  const fpgaSpecialization=seededFresh.items.find(i=>i.id==="course-elec-04");
+  if(fpgaSpecialization.programType!=="specialization"||fpgaSpecialization.childCourseIds.join(",")!=="course-elec-02,course-elec-03"){throw new Error("FPGA specialization should reference its starter child courses")}
+  if(!fpgaSpecialization.childCourses.some(child=>child.title.includes("Softcore"))||!fpgaSpecialization.childCourses.some(child=>child.title.includes("Capstone"))){throw new Error("FPGA specialization should include non-duplicated child course references")}
+  if(!seededFresh.items.find(i=>i.id==="course-fin-05").modules.some(m=>m.id==="module-fin-05-01")){throw new Error("official modules should use stable ids")}
+  if(!seededFresh.items.find(i=>i.id==="course-elec-08").modules[0].lessons.some(l=>l.id==="lesson-elec-08-01-01")){throw new Error("official lessons should use stable ids")}
   if(seededFresh.playlists.length!==1||seededFresh.playlists[0].id!=="playlist-learning-main"){throw new Error("fresh seed should replace the placeholder playlist")}
   if(seededFresh.activeTrack!=="track-electronics"){throw new Error("fresh seed should activate electronics first")}
   if(seededFresh.activePlaylist!=="playlist-learning-main"){throw new Error("fresh seed should activate the learning playlist")}
 
   const seededTwice=structuredClone(seededFresh);
   seededTwice.starterContentVersion=0;
+  seededTwice.starterCurriculumVersion=0;
   const rerunSeed=applyStarterContent(seededTwice);
   if(rerunSeed.tracks.filter(t=>t.id==="track-electronics").length!==1||rerunSeed.tracks.filter(t=>t.id==="track-finance").length!==1){throw new Error("rerunning the seed duplicated starter tracks")}
   if(rerunSeed.items.filter(i=>i.id.startsWith("course-elec-")).length!==10||rerunSeed.items.filter(i=>i.id.startsWith("course-fin-")).length!==7){throw new Error("rerunning the seed duplicated starter courses")}
@@ -299,7 +320,7 @@ await vm.runInContext(`(async()=>{
   const preservedCourse=preservedState.items.find(i=>i.id==="course-elec-01");
   preservedCourse.progress=35;
   preservedCourse.status="em_andamento";
-  preservedCourse.modules=[{title:"Módulo 1",minutes:30,done:true}];
+  preservedCourse.modules=[{id:"module-elec-01-01",title:"Rascunho antigo",minutes:30,progress:35,status:"em_andamento",notes:"Notas do módulo",completedAt:"2026-08-02T00:00:00.000Z",sessions:[{id:"session-module"}],fichamentos:["fic-1"]},{id:"custom-module-preserved",title:"Módulo pessoal",minutes:30,done:true,custom:true}];
   preservedCourse.notes="Notas preservadas";
   preservedCourse.important=false;
   preservedCourse.urgent=true;
@@ -308,10 +329,14 @@ await vm.runInContext(`(async()=>{
   preservedState.playlists.unshift({id:"playlist-alt",name:"Outra playlist",url:"https://www.youtube.com/playlist?list=PLalt12345",youtubePlaylistId:"PLalt12345",lastSyncAt:null,lastSyncError:null});
   preservedState.activePlaylist="playlist-alt";
   preservedState.starterContentVersion=0;
+  preservedState.starterCurriculumVersion=0;
   const preservedRerun=applyStarterContent(preservedState);
   const rerunCourse=preservedRerun.items.find(i=>i.id==="course-elec-01");
   if(rerunCourse.progress!==35||rerunCourse.status!=="em_andamento"){throw new Error("starter rerun should preserve course progress and status")}
-  if(rerunCourse.modules.length!==1||rerunCourse.modules[0].title!=="Módulo 1"){throw new Error("starter rerun should preserve existing course modules")}
+  if(rerunCourse.modules.length!==6){throw new Error("starter rerun should merge official modules without deleting user modules")}
+  const rerunOfficialModule=rerunCourse.modules.find(m=>m.id==="module-elec-01-01");
+  if(rerunOfficialModule.title!=="MCU Background and Analysis"||rerunOfficialModule.progress!==35||rerunOfficialModule.notes!=="Notas do módulo"||rerunOfficialModule.completedAt!=="2026-08-02T00:00:00.000Z"||rerunOfficialModule.sessions.length!==1||rerunOfficialModule.fichamentos.length!==1){throw new Error("starter rerun should update official module text while preserving module progress, notes, sessions, and fichamentos")}
+  if(!rerunCourse.modules.some(m=>m.id==="custom-module-preserved"&&m.title==="Módulo pessoal")){throw new Error("starter rerun should preserve user-created modules")}
   if(rerunCourse.notes!=="Notas preservadas"||rerunCourse.important!==false||rerunCourse.urgent!==true){throw new Error("starter rerun should preserve user course fields")}
   if(rerunCourse.createdAt!=="2026-08-01T00:00:00.000Z"){throw new Error("starter rerun should preserve createdAt")}
   if(preservedRerun.youtubeSettings.minutes!==20){throw new Error("starter rerun should preserve YouTube settings")}
@@ -323,9 +348,27 @@ await vm.runInContext(`(async()=>{
   if(!$("homeTracks").innerHTML.includes("Eletrônica")||!$("homeTracks").innerHTML.includes("Finanças")){throw new Error("seeded tracks did not render in the Sanctuary")}
   if(!$("trackTabs").innerHTML.includes("Eletrônica")||!$("trackCourses").innerHTML.includes("Microcontrollers: Basic Architecture and Design")){throw new Error("seeded track catalog did not render")}
   if(!state.dailyPlan.items.length||$("dailyPlan").innerHTML.includes("Nada pendente")){throw new Error("seeded courses did not generate a daily plan")}
+  if(!state.dailyPlan.items.some(p=>p.type==="module"||p.type==="lesson")){throw new Error("daily plan should target the next unfinished module or lesson")}
+  state=structuredClone(seededFresh);
+  state.activeTrack="track-electronics";
+  expandedCourseId="course-elec-08";
+  renderTracks();
+  if(!$("trackCourses").innerHTML.includes("module-elec-08-01")||!$("trackCourses").innerHTML.includes("lesson-elec-08-01-01")){throw new Error("expanded courses should render module and lesson ids for navigation")}
+  if(resourceByScope("module-elec-08-01","module").sourceType!=="module"){throw new Error("module resources should be addressable by scope")}
+  if(resourceByScope("lesson-elec-08-01-01","lesson").sourceType!=="lesson"){throw new Error("lesson resources should be addressable by scope")}
+  const elec08=state.items.find(i=>i.id==="course-elec-08");
+  elec08.modules[0].lessons[0].progress=100;
+  elec08.modules[0].lessons[0].done=true;
+  if(moduleProgress(elec08.modules[0])!==20||itemProgress(elec08)<=0){throw new Error("course progress should derive from lesson and module progress")}
+  const elec02=state.items.find(i=>i.id==="course-elec-02");
+  const elec03=state.items.find(i=>i.id==="course-elec-03");
+  elec02.modules.forEach(module=>{module.progress=100;module.done=true;module.status="concluido"});
+  elec03.modules.forEach(module=>{module.progress=0;module.done=false;module.status="nao_iniciado"});
+  const specProgress=itemProgress(state.items.find(i=>i.id==="course-elec-04"));
+  if(specProgress<=0||specProgress>=100){throw new Error("specialization progress should derive from child course references")}
   await ArcanaStorage.saveState(state);
   const storedSeed=await ArcanaStorage.loadState(DEFAULT_STATE);
-  if(storedSeed.starterContentVersion!==2||storedSeed.items.filter(i=>i.kind==="course").length!==17){throw new Error("seeded starter content did not persist through the canonical storage path")}
+  if(storedSeed.starterContentVersion!==2||storedSeed.starterCurriculumVersion!==1||storedSeed.items.filter(i=>i.kind==="course").length!==17){throw new Error("seeded starter content did not persist through the canonical storage path")}
 
   if(!$("homeTracks").innerHTML.includes("navigateTo('tracks',{trackId:'track-finance'})")){throw new Error("home track rows should navigate with stable track ids")}
   await navigateTo("tracks",{trackId:"track-finance"});
