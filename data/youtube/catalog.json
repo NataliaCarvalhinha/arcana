@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-17T09:58:37Z",
+  "generatedAt": "2026-08-17T13:23:50Z",
   "playlists": [
     {
       "id": "PLNur2Ccbfc5k",
@@ -4388,7 +4388,7 @@
           "channel": "PELEJA",
           "duration": 1109,
           "position": 487,
-          "thumbnail": "https://i.ytimg.com/vi_lc/LUyS_owuyck/hqdefault_en.jpg?sqp=CPS0i9QG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBqLzl_8DMhIwaHR0cHM6Ly9pLnl0aW1nLmNvbS92aS9MVXlTX293dXljay9ocWRlZmF1bHQuanBn&rs=AOn4CLBV7SP9DAnyYWZqqUrJrufgwllcDA"
+          "thumbnail": "https://i.ytimg.com/vi_lc/LUyS_owuyck/hqdefault_en.jpg?sqp=CICVjNQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBqLzl_8DMhIwaHR0cHM6Ly9pLnl0aW1nLmNvbS92aS9MVXlTX293dXljay9ocWRlZmF1bHQuanBn&rs=AOn4CLC1D_2RN1e78YDD-CHmqUsneJaD7g"
         },
         {
           "id": "oyuboXYhEAw",
@@ -13596,6 +13596,24 @@
           "duration": 1368,
           "position": 1510,
           "thumbnail": "https://i.ytimg.com/vi/qoXeMHCo8HA/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCcAMMxVaBpDyOMqY_3XQ9Oglzhww"
+        },
+        {
+          "id": "vkAZJmwO5pc",
+          "title": "TIER LIST OF THE BEST AND WORST EXPERIENCES",
+          "url": "https://www.youtube.com/watch?v=vkAZJmwO5pc",
+          "channel": "Experiência Flamino",
+          "duration": 1418,
+          "position": 1511,
+          "thumbnail": "https://i.ytimg.com/vi/vkAZJmwO5pc/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCTyXcAE-AAktpe5ANgsr9NNoRoNQ"
+        },
+        {
+          "id": "vTGf1V4aqyU",
+          "title": "How to buy your apartment through the Minha Casa Minha Vida program (step-by-step) | Aline Tófalo",
+          "url": "https://www.youtube.com/watch?v=vTGf1V4aqyU",
+          "channel": "Aline Tófalo",
+          "duration": 1203,
+          "position": 1512,
+          "thumbnail": "https://i.ytimg.com/vi/vTGf1V4aqyU/hqdefault_custom_1.jpg?sqp=CICVjNQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCLE0xhfTWEtWizIww8IpUcHOUUoA"
         }
       ]
     }
