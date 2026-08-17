@@ -1,0 +1,18 @@
+{
+  "name": "Arcana",
+  "short_name": "Arcana",
+  "description": "Personal learning grimoire with local-first storage.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#17101f",
+  "theme_color": "#17101f",
+  "icons": [
+    {
+      "src": "assets/icons/arcana.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

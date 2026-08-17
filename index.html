@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#17101f">
+  <title>Arcana — Personal Learning Grimoire</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="moon-mark">☾</div>
+      <div><div class="brand-title">ARCANA</div><div class="brand-sub">personal grimoire</div></div>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-view="home">✦ <span>Santuário</span></button>
+      <button class="nav-btn" data-view="tracks">☿ <span>Trilhas</span></button>
+	      <button class="nav-btn" data-view="youtube">▶ <span>YouTube</span></button>
+	      <button class="nav-btn" data-view="library">⌑ <span>Biblioteca</span></button>
+	      <button class="nav-btn" data-view="fichamentos">📜 <span>Fichamentos</span></button>
+	      <button class="nav-btn" data-view="notes">🜁 <span>Notas</span></button>
+	      <button class="nav-btn" data-view="review">✦ <span>Revisão</span></button>
+	      <button class="nav-btn" data-view="calendar">◐ <span>Calendário</span></button>
+      <button class="nav-btn" data-view="inbox">☽ <span>Inbox</span></button>
+      <button class="nav-btn" data-view="settings">⚙ <span>Configurações</span></button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="moon-phase" id="moonGlyph">◐</div>
+      <div><strong id="sideDate"></strong><span id="streakSide">ritual diário</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div><div class="kicker">GRIMÓRIO PESSOAL</div><h1 id="pageTitle">Santuário</h1></div>
+      <div class="top-actions">
+        <button id="exportBtn" class="ghost-btn">Exportar</button>
+        <label class="ghost-btn file-label">Importar<input id="importInput" type="file" accept="application/json"></label>
+        <button id="addBtn" class="gold-btn">＋ Adicionar</button>
+      </div>
+    </header>
+
+    <section id="homeView" class="view active">
+      <section class="welcome-card">
+        <div>
+          <div class="kicker">SEU RITUAL DE HOJE</div>
+          <h2 id="greeting"></h2>
+          <p id="todaySummary"></p>
+        </div>
+        <div class="level-orb">
+          <span id="levelNumber">1</span>
+          <small>NÍVEL</small>
+        </div>
+      </section>
+
+      <section id="gameStats" class="stat-grid"></section>
+
+      <div class="layout-grid">
+        <article class="card">
+          <div class="card-head">
+            <div><div class="kicker">PLANO AUTOMÁTICO</div><h2>Hoje</h2></div>
+            <button id="regenPlanBtn" class="mini-btn">↻ Recalcular</button>
+          </div>
+          <div class="plan-config">
+            <label>Tempo disponível hoje
+              <select id="todayMinutes">
+                <option value="30">30 min</option>
+                <option value="45">45 min</option>
+                <option value="60" selected>1h</option>
+                <option value="90">1h30</option>
+                <option value="120">2h</option>
+                <option value="180">3h</option>
+              </select>
+            </label>
+          </div>
+          <div id="dailyPlan"></div>
+        </article>
+
+        <article class="card">
+          <div class="card-head"><div><div class="kicker">PRÓXIMO VÍDEO</div><h2>YouTube de hoje</h2></div><button class="mini-btn" onclick="showView('youtube')">Ver fila</button></div>
+          <div id="homeYoutube"></div>
+        </article>
+      </div>
+
+	      <div class="layout-grid">
+	        <article class="card">
+	          <div class="card-head"><div><div class="kicker">TRILHAS</div><h2>Progresso dos caminhos</h2></div><button class="mini-btn" onclick="showView('tracks')">Abrir</button></div>
+	          <div id="homeTracks"></div>
+	        </article>
+	        <article class="card">
+	          <div class="card-head"><div><div class="kicker">HOJE</div><h2>Importância × urgência</h2></div></div>
+	          <div id="homePriority"></div>
+	        </article>
+	      </div>
+	
+	      <div class="layout-grid">
+	        <article class="card">
+	          <div class="card-head"><div><div class="kicker">VAULT</div><h2>Revisões e conexões</h2></div><button class="mini-btn" onclick="showView('review')">Revisar</button></div>
+	          <div id="homeReviews"></div>
+	        </article>
+	        <article class="card">
+	          <div class="card-head"><div><div class="kicker">MEMÓRIA</div><h2>Notas recentes</h2></div><button class="mini-btn" onclick="showView('notes')">Abrir</button></div>
+	          <div id="homeKnowledge"></div>
+	        </article>
+	      </div>
+	    </section>
+
+    <section id="tracksView" class="view">
+      <div class="section-toolbar">
+        <div><div class="kicker">CAMINHOS DE APRENDIZADO</div><h2>Trilhas</h2></div>
+        <button id="newTrackBtn" class="gold-btn">＋ Nova trilha</button>
+      </div>
+      <div id="trackTabs" class="track-tabs"></div>
+      <div id="trackHero" class="track-hero"></div>
+      <div class="layout-grid">
+        <article class="card">
+          <div class="card-head"><div><div class="kicker">CURSOS</div><h2>Currículo da trilha</h2></div><button id="addCourseBtn" class="mini-btn">＋ Curso</button></div>
+          <div id="trackCourses"></div>
+        </article>
+        <article class="card">
+          <div class="card-head"><div><div class="kicker">PERFIL</div><h2>Progresso</h2></div><button id="editTrackBtn" class="mini-btn">Editar</button></div>
+          <div id="trackProfile"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="youtubeView" class="view">
+      <div class="section-toolbar">
+        <div><div class="kicker">ORÁCULO DO YOUTUBE</div><h2>Playlists de foco</h2></div>
+        <button id="newPlaylistBtn" class="gold-btn">＋ Playlist</button>
+      </div>
+      <div id="playlistTabs" class="playlist-tabs"></div>
+      <div class="layout-grid">
+        <article class="card">
+          <div class="card-head">
+            <div><div class="kicker">PLAYLIST ATIVA</div><h2 id="activePlaylistName"></h2><div id="playlistSyncStatus" class="sync-status"></div></div>
+            <div class="youtube-actions"><button id="syncPlaylistBtn" class="ghost-btn">↻ Sincronizar</button><button id="exportPlaylistBtn" class="mini-btn">Exportar JSON</button><label class="mini-btn file-label">Importar JSON<input id="playlistImportInput" type="file" accept="application/json"></label><button id="editPlaylistBtn" class="mini-btn">Editar</button></div>
+          </div>
+          <div id="activePlaylistPanel"></div>
+        </article>
+        <article class="card">
+          <div class="card-head"><div><div class="kicker">ORÇAMENTO DIÁRIO</div><h2>Atenção disponível</h2></div></div>
+          <div id="youtubeBudget"></div>
+        </article>
+      </div>
+      <article class="card">
+        <div class="card-head"><div><div class="kicker">LIBERADOS HOJE</div><h2>Vídeos do dia</h2></div></div>
+        <div id="dailyVideos"></div>
+      </article>
+      <article class="card">
+        <div class="card-head"><div><div class="kicker">FILA</div><h2>Próximos vídeos</h2></div></div>
+        <div id="youtubeQueue"></div>
+      </article>
+    </section>
+
+	    <section id="libraryView" class="view">
+      <div class="section-toolbar">
+        <div><div class="kicker">ARQUIVO</div><h2>Biblioteca</h2></div>
+      </div>
+      <div class="filters">
+        <input id="searchInput" placeholder="Buscar no grimório...">
+        <select id="libraryTypeFilter">
+          <option value="all">Tudo</option><option value="course">Cursos</option><option value="reading">Leituras</option><option value="podcast">Podcasts</option><option value="article">Artigos</option><option value="newsletter">Newsletters</option><option value="repo">GitHub</option><option value="documentary">Documentários</option><option value="manual">Outros</option>
+        </select>
+        <select id="priorityFilter">
+          <option value="all">Toda prioridade</option><option value="IU">Importante + urgente</option><option value="I">Importante</option><option value="U">Urgente</option><option value="N">Nem importante nem urgente</option>
+        </select>
+      </div>
+	      <div id="libraryGrid" class="library-grid"></div>
+	    </section>
+	
+	    <section id="fichamentosView" class="view">
+	      <div class="section-toolbar">
+	        <div><div class="kicker">LEITURA ATIVA</div><h2>Fichamentos</h2></div>
+	        <button id="newFichamentoBtn" class="gold-btn">＋ Fichamento</button>
+	      </div>
+	      <div class="filters">
+	        <input id="fichamentoSearch" placeholder="Buscar por fonte, citação ou conceito...">
+	        <select id="fichamentoSourceType">
+	          <option value="all">Todas as fontes</option><option value="book">Livro</option><option value="article">Artigo/Paper</option><option value="video">Vídeo</option><option value="course">Curso</option><option value="podcast">Podcast</option><option value="document">Documento</option>
+	        </select>
+	      </div>
+	      <div class="vault-layout">
+	        <article class="card vault-list-card"><div id="fichamentoList" class="vault-list"></div></article>
+	        <article class="card vault-editor-card"><div id="fichamentoEditor" class="vault-editor"></div></article>
+	      </div>
+	    </section>
+	
+	    <section id="notesView" class="view">
+	      <div class="section-toolbar">
+	        <div><div class="kicker">ZETTELKASTEN LOCAL</div><h2>Notas</h2></div>
+	        <button id="newNoteBtn" class="gold-btn">＋ Nota</button>
+	      </div>
+	      <div class="filters vault-filters">
+	        <input id="vaultSearchInput" placeholder="Buscar notas, tags, wiki links...">
+	        <select id="vaultTypeFilter"><option value="all">Todos os tipos</option><option value="permanent">Permanente</option><option value="concept">Conceito</option><option value="question">Pergunta</option><option value="insight">Insight</option><option value="quote">Citação</option><option value="reference">Referência</option><option value="next_action">Ação</option><option value="quick">Rápida</option><option value="session">Sessão</option></select>
+	        <select id="vaultTrackFilter"><option value="all">Todas as trilhas</option></select>
+	        <input id="vaultTagFilter" placeholder="#tag">
+	        <select id="vaultFavoriteFilter"><option value="all">Todas</option><option value="true">Favoritas</option></select>
+	        <select id="vaultReviewFilter"><option value="all">Toda revisão</option><option value="due">Vencidas</option><option value="archived">Arquivo</option></select>
+	        <select id="vaultSortFilter"><option value="updated">Atualizadas</option><option value="created">Criadas</option><option value="review">Revisão</option><option value="alphabetical">A-Z</option></select>
+	      </div>
+	      <div class="vault-layout">
+	        <article class="card vault-list-card"><div id="vaultList" class="vault-list"></div></article>
+	        <article class="card vault-editor-card"><div id="vaultEditorPane" class="vault-editor"></div></article>
+	      </div>
+	    </section>
+	
+	    <section id="reviewView" class="view">
+	      <div class="section-toolbar">
+	        <div><div class="kicker">REVISÃO ESPAÇADA</div><h2>Fila de revisão</h2></div>
+	      </div>
+	      <div class="vault-layout">
+	        <article class="card vault-list-card"><div id="reviewQueue" class="vault-list"></div></article>
+	        <article class="card vault-editor-card"><div id="reviewActive" class="vault-editor"></div></article>
+	      </div>
+	    </section>
+
+    <section id="calendarView" class="view">
+      <div class="section-toolbar">
+        <div><div class="kicker">MEMÓRIA DO RITUAL</div><h2>Calendário</h2></div>
+      </div>
+      <article class="card">
+        <div class="calendar-nav"><button id="prevMonthBtn" class="ghost-btn">←</button><h2 id="calendarTitle"></h2><button id="nextMonthBtn" class="ghost-btn">→</button></div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+      </article>
+      <article class="card">
+        <div class="card-head"><div><div class="kicker">HISTÓRICO</div><h2>Sessões recentes</h2></div></div>
+        <div id="recentSessions"></div>
+      </article>
+    </section>
+
+    <section id="inboxView" class="view">
+      <article class="card">
+        <div class="card-head"><div><div class="kicker">INBOX INTELIGENTE</div><h2>Capture agora, organize depois</h2></div></div>
+        <div class="capture">
+          <input id="inboxInput" placeholder="Cole um link ou escreva uma ideia...">
+          <button id="captureBtn" class="gold-btn">Capturar</button>
+        </div>
+        <p class="hint">O Arcana tenta identificar YouTube, Coursera, GitHub, artigo, newsletter, podcast e outros tipos automaticamente.</p>
+        <div id="inboxList"></div>
+      </article>
+    </section>
+
+    <section id="settingsView" class="view">
+      <div class="layout-grid">
+        <article class="card">
+          <div class="card-head"><div><div class="kicker">YOUTUBE</div><h2>Limite diário global</h2></div></div>
+          <form id="youtubeSettingsForm" class="settings-form">
+            <label>Modo<select name="mode"><option value="minutes">Minutos</option><option value="count">Vídeos</option><option value="either">Minutos OU vídeos</option><option value="none">Sem limite</option></select></label>
+            <label>Minutos/dia<input name="minutes" type="number" min="0"></label>
+            <label>Vídeos/dia<input name="count" type="number" min="0"></label>
+            <label class="check"><input name="hideAfterLimit" type="checkbox"> Esconder extras ao atingir o limite</label>
+            <button class="gold-btn">Salvar</button>
+          </form>
+        </article>
+	        <article class="card">
+	          <div class="card-head"><div><div class="kicker">BACKUP</div><h2>Segurança local</h2></div></div>
+	          <div id="environmentStatus" class="hint"></div>
+	          <div id="backupStatus"></div>
+	          <div class="item-actions">
+	            <button id="backupNowBtn" class="gold-btn">Criar snapshot</button>
+	            <button id="exportFullBackupBtn" class="ghost-btn">Exportar backup</button>
+	            <label class="ghost-btn file-label">Importar backup<input id="fullBackupImportInput" type="file" accept="application/json"></label>
+	            <button id="exportVaultBtn" class="ghost-btn">Exportar vault ZIP</button>
+	            <label class="ghost-btn file-label">Importar vault ZIP<input id="vaultImportInput" type="file" accept=".zip,application/zip"></label>
+	            <button id="reindexVaultBtn" class="ghost-btn">Reindexar vault</button>
+	          </div>
+	          <div class="snapshot-tools"><select id="snapshotList"></select><button id="restoreSnapshotBtn" class="ghost-btn">Restaurar snapshot</button></div>
+	        </article>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="trackDialog"><form id="trackForm" class="modal">
+  <div class="modal-head"><div><div class="kicker">TRILHA</div><h2 id="trackDialogTitle">Nova trilha</h2></div><button type="button" class="x" data-close="trackDialog">×</button></div>
+  <input type="hidden" name="id">
+  <label>Nome<input name="name" required></label>
+  <label>Sigilo<input name="sigil" maxlength="4" value="☽"></label>
+  <label>Subtítulo<input name="subtitle"></label>
+  <label>Descrição<textarea name="description" rows="3"></textarea></label>
+  <label>Meta semanal (min)<input name="weeklyGoal" type="number" min="0" value="120"></label>
+  <div class="modal-actions"><button id="deleteTrackBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button type="button" class="ghost-btn" data-close="trackDialog">Cancelar</button><button class="gold-btn">Salvar</button></div>
+</form></dialog>
+
+<dialog id="playlistDialog"><form id="playlistForm" class="modal">
+  <div class="modal-head"><div><div class="kicker">PLAYLIST</div><h2 id="playlistDialogTitle">Nova playlist</h2></div><button type="button" class="x" data-close="playlistDialog">×</button></div>
+  <input type="hidden" name="id">
+  <label>Nome<input name="name" required></label>
+  <label>URL<input name="url" type="url" required></label>
+  <div class="modal-actions"><button id="deletePlaylistBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button type="button" class="ghost-btn" data-close="playlistDialog">Cancelar</button><button class="gold-btn">Salvar</button></div>
+</form></dialog>
+
+<dialog id="itemDialog"><form id="itemForm" class="modal">
+  <div class="modal-head"><div><div class="kicker">NOVO REGISTRO</div><h2>Adicionar ao grimório</h2></div><button type="button" class="x" data-close="itemDialog">×</button></div>
+  <input type="hidden" name="id">
+  <label>Tipo<select name="kind"><option value="course">Curso</option><option value="reading">Livro/PDF</option><option value="article">Artigo/Paper</option><option value="podcast">Podcast</option><option value="newsletter">Newsletter</option><option value="repo">GitHub</option><option value="documentary">Documentário</option><option value="manual">Outro</option></select></label>
+  <label>Trilha<select name="track"></select></label>
+  <label>Título<input name="title" required></label>
+  <label>URL<input name="url" type="url"></label>
+  <label>Fonte<input name="source"></label>
+  <div class="two-fields">
+    <label>Importante<select name="important"><option value="true">Sim</option><option value="false">Não</option></select></label>
+    <label>Urgente<select name="urgent"><option value="false">Não</option><option value="true">Sim</option></select></label>
+  </div>
+  <label>Tempo estimado restante (min)<input name="estimatedMinutes" type="number" min="0"></label>
+  <label>Progresso (%)<input name="progress" type="number" min="0" max="100" value="0"></label>
+  <label>Notas<textarea name="notes" rows="4"></textarea></label>
+  <div id="moduleEditor" class="module-editor hidden">
+    <div class="card-head"><strong>Módulos / aulas</strong><button id="addModuleBtn" type="button" class="mini-btn">＋ Módulo</button></div>
+    <div id="moduleRows"></div>
+  </div>
+  <div class="modal-actions"><button type="button" class="ghost-btn" data-close="itemDialog">Cancelar</button><button class="gold-btn">Salvar</button></div>
+</form></dialog>
+
+	<dialog id="notesDialog"><div class="modal">
+	  <div class="modal-head"><div><div class="kicker">CADERNO</div><h2 id="notesTitle"></h2></div><button type="button" class="x" data-close="notesDialog">×</button></div>
+	  <textarea id="notesText" rows="14" placeholder="Suas anotações..."></textarea>
+	  <div class="modal-actions"><button id="promoteDialogNoteBtn" class="ghost-btn">Promover ideia</button><button id="saveNotesBtn" class="gold-btn">Salvar notas</button></div>
+	</div></dialog>
+	
+	<dialog id="focusDialog"><div class="modal focus-modal">
+	  <div class="modal-head"><div><div class="kicker">CÍRCULO DE FOCO</div><h2 id="focusTitle"></h2></div><button id="closeFocusBtn" class="x">×</button></div>
+	  <div class="focus-grid">
+	    <div>
+	      <div id="playerWrap"></div>
+	      <div class="timer-wrap"><div id="timerDisplay">00:00:00</div><div class="timer-controls"><button id="timerStartBtn" class="gold-btn">Iniciar</button><button id="timerPauseBtn" class="ghost-btn">Pausar</button><button id="timerResetBtn" class="ghost-btn">Zerar</button></div></div>
+	    </div>
+	    <aside class="focus-notes">
+	      <div class="quick-actions"><button class="mini-btn" data-focus-block="concept">Conceito</button><button class="mini-btn" data-focus-block="quote">Citação</button><button class="mini-btn" data-focus-block="question">Pergunta</button><button class="mini-btn" data-focus-block="action">Ação</button></div>
+	      <input id="focusTimestamp" placeholder="Timestamp ou página">
+	      <textarea id="focusNotesText" rows="14" placeholder="Notas da sessão..."></textarea>
+	      <div id="focusSaveState" class="hint">Rascunho local no vault.</div>
+	    </aside>
+	  </div>
+	  <div class="modal-actions"><a id="focusOpenLink" class="ghost-btn" target="_blank" rel="noopener noreferrer">Abrir recurso</a><button id="focusDoneBtn" class="gold-btn">Concluir sessão</button></div>
+	</div></dialog>
+
+<script src="db.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

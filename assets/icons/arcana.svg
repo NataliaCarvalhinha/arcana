@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Arcana">
+  <rect width="512" height="512" rx="96" fill="#17101f"/>
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#d7b56d" stroke-width="22"/>
+  <path d="M310 118c-74 24-122 93-122 166 0 52 25 94 65 118-83-6-149-75-149-160 0-69 44-130 109-152 35-12 70-11 97 28Z" fill="#f2dfaa"/>
+  <path d="M256 89 279 194 384 217 279 240 256 345 233 240 128 217 233 194Z" fill="#d7b56d" opacity=".9"/>
+</svg>
