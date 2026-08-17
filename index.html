@@ -276,15 +276,16 @@
   </main>
 </div>
 
-<dialog id="trackDialog"><form id="trackForm" class="modal">
+<dialog id="trackDialog"><form id="trackForm" class="modal" novalidate>
   <div class="modal-head"><div><div class="kicker">TRILHA</div><h2 id="trackDialogTitle">Nova trilha</h2></div><button type="button" class="x" data-close="trackDialog">×</button></div>
   <input type="hidden" name="id">
   <label>Nome<input name="name" required></label>
-  <label>Sigilo<input name="sigil" maxlength="4" value="☽"></label>
+  <label>Sigilo<input name="sigil" maxlength="12" value="☽"></label>
   <label>Subtítulo<input name="subtitle"></label>
   <label>Descrição<textarea name="description" rows="3"></textarea></label>
   <label>Meta semanal (min)<input name="weeklyGoal" type="number" min="0" value="120"></label>
-  <div class="modal-actions"><button id="deleteTrackBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button type="button" class="ghost-btn" data-close="trackDialog">Cancelar</button><button class="gold-btn">Salvar</button></div>
+  <div id="trackFormError" class="form-error hidden" role="alert"></div>
+  <div class="modal-actions"><button id="deleteTrackBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button type="button" class="ghost-btn" data-close="trackDialog">Cancelar</button><button id="trackSaveBtn" type="submit" class="gold-btn">Salvar</button></div>
 </form></dialog>
 
 <dialog id="playlistDialog"><form id="playlistForm" class="modal">

@@ -412,3 +412,6 @@ const ArcanaStorage=(()=>{
 
   return {init,loadState,saveState,snapshot,listSnapshots,restoreSnapshot,downloadFullBackup,importFullBackup,downloadVault,importVault,canHandle,route,get ready(){return ready},log}
 })();
+if(typeof window!=="undefined"){
+  window.ArcanaStorage=ArcanaStorage
+}

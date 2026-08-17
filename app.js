@@ -40,13 +40,24 @@ function migrate(old){
   return s
 }
 function save(render=true,reason="change"){
-  if(window.ArcanaStorage?.ready){
-    ArcanaStorage.saveState(state).catch(e=>console.warn("[Arcana] IndexedDB save failed",e))
-  }else{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
+  let persisted;
+  try{
+    if(window.ArcanaStorage?.ready){
+      persisted=ArcanaStorage.saveState(state)
+    }else{
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+      persisted=Promise.resolve()
+    }
+  }catch(e){
+    persisted=Promise.reject(e)
   }
-  if(render){renderAll()}
-  scheduleAutoBackup(reason)
+  const done=Promise.resolve(persisted).then(()=>{
+    if(render){renderAll()}
+    scheduleAutoBackup(reason);
+    return state
+  });
+  done.catch(e=>console.warn("[Arcana] save failed",e));
+  return done
 }
 function dayKey(d=new Date()){return d.toLocaleDateString("en-CA")}
 function esc(v=""){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
@@ -169,9 +180,12 @@ function courseRow(i){
   const p=itemProgress(i),nc=noteCount(i.id);return `<div class="course-row"><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${priorityLabel(i)} · ${nc} notas</span><div class="progress"><div style="width:${p}%"></div></div>${i.modules?.length?`<div class="module-list">${i.modules.map(m=>`<div class="module ${m.done?"done":""}"><span>${m.done?"✓":"○"} ${esc(m.title)}</span><span>${m.minutes||0}m</span></div>`).join("")}</div>`:""}</div><button class="mini-btn" onclick="editItem('${i.id}')">Editar</button><button class="mini-btn" onclick="openFichamentoForSource('${i.id}','item')">Fichamento</button><button class="mini-btn" onclick="openNotes('${i.id}','item')">Notas</button></div>`
 }
 function setTrack(id){state.activeTrack=id;save();renderTracks()}
-function openTrackDialog(id=null){const f=$("trackForm");f.reset();f.id.value="";if(id){const t=trackById(id);$("trackDialogTitle").textContent="Editar trilha";Object.keys(t).forEach(k=>{if(f.elements[k])f.elements[k].value=t[k]??""});$("deleteTrackBtn").classList.toggle("hidden",state.tracks.length<=1)}else{$("trackDialogTitle").textContent="Nova trilha";f.sigil.value="☽";f.weeklyGoal.value=120;$("deleteTrackBtn").classList.add("hidden")}$("trackDialog").showModal()}
-function saveTrack(e){e.preventDefault();const f=e.currentTarget,id=f.id.value,name=f.name.value.trim();if(!name)return;if(id){Object.assign(trackById(id),{name,sigil:f.sigil.value||"☽",subtitle:f.subtitle.value,description:f.description.value,weeklyGoal:Number(f.weeklyGoal.value)||0})}else{let base=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-"),nid=base,n=2;while(state.tracks.some(t=>t.id===nid))nid=`${base}-${n++}`;state.tracks.push({id:nid,name,sigil:f.sigil.value||"☽",subtitle:f.subtitle.value,description:f.description.value,weeklyGoal:Number(f.weeklyGoal.value)||0});state.activeTrack=nid}save();$("trackDialog").close()}
-function deleteTrack(){const id=$("trackForm").id.value;if(!id||state.tracks.length<=1)return;if(!confirm("Excluir esta trilha e seus itens?"))return;state.tracks=state.tracks.filter(t=>t.id!==id);state.items=state.items.filter(i=>i.track!==id);state.activeTrack=state.tracks[0].id;save();$("trackDialog").close()}
+function setTrackFormError(message=""){const el=$("trackFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
+function setTrackSaving(saving){const btn=$("trackSaveBtn");if(!btn){return}btn.disabled=saving;btn.textContent=saving?"Salvando...":"Salvar"}
+function makeTrackId(name,tracks=state.tracks){let base=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"trilha",nid=base,n=2;while(tracks.some(t=>t.id===nid)){nid=`${base}-${n++}`}return nid}
+function openTrackDialog(id=null){const f=$("trackForm"),fields=f.elements;f.reset();setTrackFormError();setTrackSaving(false);fields.id.value="";if(id){const t=trackById(id);if(!t){openTrackDialog();return}$("trackDialogTitle").textContent="Editar trilha";Object.keys(t).forEach(k=>{if(fields[k]){fields[k].value=t[k]??""}});$("deleteTrackBtn").classList.toggle("hidden",state.tracks.length<=1)}else{$("trackDialogTitle").textContent="Nova trilha";fields.sigil.value="☽";fields.weeklyGoal.value=120;$("deleteTrackBtn").classList.add("hidden")}$("trackDialog").showModal()}
+async function saveTrack(e){e.preventDefault();const f=e.currentTarget,fields=f.elements,id=fields.id.value,name=fields.name.value.trim(),weeklyGoal=Number(fields.weeklyGoal.value)||0;setTrackFormError();if(!name){setTrackFormError("Informe um nome para salvar a trilha.");fields.name.focus();return}if(weeklyGoal<0){setTrackFormError("A meta semanal não pode ser negativa.");fields.weeklyGoal.focus();return}const previous=structuredClone(state),next=structuredClone(state),payload={name,sigil:fields.sigil.value.trim()||"☽",subtitle:fields.subtitle.value.trim(),description:fields.description.value.trim(),weeklyGoal};if(id){const existing=next.tracks.find(t=>t.id===id);if(!existing){setTrackFormError("Esta trilha não existe mais. Atualize a página e tente novamente.");return}Object.assign(existing,payload)}else{const nid=makeTrackId(name,next.tracks);next.tracks.push({id:nid,...payload});next.activeTrack=nid;next.weeklyProgress=next.weeklyProgress||{};if(!Object.prototype.hasOwnProperty.call(next.weeklyProgress,nid)){next.weeklyProgress[nid]=0}}state=next;setTrackSaving(true);try{await save(false,"track");$("trackDialog").close();renderAll()}catch(err){state=previous;setTrackFormError(`Não consegui salvar a trilha: ${err.message||"erro de armazenamento"}.`)}finally{setTrackSaving(false)}}
+function deleteTrack(){const id=$("trackForm").elements.id.value;if(!id||state.tracks.length<=1){return}if(!confirm("Excluir esta trilha e seus itens?")){return}state.tracks=state.tracks.filter(t=>t.id!==id);state.items=state.items.filter(i=>i.track!==id);state.activeTrack=state.tracks[0].id;save();$("trackDialog").close()}
 
 function renderYoutube(){
   $("playlistTabs").innerHTML=state.playlists.map(p=>`<button class="playlist-tab ${p.id===state.activePlaylist?"active":""}" onclick="setPlaylist('${p.id}')"><strong>${esc(p.name)}</strong><span>${state.youtubeQueue.filter(v=>v.playlistId===p.id&&itemProgress(v)<100).length} pendentes</span></button>`).join("");
@@ -218,9 +232,9 @@ function videoRow(v,n,today){
   return `<div class="video-row">${v.thumbnail?`<img class="video-thumb" src="${esc(v.thumbnail)}">`:"<div class='num'>▶</div>"}<div class="grow"><strong>${esc(v.title)}</strong><span>${esc(v.channel||"YouTube")} · ${dur} ${today?`· vídeo ${n+1} de hoje`:""} · ${noteCount(v.id)} notas</span></div><button class="mini-btn" onclick="openFocus('${v.id}','youtube')">Assistir</button><button class="mini-btn" onclick="openFichamentoForSource('${v.id}','youtube')">Fichamento</button><button class="mini-btn" onclick="openNotes('${v.id}','youtube')">Notas</button></div>`
 }
 function setPlaylist(id){state.activePlaylist=id;save();renderYoutube()}
-function openPlaylistDialog(id=null){const f=$("playlistForm");f.reset();f.id.value="";if(id){const p=state.playlists.find(x=>x.id===id);$("playlistDialogTitle").textContent="Editar playlist";f.id.value=p.id;f.name.value=p.name;f.url.value=p.url;$("deletePlaylistBtn").classList.remove("hidden")}else{$("playlistDialogTitle").textContent="Nova playlist";$("deletePlaylistBtn").classList.add("hidden")}$("playlistDialog").showModal()}
-async function savePlaylist(e){e.preventDefault();const f=e.currentTarget,id=f.id.value,name=f.name.value.trim(),url=f.url.value.trim();if(id){Object.assign(state.playlists.find(p=>p.id===id),{name,url})}else{const nid=crypto.randomUUID();state.playlists.push({id:nid,name,url,lastSyncAt:null,lastSyncError:null});state.activePlaylist=nid}save(false);$("playlistDialog").close();await syncPlaylist()}
-function deletePlaylist(){const id=$("playlistForm").id.value;if(state.playlists.length<=1)return alert("Mantenha pelo menos uma playlist.");if(!confirm("Excluir esta playlist e sua fila local?"))return;state.playlists=state.playlists.filter(p=>p.id!==id);state.youtubeQueue=state.youtubeQueue.filter(v=>v.playlistId!==id);state.activePlaylist=state.playlists[0].id;save();$("playlistDialog").close()}
+function openPlaylistDialog(id=null){const f=$("playlistForm"),fields=f.elements;f.reset();fields.id.value="";if(id){const p=state.playlists.find(x=>x.id===id);$("playlistDialogTitle").textContent="Editar playlist";fields.id.value=p.id;fields.name.value=p.name;fields.url.value=p.url;$("deletePlaylistBtn").classList.remove("hidden")}else{$("playlistDialogTitle").textContent="Nova playlist";$("deletePlaylistBtn").classList.add("hidden")}$("playlistDialog").showModal()}
+async function savePlaylist(e){e.preventDefault();const f=e.currentTarget,fields=f.elements,id=fields.id.value,name=fields.name.value.trim(),url=fields.url.value.trim();if(id){Object.assign(state.playlists.find(p=>p.id===id),{name,url})}else{const nid=crypto.randomUUID();state.playlists.push({id:nid,name,url,lastSyncAt:null,lastSyncError:null});state.activePlaylist=nid}save(false);$("playlistDialog").close();await syncPlaylist()}
+function deletePlaylist(){const id=$("playlistForm").elements.id.value;if(state.playlists.length<=1){return alert("Mantenha pelo menos uma playlist.")}if(!confirm("Excluir esta playlist e sua fila local?")){return}state.playlists=state.playlists.filter(p=>p.id!==id);state.youtubeQueue=state.youtubeQueue.filter(v=>v.playlistId!==id);state.activePlaylist=state.playlists[0].id;save();$("playlistDialog").close()}
 function mergePlaylistData(data,p){
   if(!Array.isArray(data.items)){
     throw new Error("Resposta sem lista de vídeos.")
@@ -289,14 +303,14 @@ function renderLibrary(){
 }
 function libraryCard(i){const p=itemProgress(i),tr=trackById(i.track);return `<article class="library-item"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><h3>${esc(i.title)}</h3><div class="meta"><span>${esc(tr?.name||"Sem trilha")}</span><span>${esc(i.source||i.kind)}</span><span>${p}%</span><span>${noteCount(i.id)} notas</span></div><div class="progress"><div style="width:${p}%"></div></div>${i.notes?`<p class="hint">${esc(i.notes).slice(0,180)}</p>`:""}<div class="item-actions"><button class="mini-btn" onclick="openFocus('${i.id}','item')">Focar</button><button class="mini-btn" onclick="editItem('${i.id}')">Editar</button><button class="mini-btn" onclick="openFichamentoForSource('${i.id}','item')">Fichamento</button><button class="mini-btn" onclick="openNotes('${i.id}','item')">Notas</button></div></article>`}
 function openItemDialog(kind="course",id=null){
-  const f=$("itemForm");f.reset();f.id.value=id||"";f.track.innerHTML=state.tracks.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");f.track.value=state.activeTrack;f.kind.value=kind;renderModuleEditor();
-  if(id){const i=state.items.find(x=>x.id===id);if(!i)return;["kind","track","title","url","source","estimatedMinutes","progress","notes"].forEach(k=>{if(f.elements[k])f.elements[k].value=i[k]??""});f.important.value=String(i.important!==false);f.urgent.value=String(!!i.urgent);renderModuleEditor(i.modules||[])}
+  const f=$("itemForm"),fields=f.elements;f.reset();fields.id.value=id||"";fields.track.innerHTML=state.tracks.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");fields.track.value=state.activeTrack;fields.kind.value=kind;renderModuleEditor();
+  if(id){const i=state.items.find(x=>x.id===id);if(!i){return}["kind","track","title","url","source","estimatedMinutes","progress","notes"].forEach(k=>{if(fields[k]){fields[k].value=i[k]??""}});fields.important.value=String(i.important!==false);fields.urgent.value=String(!!i.urgent);renderModuleEditor(i.modules||[])}
   $("itemDialog").showModal()
 }
 function editItem(id){openItemDialog("course",id)}
-function renderModuleEditor(modules=[]){const f=$("itemForm"),show=f.kind.value==="course";$("moduleEditor").classList.toggle("hidden",!show);if(show){$("moduleRows").innerHTML=modules.map((m,n)=>moduleInput(m,n)).join("")}}
+function renderModuleEditor(modules=[]){const f=$("itemForm"),show=f.elements.kind.value==="course";$("moduleEditor").classList.toggle("hidden",!show);if(show){$("moduleRows").innerHTML=modules.map((m,n)=>moduleInput(m,n)).join("")}}
 function moduleInput(m={},n=Date.now()){return `<div class="module-input-row"><input data-module-title value="${esc(m.title||"")}" placeholder="Nome do módulo/aula"><input data-module-minutes type="number" min="0" value="${m.minutes||0}" placeholder="min"><button type="button" class="x" onclick="this.parentElement.remove()">×</button></div>`}
-function saveItem(e){e.preventDefault();const f=e.currentTarget,id=f.id.value;let i=id?state.items.find(x=>x.id===id):{id:crypto.randomUUID(),createdAt:new Date().toISOString()};Object.assign(i,{kind:f.kind.value,track:f.track.value,title:f.title.value.trim(),url:f.url.value.trim(),source:f.source.value.trim(),important:f.important.value==="true",urgent:f.urgent.value==="true",estimatedMinutes:Number(f.estimatedMinutes.value)||0,progress:Number(f.progress.value)||0,notes:f.notes.value});i.status=statusFromProgress(i.progress);if(i.kind==="course")i.modules=[...document.querySelectorAll("#moduleRows .module-input-row")].map(r=>({title:r.querySelector("[data-module-title]").value.trim(),minutes:Number(r.querySelector("[data-module-minutes]").value)||0,done:false})).filter(m=>m.title);if(!id)state.items.push(i);save();$("itemDialog").close()}
+function saveItem(e){e.preventDefault();const f=e.currentTarget,fields=f.elements,id=fields.id.value;let i=id?state.items.find(x=>x.id===id):{id:crypto.randomUUID(),createdAt:new Date().toISOString()};Object.assign(i,{kind:fields.kind.value,track:fields.track.value,title:fields.title.value.trim(),url:fields.url.value.trim(),source:fields.source.value.trim(),important:fields.important.value==="true",urgent:fields.urgent.value==="true",estimatedMinutes:Number(fields.estimatedMinutes.value)||0,progress:Number(fields.progress.value)||0,notes:fields.notes.value});i.status=statusFromProgress(i.progress);if(i.kind==="course"){i.modules=[...document.querySelectorAll("#moduleRows .module-input-row")].map(r=>({title:r.querySelector("[data-module-title]").value.trim(),minutes:Number(r.querySelector("[data-module-minutes]").value)||0,done:false})).filter(m=>m.title)}if(!id){state.items.push(i)}save();$("itemDialog").close()}
 
 function detectInbox(text){
   const t=text.trim(),low=t.toLowerCase();let type="manual";
@@ -306,7 +320,7 @@ function detectInbox(text){
 function renderInbox(){$("inboxList").innerHTML=state.inbox.length?state.inbox.map(x=>`<div class="inbox-row"><span class="inbox-type">${x.type}</span><div class="grow"><strong>${esc(x.title)}</strong><span>${esc(x.url||"")}</span></div><button class="mini-btn" onclick="promoteInbox('${x.id}')">Organizar</button><button class="mini-btn danger" onclick="removeInbox('${x.id}')">×</button></div>`).join(""):`<div class="hint">Inbox vazia.</div>`}
 function captureInbox(){const v=$("inboxInput").value.trim();if(!v)return;state.inbox.unshift(detectInbox(v));$("inboxInput").value="";save()}
 function removeInbox(id){state.inbox=state.inbox.filter(x=>x.id!==id);save()}
-function promoteInbox(id){const x=state.inbox.find(a=>a.id===id);if(!x)return;if(x.type==="youtube"){addYoutubeUrlToQueue(x.url,x.title);showView("youtube")}else{openItemDialog(x.type);const f=$("itemForm");f.title.value=x.title;f.url.value=x.url}state.inbox=state.inbox.filter(a=>a.id!==id);save(false)}
+function promoteInbox(id){const x=state.inbox.find(a=>a.id===id);if(!x){return}if(x.type==="youtube"){addYoutubeUrlToQueue(x.url,x.title);showView("youtube")}else{openItemDialog(x.type);const fields=$("itemForm").elements;fields.title.value=x.title;fields.url.value=x.url}state.inbox=state.inbox.filter(a=>a.id!==id);save(false)}
 
 async function openNotes(id,scope){
   notesRef={id,scope};const i=resourceByScope(id,scope);if(!i)return;
