@@ -27,6 +27,11 @@ assert.doesNotMatch(app, /sincronização automática precisa do Arcana Local/, 
 assert.match(app, /function publishedCatalogUrl/, "published catalog URL helper is present");
 assert.match(app, /async function fetchPublishedCatalog/, "published catalog fetcher is present");
 assert.match(app, /function applyPublishedCatalog/, "published catalog merge path is present");
+assert.match(app, /const DEFAULT_OBSIDIAN_STATE=/, "obsidian state defaults are declared");
+assert.match(app, /async function refreshObsidianStatus/, "obsidian status refresh exists");
+assert.match(app, /function queueObsidianAutoSync/, "obsidian autosync hook exists");
+assert.match(app, /queueObsidianAutoSync\("after_session"\)/, "focus completion triggers obsidian autosync");
+assert.match(app, /queueObsidianAutoSync\("after_note_save"\)/, "note saves can trigger obsidian autosync");
 assert.match(app, /function exportPlaylistFile/, "playlist JSON export is available");
 assert.match(index, /<form id="trackForm" class="modal" novalidate>/, "track form uses app validation");
 assert.match(index, /name="sigil" maxlength="12"/, "track sigil accepts the requested label length");
@@ -44,10 +49,15 @@ assert.match(app, /playlist-learning-main/, "starter playlist is present in the 
 assert.match(app, /course-elec-01/, "starter electronics catalog is present");
 assert.match(app, /course-fin-07/, "starter finance catalog is present");
 assert.match(app, /state=applyStarterContent\(await ArcanaStorage\.init/, "starter content is applied during IndexedDB startup");
+assert.match(index, /id="obsidianConnectBtn"/, "settings exposes the obsidian connect action");
+assert.match(index, /id="obsidianSyncBtn"/, "settings exposes the obsidian sync action");
+assert.match(index, /id="obsidianAutoSync"/, "settings exposes autosync selection");
 assert.doesNotMatch(app, /state\.dailyPlan\.date!==dayKey\(\)\|\|!state\.dailyPlan\.items\.length/, "empty daily plans do not recursively regenerate");
 assert.doesNotMatch(app, /\$\("trackForm"\)\.id\.value|const f=e\.currentTarget,id=f\.id\.value/, "track flow does not read colliding form properties");
 assert.match(db, /async function list\(name\)/, "storage exposes a store inspection helper");
 assert.match(db, /tracks","courses","modules"/, "IndexedDB schema still contains domain stores");
+assert.match(db, /arcana_managed: true/, "obsidian vault export marks managed notes");
+assert.match(db, /Arcana Obsidian Vault/, "obsidian vault export uses the dedicated vault root");
 assert.equal(youtubePlaylists.playlists[0].id, "PLNur2Ccbfc5k");
 assert.equal(youtubePlaylists.playlists[0].enabled, true);
 assert.equal(youtubeCatalog.version, 1);

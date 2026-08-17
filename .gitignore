@@ -19,3 +19,4 @@ data/index.json
 
 __pycache__/
 .venv/
+.arcana-local.json
