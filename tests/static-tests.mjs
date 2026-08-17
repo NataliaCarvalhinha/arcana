@@ -298,6 +298,9 @@ await vm.runInContext(`(async()=>{
   if(!publishedCatalogRequestUrl(true).startsWith("https://example.test/arcana/data/youtube/catalog.json?_arcana=")){throw new Error("forced catalog requests should bypass stale caches")}
   const normalizedPlaylistInput=normalizeYoutubePlaylistInput("youtube.com/playlist?list=PL12345678&si=ruido");
   if(normalizedPlaylistInput.youtubePlaylistId!=="PL12345678"||normalizedPlaylistInput.url!=="https://www.youtube.com/playlist?list=PL12345678"){throw new Error("playlist input normalization should keep only the stable list id")}
+  const normalizedPlaylistAlt=normalizeYoutubePlaylistInput("https://m.youtube.com/playlist?utm_source=test&list=PL12345678");
+  if(normalizedPlaylistAlt.youtubePlaylistId!=="PL12345678"||normalizedPlaylistAlt.url!=="https://www.youtube.com/playlist?list=PL12345678"){throw new Error("playlist input normalization should canonicalize alternate YouTube hosts and extra params")}
+  if(youtubePlaylistIdFromUrl("PL12345678&si=ruido")!=="PL12345678"){throw new Error("playlist id normalization should repair polluted stored ids")}
 
   state=normalize({
     ...structuredClone(DEFAULT_STATE),
@@ -344,6 +347,19 @@ await vm.runInContext(`(async()=>{
   if(applyPublishedCatalog(multiCatalog)!==2){throw new Error("published catalog application should merge every published playlist")}
   if(state.playlists.length!==2||!state.playlists.some(p=>playlistCatalogId(p)==="PL22222222")){throw new Error("published catalog sync should create local playlist records for new remote playlists")}
   if(state.youtubeQueue.filter(v=>v.activeInCatalog!==false).map(v=>v.videoId).sort().join(",")!=="v1,v2"){throw new Error("published catalog sync should merge videos from multiple playlists")}
+
+  state=normalize({
+    ...structuredClone(DEFAULT_STATE),
+    playlists:[{id:"playlist-repaired",name:"Reparada",url:"https://youtube.com/playlist?list=PLY2z-v4ZkvrY&si=jkRVSlrBKu2p0zSm",youtubePlaylistId:"PLY2z-v4ZkvrY&si=jkRVSlrBKu2p0zSm",progress:25,notes:"preservar",settings:{mode:"foco"},createdAt:"2026-08-16T10:00:00.000Z",updatedAt:"2026-08-16T11:00:00.000Z",lastSyncAt:null,lastSyncError:null}],
+    activePlaylist:"playlist-repaired",
+    youtubeQueue:[{id:"queue-repaired",videoId:"vid-r",playlistId:"playlist-repaired",youtubePlaylistId:"PLY2z-v4ZkvrY&si=jkRVSlrBKu2p0zSm",kind:"youtube",title:"Video R",url:"https://www.youtube.com/watch?v=vid-r",channel:"Canal R",thumbnail:"thumb-r",estimatedMinutes:9,progress:15,status:"em_andamento",notes:"ok",important:true,urgent:false,track:null,createdAt:"2026-08-16T12:00:00.000Z",position:0,catalogManaged:true,activeInCatalog:true,archivedAt:null}],
+    youtubeDaily:{today:["vid-r"]}
+  });
+  const repairedPlaylist=activePlaylist();
+  if(repairedPlaylist.youtubePlaylistId!=="PLY2z-v4ZkvrY"||repairedPlaylist.url!=="https://www.youtube.com/playlist?list=PLY2z-v4ZkvrY"){throw new Error("startup normalization should repair polluted playlist ids and URLs")}
+  if(repairedPlaylist.createdAt!=="2026-08-16T10:00:00.000Z"||repairedPlaylist.updatedAt!=="2026-08-16T11:00:00.000Z"){throw new Error("startup normalization should preserve playlist timestamps")}
+  if(state.youtubeQueue[0].youtubePlaylistId!=="PLY2z-v4ZkvrY"){throw new Error("startup normalization should also repair playlist ids stored on queue items")}
+  if(state.youtubeDaily.today[0]!=="vid-r"){throw new Error("startup normalization should preserve daily state")}
 
   location.hostname="pages.example";
   youtubeCatalogMeta.version=1;

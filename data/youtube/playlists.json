@@ -5,6 +5,12 @@
       "name": "Playlist de aprendizado",
       "url": "https://www.youtube.com/playlist?list=PLNur2Ccbfc5k",
       "enabled": true
+    },
+    {
+      "id": "PLY2z-v4ZkvrY",
+      "name": "Espiritualidade, religião e mitologia",
+      "url": "https://www.youtube.com/playlist?list=PLY2z-v4ZkvrY",
+      "enabled": true
     }
   ]
 }

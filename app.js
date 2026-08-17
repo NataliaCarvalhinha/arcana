@@ -66,7 +66,7 @@ function normalize(s){
   s.activePlaylist=s.playlists.some(p=>p?.id===s.activePlaylist)?s.activePlaylist:(s.playlists[0]?.id||null);
   s.tracks.forEach(t=>{if(t?.id&&!Object.prototype.hasOwnProperty.call(s.weeklyProgress,t.id)){s.weeklyProgress[t.id]=0}});
   s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=Array.isArray(i.modules)?i.modules:[];i.notes=typeof i.notes==="string"?i.notes:"";i.description=typeof i.description==="string"?i.description:"";i.catalogOrder=Number(i.catalogOrder)||0});
-  s.youtubeQueue.forEach(v=>{v.catalogManaged=v.catalogManaged!==false;v.activeInCatalog=v.activeInCatalog!==false;v.archivedAt=v.archivedAt||null});
+  s.youtubeQueue.forEach(v=>{v.catalogManaged=v.catalogManaged!==false;v.activeInCatalog=v.activeInCatalog!==false;v.archivedAt=v.archivedAt||null;const playlistId=youtubePlaylistIdFromUrl(v.youtubePlaylistId);if(playlistId){v.youtubePlaylistId=playlistId}});
   return s
 }
 function migrate(old){
@@ -244,39 +244,63 @@ function obsidianEnvironmentLabel(){
   return isLocalBackend()?"Arcana Local com sincronização direta disponível":"GitHub Pages/estático com exportação e importação de vault ZIP"
 }
 function canonicalYoutubePlaylistUrl(playlistId){
-  return `https://www.youtube.com/playlist?list=${encodeURIComponent(String(playlistId||"").trim())}`
+  const url=new URL("https://www.youtube.com/playlist");
+  url.searchParams.set("list",String(playlistId||"").trim());
+  return url.toString()
 }
-function normalizeYoutubePlaylistInput(raw){
+function youtubePlaylistSearchParams(raw){
+  const url=new URL("https://www.youtube.com/playlist");
+  url.search=String(raw||"").trim().replace(/^\?/,"");
+  return url.searchParams
+}
+function normalizeYoutubePlaylistReference(raw){
   const value=String(raw||"").trim();
   if(!value){
     throw new Error("URL não informada.")
   }
-  const candidate=value.includes("://")?value:`https://${value}`;
-  let url;
-  try{
-    url=new URL(candidate)
-  }catch{
-    throw new Error("Use uma URL de playlist do YouTube.")
+  let playlistId="";
+  const looksLikeUrl=value.includes("://")||/^(?:www\.|m\.)?youtube\.com\//i.test(value);
+  if(looksLikeUrl){
+    const candidate=value.includes("://")?value:`https://${value}`;
+    let url;
+    try{
+      url=new URL(candidate)
+    }catch{
+      throw new Error("Use uma URL de playlist do YouTube.")
+    }
+    const host=url.hostname.toLowerCase();
+    if(!["youtube.com","www.youtube.com","m.youtube.com"].includes(host)){
+      throw new Error("Use uma URL de playlist do YouTube.")
+    }
+    playlistId=(url.searchParams.get("list")||"").trim()
+    if(!playlistId){
+      throw new Error("A URL precisa conter o parâmetro list da playlist.")
+    }
+  }else{
+    const directParams=youtubePlaylistSearchParams(value);
+    playlistId=(directParams.get("list")||"").trim();
+    if(!playlistId){
+      const wrappedParams=youtubePlaylistSearchParams(`list=${value}`);
+      playlistId=(wrappedParams.get("list")||"").trim()
+    }
   }
-  const host=url.hostname.toLowerCase();
-  if(!["youtube.com","www.youtube.com","m.youtube.com"].includes(host)){
-    throw new Error("Use uma URL de playlist do YouTube.")
-  }
-  const playlistId=(url.searchParams.get("list")||"").trim();
   if(!playlistId){
-    throw new Error("A URL precisa conter o parâmetro list da playlist.")
+    throw new Error("ID de playlist inválido.")
   }
   if(!YOUTUBE_PLAYLIST_ID_RE.test(playlistId)){
     throw new Error("ID de playlist inválido.")
   }
   return {youtubePlaylistId:playlistId,url:canonicalYoutubePlaylistUrl(playlistId)}
 }
+function normalizeYoutubePlaylistInput(raw){
+  return normalizeYoutubePlaylistReference(raw)
+}
 function youtubePlaylistIdFromUrl(raw){
   if(!raw){
     return ""
   }
   try{
-    return normalizeYoutubePlaylistInput(raw).youtubePlaylistId
+    return normalizeYoutubePlaylistReference(raw).youtubePlaylistId
   }catch{
     return ""
   }
@@ -290,25 +314,27 @@ function normalizePlaylistRecord(playlist,index=0){
   const fallbackName=String(input.name||`Playlist ${index+1}`).trim()||`Playlist ${index+1}`;
   let youtubePlaylistId=String(input.youtubePlaylistId||"").trim();
   let url=String(input.url||"").trim();
-  if(!youtubePlaylistId&&url){
-    youtubePlaylistId=youtubePlaylistIdFromUrl(url)
-  }
-  if(!url&&youtubePlaylistId){
-    url=canonicalYoutubePlaylistUrl(youtubePlaylistId)
-  }
+  let normalizedPlaylist=null;
   if(url){
     try{
-      const normalizedUrl=normalizeYoutubePlaylistInput(url);
-      youtubePlaylistId=normalizedUrl.youtubePlaylistId;
-      url=normalizedUrl.url
-    }catch{
-      if(youtubePlaylistId){
-        url=canonicalYoutubePlaylistUrl(youtubePlaylistId)
-      }
-    }
+      normalizedPlaylist=normalizeYoutubePlaylistReference(url)
+    }catch{}
   }
-  if(!url&&youtubePlaylistId){
-    url=canonicalYoutubePlaylistUrl(youtubePlaylistId)
+  if(!normalizedPlaylist&&youtubePlaylistId){
+    try{
+      normalizedPlaylist=normalizeYoutubePlaylistReference(youtubePlaylistId)
+    }catch{}
+  }
+  if(normalizedPlaylist){
+    youtubePlaylistId=normalizedPlaylist.youtubePlaylistId;
+    url=normalizedPlaylist.url
+  }else{
+    if(!youtubePlaylistId&&url){
+      youtubePlaylistId=youtubePlaylistIdFromUrl(url)
+    }
+    if(!url&&youtubePlaylistId){
+      url=canonicalYoutubePlaylistUrl(youtubePlaylistId)
+    }
   }
   return {
     ...input,
@@ -329,7 +355,7 @@ function playlistCatalogId(playlist){
   if(!playlist){
     return ""
   }
-  return String(playlist.youtubePlaylistId||youtubePlaylistIdFromUrl(playlist.url)||"").trim()
+  return youtubePlaylistIdFromUrl(playlist.youtubePlaylistId)||youtubePlaylistIdFromUrl(playlist.url)||""
 }
 function publishedCatalogUrl(){
   return new URL("./data/youtube/catalog.json",appBaseUrl()).toString()
@@ -455,15 +481,17 @@ function normalizePublishedCatalog(data){
     if(!playlist||typeof playlist!=="object"){
       return null
     }
-    const id=String(playlist.id||"").trim();
+    const normalizedSource=playlist.id||playlist.url||"";
+    const normalizedPlaylist=normalizeYoutubePlaylistReference(normalizedSource);
+    const id=normalizedPlaylist.youtubePlaylistId;
     if(!id){
       throw new Error(`Playlist inválida na posição ${pos+1}.`)
     }
-    const canonicalUrl=canonicalYoutubePlaylistUrl(id);
+    const canonicalUrl=normalizedPlaylist.url;
     let url=canonicalUrl;
     if(playlist.url){
       try{
-        const normalizedUrl=normalizeYoutubePlaylistInput(String(playlist.url).trim());
+        const normalizedUrl=normalizeYoutubePlaylistReference(String(playlist.url).trim());
         url=normalizedUrl.youtubePlaylistId===id?normalizedUrl.url:canonicalUrl
       }catch{
         url=canonicalUrl
@@ -512,12 +540,10 @@ function catalogPlaylistStateId(catalogPlaylist){
   return `playlist-${slug}`
 }
 function ensurePlaylistFromCatalog(catalogPlaylist){
-  const catalogId=String(catalogPlaylist.id||"").trim();
+  const catalogId=playlistCatalogId(catalogPlaylist);
   let local=state.playlists.find(p=>playlistCatalogId(p)===catalogId);
   if(local){
-    if(!local.url){
-      local.url=catalogPlaylist.url
-    }
+    local.url=catalogPlaylist.url||local.url;
     if(!local.name){
       local.name=catalogPlaylist.name
     }
@@ -988,8 +1014,9 @@ function mergePlaylistData(data,p){
     p.name=data.title||p.name
   }
   p.catalogTitle=data.title||p.catalogTitle||null;
-  p.url=p.url||canonicalYoutubePlaylistUrl(data.playlistId||playlistCatalogId(p));
-  p.youtubePlaylistId=data.playlistId||p.youtubePlaylistId||playlistCatalogId(p)||"";
+  const canonicalPlaylist=normalizeYoutubePlaylistReference(data.playlistId||p.youtubePlaylistId||p.url||playlistCatalogId(p)||"");
+  p.url=canonicalPlaylist.url;
+  p.youtubePlaylistId=canonicalPlaylist.youtubePlaylistId;
   p.catalogGeneratedAt=data.generatedAt||p.catalogGeneratedAt||youtubeCatalogMeta.generatedAt||null;
   p.updatedAt=new Date().toISOString();
   p.lastSyncAt=new Date().toISOString();

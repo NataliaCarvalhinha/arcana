@@ -146,6 +146,18 @@ def enrich_video(video_id: str) -> dict[str, Any]:
     return run_ytdlp(["--dump-single-json", f"https://www.youtube.com/watch?v={video_id}"])
 
 
+def dedupe_playlist_videos(videos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for video in videos:
+        video_id = str(video.get("id") or "").strip()
+        if not video_id or video_id in seen_ids:
+            continue
+        seen_ids.add(video_id)
+        deduped.append({**video, "position": len(deduped) + 1})
+    return deduped
+
+
 def extract_playlist(playlist: PlaylistConfig) -> dict[str, Any]:
     data = run_ytdlp(["--flat-playlist", "--dump-single-json", playlist.url])
     entries = data.get("entries")
@@ -190,6 +202,7 @@ def extract_playlist(playlist: PlaylistConfig) -> dict[str, Any]:
             }
         )
 
+    videos = dedupe_playlist_videos(videos)
     if not videos:
         raise CatalogSyncError(f"Playlist {playlist.id} returned zero videos; keeping previous catalog.")
 
