@@ -25,8 +25,12 @@ assert.match(app, /ArcanaStorage\.init/, "IndexedDB init is wired");
 assert.match(db, /window\.ArcanaStorage=ArcanaStorage/, "IndexedDB storage is exposed to the app");
 assert.doesNotMatch(app, /sincronização automática precisa do Arcana Local/, "Pages no longer blocks on the old local-only sync warning");
 assert.match(app, /function publishedCatalogUrl/, "published catalog URL helper is present");
+assert.match(app, /function publishedCatalogRequestUrl/, "published catalog request helper supports cache busting");
 assert.match(app, /async function fetchPublishedCatalog/, "published catalog fetcher is present");
 assert.match(app, /function applyPublishedCatalog/, "published catalog merge path is present");
+assert.match(app, /function normalizeYoutubePlaylistInput/, "playlist input normalization is present");
+assert.match(app, /function playlistStatusSummary/, "playlist status helper is present");
+assert.match(app, /function catalogRequestPayload/, "catalog request payload helper is present");
 assert.match(app, /const DEFAULT_OBSIDIAN_STATE=/, "obsidian state defaults are declared");
 assert.match(app, /async function refreshObsidianStatus/, "obsidian status refresh exists");
 assert.match(app, /function queueObsidianAutoSync/, "obsidian autosync hook exists");
@@ -52,6 +56,16 @@ assert.match(app, /state=applyStarterContent\(await ArcanaStorage\.init/, "start
 assert.match(index, /id="obsidianConnectBtn"/, "settings exposes the obsidian connect action");
 assert.match(index, /id="obsidianSyncBtn"/, "settings exposes the obsidian sync action");
 assert.match(index, /id="obsidianAutoSync"/, "settings exposes autosync selection");
+assert.match(index, /id="requestCatalogBtn"/, "YouTube view exposes the catalog request action");
+assert.match(index, /id="youtubeCatalogStatus"/, "settings exposes the YouTube catalog summary");
+assert.match(index, /id="youtubePlaylistDiagnostics"/, "settings exposes playlist diagnostics");
+assert.match(index, /id="refreshCatalogBtn"/, "settings exposes a catalog refresh action");
+assert.match(index, /<form id="playlistForm" class="modal" novalidate>/, "playlist form uses app validation");
+assert.match(index, /name="enabled" type="checkbox"/, "playlist form exposes the enabled toggle");
+assert.match(index, /id="playlistFormError"/, "playlist form has a visible error region");
+assert.match(index, /id="playlistSaveBtn" type="submit"/, "playlist save button submits the playlist form");
+assert.match(index, /id="catalogRequestDialog"/, "catalog request dialog is present");
+assert.match(index, /id="copyCatalogRequestBtn"/, "catalog request dialog exposes copy action");
 assert.doesNotMatch(app, /state\.dailyPlan\.date!==dayKey\(\)\|\|!state\.dailyPlan\.items\.length/, "empty daily plans do not recursively regenerate");
 assert.doesNotMatch(app, /\$\("trackForm"\)\.id\.value|const f=e\.currentTarget,id=f\.id\.value/, "track flow does not read colliding form properties");
 assert.match(db, /async function list\(name\)/, "storage exposes a store inspection helper");
@@ -65,15 +79,21 @@ assert.ok(Array.isArray(youtubeCatalog.playlists), "public catalog uses the expe
 assert.match(syncWorkflow, /workflow_dispatch:/, "catalog workflow supports manual runs");
 assert.match(syncWorkflow, /cron: "17 4 \* \* \*"/, "catalog workflow is scheduled");
 assert.match(syncWorkflow, /contents: write/, "catalog workflow can push updates");
+assert.match(syncWorkflow, /pages: write/, "catalog workflow can publish Pages artifacts directly");
+assert.match(syncWorkflow, /id-token: write/, "catalog workflow can authenticate the Pages deployment");
 assert.match(syncWorkflow, /python scripts\/sync-youtube\.py/, "catalog workflow executes the sync script");
+assert.match(syncWorkflow, /actions\/upload-pages-artifact@v3/, "catalog workflow uploads a Pages artifact after syncing");
+assert.match(syncWorkflow, /actions\/deploy-pages@v4/, "catalog workflow deploys Pages after syncing");
 assert.match(youtubeSyncScript, /--flat-playlist/, "sync script fetches playlist metadata without downloads");
 assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/, "sync script avoids overwriting the catalog with empty results");
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v5/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v6/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
-assert.match(worker, /caches\.match\(event\.request\)/, "service worker falls back to the cached catalog offline");
+assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
+assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
+assert.match(worker, /caches\.match\(catalogCacheRequest\(url\)\)/, "service worker falls back to the normalized cached catalog offline");
 assert.ok(!/youtube\.com|youtu\.be/.test(worker), "service worker does not cache YouTube");
 
 function makeElement(id) {
@@ -94,6 +114,7 @@ function makeElement(id) {
       contains() { return false; }
     },
     focus() { this.focused = true; },
+    select() { this.selected = true; },
     showModal() { this.open = true; },
     close() { this.closed = true; this.open = false; },
     reset() {
@@ -110,7 +131,7 @@ function makeElement(id) {
 }
 
 const elements = new Map();
-const ids = ["trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "dailyPlan", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows"];
+const ids = ["trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "dailyPlan", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianPullBtn", "obsidianPushBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }
@@ -135,6 +156,16 @@ elements.get("itemForm").elements = {
   progress: makeElement("itemProgress"),
   notes: makeElement("itemNotes")
 };
+elements.get("playlistForm").elements = {
+  id: makeElement("playlistId"),
+  name: makeElement("playlistName"),
+  url: makeElement("playlistUrl"),
+  enabled: makeElement("playlistEnabled")
+};
+elements.get("youtubeSettingsForm").mode = makeElement("youtubeMode");
+elements.get("youtubeSettingsForm").minutes = makeElement("youtubeMinutes");
+elements.get("youtubeSettingsForm").count = makeElement("youtubeCount");
+elements.get("youtubeSettingsForm").hideAfterLimit = makeElement("youtubeHideAfterLimit");
 
 const savedStates = [];
 const context = {
@@ -208,7 +239,7 @@ await vm.runInContext(`(async()=>{
   if(rerunSeed.items.filter(i=>i.id.startsWith("course-elec-")).length!==10||rerunSeed.items.filter(i=>i.id.startsWith("course-fin-")).length!==7){throw new Error("rerunning the seed duplicated starter courses")}
   if(rerunSeed.playlists.filter(p=>p.id==="playlist-learning-main").length!==1){throw new Error("rerunning the seed duplicated the starter playlist")}
 
-  const existingProfile=normalize({...structuredClone(DEFAULT_STATE),tracks:[{id:"frances",name:"Francês",sigil:"F",subtitle:"Idioma",description:"Curso pessoal",weeklyGoal:90}],activeTrack:"frances",items:[],playlists:[{id:"playlist-custom",name:"Outra playlist",url:"https://youtube.com/playlist?list=custom",lastSyncAt:null,lastSyncError:null}],activePlaylist:"playlist-custom",youtubeQueue:[],weeklyProgress:{frances:12},starterContentVersion:0});
+  const existingProfile=normalize({...structuredClone(DEFAULT_STATE),tracks:[{id:"frances",name:"Francês",sigil:"F",subtitle:"Idioma",description:"Curso pessoal",weeklyGoal:90}],activeTrack:"frances",items:[],playlists:[{id:"playlist-custom",name:"Outra playlist",url:"https://www.youtube.com/playlist?list=PLcustom123",youtubePlaylistId:"PLcustom123",lastSyncAt:null,lastSyncError:null}],activePlaylist:"playlist-custom",youtubeQueue:[],weeklyProgress:{frances:12},starterContentVersion:0});
   const mergedProfile=applyStarterContent(existingProfile);
   if(mergedProfile.tracks.map(t=>t.id).join(",")!=="frances,track-electronics,track-finance"){throw new Error("starter tracks should append after existing custom tracks")}
   if(mergedProfile.activeTrack!=="frances"){throw new Error("existing active track should be preserved")}
@@ -224,7 +255,7 @@ await vm.runInContext(`(async()=>{
   preservedCourse.urgent=true;
   preservedCourse.createdAt="2026-08-01T00:00:00.000Z";
   preservedState.youtubeSettings.minutes=20;
-  preservedState.playlists.unshift({id:"playlist-alt",name:"Outra playlist",url:"https://youtube.com/playlist?list=alt",lastSyncAt:null,lastSyncError:null});
+  preservedState.playlists.unshift({id:"playlist-alt",name:"Outra playlist",url:"https://www.youtube.com/playlist?list=PLalt12345",youtubePlaylistId:"PLalt12345",lastSyncAt:null,lastSyncError:null});
   preservedState.activePlaylist="playlist-alt";
   preservedState.starterContentVersion=0;
   const preservedRerun=applyStarterContent(preservedState);
@@ -251,9 +282,9 @@ await vm.runInContext(`(async()=>{
     generatedAt:"2026-08-17T04:17:00Z",
     playlists:[
       {
-        id:"PL123",
+        id:"PL12345678",
         name:"Catalogada",
-        url:"https://www.youtube.com/playlist?list=PL123",
+        url:"https://www.youtube.com/playlist?list=PL12345678&si=ruido",
         videos:[
           {id:"vid-b",title:"Video B",url:"https://www.youtube.com/watch?v=vid-b",channel:"Canal B",duration:900,position:1,thumbnail:"thumb-b"},
           {id:"vid-a",title:"Video A",url:"https://www.youtube.com/watch?v=vid-a",channel:"Canal A",duration:0,position:2,thumbnail:"thumb-a"}
@@ -262,16 +293,20 @@ await vm.runInContext(`(async()=>{
     ]
   });
   if(catalogSample.playlists[0].videos[0].id!=="vid-b"){throw new Error("published catalog normalization should preserve playlist order")}
+  if(catalogSample.playlists[0].url!=="https://www.youtube.com/playlist?list=PL12345678"){throw new Error("published catalog normalization should canonicalize playlist URLs")}
   if(publishedCatalogUrl()!=="https://example.test/arcana/data/youtube/catalog.json"){throw new Error("published catalog URL should respect the GitHub Pages base path")}
+  if(!publishedCatalogRequestUrl(true).startsWith("https://example.test/arcana/data/youtube/catalog.json?_arcana=")){throw new Error("forced catalog requests should bypass stale caches")}
+  const normalizedPlaylistInput=normalizeYoutubePlaylistInput("youtube.com/playlist?list=PL12345678&si=ruido");
+  if(normalizedPlaylistInput.youtubePlaylistId!=="PL12345678"||normalizedPlaylistInput.url!=="https://www.youtube.com/playlist?list=PL12345678"){throw new Error("playlist input normalization should keep only the stable list id")}
 
   state=normalize({
     ...structuredClone(DEFAULT_STATE),
-    playlists:[{id:"playlist-local",name:"Catalogada",url:"https://www.youtube.com/playlist?list=PL123",youtubePlaylistId:"PL123",lastSyncAt:null,lastSyncError:null}],
+    playlists:[{id:"playlist-local",name:"Catalogada",url:"https://www.youtube.com/playlist?list=PL12345678",youtubePlaylistId:"PL12345678",lastSyncAt:null,lastSyncError:null}],
     activePlaylist:"playlist-local",
     youtubeQueue:[
-      {id:"queue-a",videoId:"vid-a",playlistId:"playlist-local",youtubePlaylistId:"PL123",kind:"youtube",title:"Video A antigo",url:"https://www.youtube.com/watch?v=vid-a",channel:"Canal A",thumbnail:"old-thumb",estimatedMinutes:12,progress:40,status:"em_andamento",notes:"preservar",important:true,urgent:false,track:null,createdAt:"2026-08-16T00:00:00.000Z",position:0,catalogManaged:true,activeInCatalog:true,archivedAt:null},
-      {id:"queue-removed",videoId:"vid-removed",playlistId:"playlist-local",youtubePlaylistId:"PL123",kind:"youtube",title:"Video removido",url:"https://www.youtube.com/watch?v=vid-removed",channel:"Canal X",thumbnail:"thumb-x",estimatedMinutes:15,progress:100,status:"concluido",notes:"histórico",important:true,urgent:false,track:null,createdAt:"2026-08-15T00:00:00.000Z",position:1,catalogManaged:true,activeInCatalog:true,archivedAt:null},
-      {id:"queue-manual",videoId:"vid-manual",playlistId:"playlist-local",youtubePlaylistId:"PL123",kind:"youtube",title:"Manual",url:"https://www.youtube.com/watch?v=vid-manual",channel:"YouTube",thumbnail:"",estimatedMinutes:8,progress:0,status:"nao_iniciado",notes:"manual",important:true,urgent:false,track:null,createdAt:"2026-08-14T00:00:00.000Z",position:2,catalogManaged:false,activeInCatalog:true,archivedAt:null}
+      {id:"queue-a",videoId:"vid-a",playlistId:"playlist-local",youtubePlaylistId:"PL12345678",kind:"youtube",title:"Video A antigo",url:"https://www.youtube.com/watch?v=vid-a",channel:"Canal A",thumbnail:"old-thumb",estimatedMinutes:12,progress:40,status:"em_andamento",notes:"preservar",important:true,urgent:false,favorite:true,track:null,createdAt:"2026-08-16T00:00:00.000Z",position:0,catalogManaged:true,activeInCatalog:true,archivedAt:null},
+      {id:"queue-removed",videoId:"vid-removed",playlistId:"playlist-local",youtubePlaylistId:"PL12345678",kind:"youtube",title:"Video removido",url:"https://www.youtube.com/watch?v=vid-removed",channel:"Canal X",thumbnail:"thumb-x",estimatedMinutes:15,progress:100,status:"concluido",notes:"histórico",important:true,urgent:false,track:null,createdAt:"2026-08-15T00:00:00.000Z",position:1,catalogManaged:true,activeInCatalog:true,archivedAt:null},
+      {id:"queue-manual",videoId:"vid-manual",playlistId:"playlist-local",youtubePlaylistId:"PL12345678",kind:"youtube",title:"Manual",url:"https://www.youtube.com/watch?v=vid-manual",channel:"YouTube",thumbnail:"",estimatedMinutes:8,progress:0,status:"nao_iniciado",notes:"manual",important:true,urgent:false,track:null,createdAt:"2026-08-14T00:00:00.000Z",position:2,catalogManaged:false,activeInCatalog:true,archivedAt:null}
     ],
     youtubeDaily:{},
     youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true}
@@ -283,6 +318,7 @@ await vm.runInContext(`(async()=>{
   const mergedManual=state.youtubeQueue.find(v=>v.videoId==="vid-manual");
   if(mergedA.progress!==40||mergedA.notes!=="preservar"){throw new Error("playlist merge should preserve progress and notes by stable video id")}
   if(mergedA.estimatedMinutes!==12){throw new Error("playlist merge should preserve a known duration when the catalog duration is missing")}
+  if(mergedA.favorite!==true){throw new Error("playlist merge should preserve local-only metadata while public fields refresh")}
   if(mergedRemoved.activeInCatalog!==false||!mergedRemoved.archivedAt){throw new Error("videos removed from the remote playlist should stay locally archived")}
   if(mergedManual.activeInCatalog!==true||mergedManual.catalogManaged!==false){throw new Error("manual videos should stay visible after catalog sync")}
   if(localPlaylist.catalogGeneratedAt!=="2026-08-17T04:17:00Z"){throw new Error("catalog timestamp should be stored on the playlist")}
@@ -293,7 +329,7 @@ await vm.runInContext(`(async()=>{
 
   state=normalize({
     ...structuredClone(DEFAULT_STATE),
-    playlists:[{id:"playlist-local",name:"Primeira",url:"https://www.youtube.com/playlist?list=PL111",youtubePlaylistId:"PL111",lastSyncAt:null,lastSyncError:null}],
+    playlists:[{id:"playlist-local",name:"Primeira",url:"https://www.youtube.com/playlist?list=PL11111111",youtubePlaylistId:"PL11111111",lastSyncAt:null,lastSyncError:null}],
     activePlaylist:"playlist-local",
     youtubeQueue:[]
   });
@@ -301,13 +337,29 @@ await vm.runInContext(`(async()=>{
     version:1,
     generatedAt:"2026-08-17T05:00:00Z",
     playlists:[
-      {id:"PL111",name:"Primeira",url:"https://www.youtube.com/playlist?list=PL111",videos:[{id:"v1",title:"V1",url:"https://www.youtube.com/watch?v=v1",channel:"C1",duration:600,position:1,thumbnail:"t1"}]},
-      {id:"PL222",name:"Segunda",url:"https://www.youtube.com/playlist?list=PL222",videos:[{id:"v2",title:"V2",url:"https://www.youtube.com/watch?v=v2",channel:"C2",duration:300,position:1,thumbnail:"t2"}]}
+      {id:"PL11111111",name:"Primeira",url:"https://www.youtube.com/playlist?list=PL11111111",videos:[{id:"v1",title:"V1",url:"https://www.youtube.com/watch?v=v1",channel:"C1",duration:600,position:1,thumbnail:"t1"}]},
+      {id:"PL22222222",name:"Segunda",url:"https://www.youtube.com/playlist?list=PL22222222",videos:[{id:"v2",title:"V2",url:"https://www.youtube.com/watch?v=v2",channel:"C2",duration:300,position:1,thumbnail:"t2"}]}
     ]
   });
   if(applyPublishedCatalog(multiCatalog)!==2){throw new Error("published catalog application should merge every published playlist")}
-  if(state.playlists.length!==2||!state.playlists.some(p=>playlistCatalogId(p)==="PL222")){throw new Error("published catalog sync should create local playlist records for new remote playlists")}
+  if(state.playlists.length!==2||!state.playlists.some(p=>playlistCatalogId(p)==="PL22222222")){throw new Error("published catalog sync should create local playlist records for new remote playlists")}
   if(state.youtubeQueue.filter(v=>v.activeInCatalog!==false).map(v=>v.videoId).sort().join(",")!=="v1,v2"){throw new Error("published catalog sync should merge videos from multiple playlists")}
+
+  location.hostname="pages.example";
+  youtubeCatalogMeta.version=1;
+  youtubeCatalogMeta.generatedAt="2026-08-17T05:00:00Z";
+  youtubeCatalogMeta.lastLoadedAt="2026-08-17T05:05:00Z";
+  youtubeCatalogMeta.playlistIds=["PL11111111","PL22222222"];
+  youtubeCatalogMeta.playlistCount=2;
+  youtubeCatalogMeta.videoCount=2;
+  youtubeCatalogMeta.error=null;
+  state=normalize({...structuredClone(DEFAULT_STATE),playlists:[{id:"playlist-awaiting",name:"Nova playlist",url:"https://www.youtube.com/playlist?list=PL99999999",youtubePlaylistId:"PL99999999",lastSyncAt:null,lastSyncError:null}],activePlaylist:"playlist-awaiting",youtubeQueue:[]});
+  if(applyPublishedCatalog(multiCatalog,{targetPlaylist:activePlaylist()})!==0){throw new Error("targeted catalog sync should return zero when a playlist is still missing from the published catalog")}
+  const awaitingStatus=playlistStatusSummary(activePlaylist());
+  if(awaitingStatus.tone!=="pending"||awaitingStatus.label!=="Aguardando catálogo"){throw new Error("missing published playlists should surface the awaiting catalog status")}
+  const requestPayload=catalogRequestPayload(activePlaylist());
+  if(!requestPayload.includes('"id": "PL99999999"')||!requestPayload.includes('"url": "https://www.youtube.com/playlist?list=PL99999999"')){throw new Error("catalog request payload should be copy-ready with the canonical playlist URL")}
+  location.hostname="";
 
   state=normalize({...structuredClone(DEFAULT_STATE),activeTrack:null,tracks:[],items:[],weeklyProgress:{},dailyPlan:{date:null,minutes:60,items:[]}});
   renderDailyPlan();

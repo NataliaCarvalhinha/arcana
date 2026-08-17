@@ -137,7 +137,7 @@
         <article class="card">
           <div class="card-head">
             <div><div class="kicker">PLAYLIST ATIVA</div><h2 id="activePlaylistName"></h2><div id="playlistSyncStatus" class="sync-status"></div></div>
-            <div class="youtube-actions"><button id="syncPlaylistBtn" class="ghost-btn">↻ Sincronizar</button><button id="exportPlaylistBtn" class="mini-btn">Exportar JSON</button><label class="mini-btn file-label">Importar JSON<input id="playlistImportInput" type="file" accept="application/json"></label><button id="editPlaylistBtn" class="mini-btn">Editar</button></div>
+            <div class="youtube-actions"><button id="syncPlaylistBtn" class="ghost-btn">↻ Sincronizar</button><button id="exportPlaylistBtn" class="mini-btn">Exportar JSON</button><label class="mini-btn file-label">Importar JSON<input id="playlistImportInput" type="file" accept="application/json"></label><button id="requestCatalogBtn" class="mini-btn">Adicionar ao catálogo</button><button id="editPlaylistBtn" class="mini-btn">Editar</button></div>
           </div>
           <div id="activePlaylistPanel"></div>
         </article>
@@ -256,6 +256,9 @@
             <label class="check"><input name="hideAfterLimit" type="checkbox"> Esconder extras ao atingir o limite</label>
             <button class="gold-btn">Salvar</button>
           </form>
+          <div id="youtubeCatalogStatus"></div>
+          <div class="card-head settings-subhead"><div><div class="kicker">DIAGNÓSTICO</div><h2>Playlists e catálogo</h2></div><button id="refreshCatalogBtn" class="ghost-btn" type="button">Atualizar catálogo</button></div>
+          <div id="youtubePlaylistDiagnostics" class="diagnostics-list"></div>
         </article>
 	        <article class="card">
 	          <div class="card-head"><div><div class="kicker">BACKUP</div><h2>Segurança local</h2></div></div>
@@ -311,13 +314,23 @@
   <div class="modal-actions"><button id="deleteTrackBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button type="button" class="ghost-btn" data-close="trackDialog">Cancelar</button><button id="trackSaveBtn" type="submit" class="gold-btn">Salvar</button></div>
 </form></dialog>
 
-<dialog id="playlistDialog"><form id="playlistForm" class="modal">
+<dialog id="playlistDialog"><form id="playlistForm" class="modal" novalidate>
   <div class="modal-head"><div><div class="kicker">PLAYLIST</div><h2 id="playlistDialogTitle">Nova playlist</h2></div><button type="button" class="x" data-close="playlistDialog">×</button></div>
   <input type="hidden" name="id">
   <label>Nome<input name="name" required></label>
   <label>URL<input name="url" type="url" required></label>
-  <div class="modal-actions"><button id="deletePlaylistBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button type="button" class="ghost-btn" data-close="playlistDialog">Cancelar</button><button class="gold-btn">Salvar</button></div>
+  <label class="check"><input name="enabled" type="checkbox" checked> Playlist ativa para sincronização</label>
+  <div id="playlistFormError" class="form-error hidden" role="alert"></div>
+  <div class="modal-actions"><button id="deletePlaylistBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button type="button" class="ghost-btn" data-close="playlistDialog">Cancelar</button><button id="playlistSaveBtn" type="submit" class="gold-btn">Salvar</button></div>
 </form></dialog>
+
+<dialog id="catalogRequestDialog"><div class="modal">
+  <div class="modal-head"><div><div class="kicker">CATÁLOGO</div><h2 id="catalogRequestTitle">Adicionar ao catálogo</h2></div><button type="button" class="x" data-close="catalogRequestDialog">×</button></div>
+  <div id="catalogRequestHelp"></div>
+  <label>Bloco JSON para <code>data/youtube/playlists.json</code><textarea id="catalogRequestJson" rows="10" readonly spellcheck="false"></textarea></label>
+  <div id="catalogRequestStatus" class="hint" role="status"></div>
+  <div class="modal-actions"><button type="button" class="ghost-btn" data-close="catalogRequestDialog">Fechar</button><button id="copyCatalogRequestBtn" type="button" class="gold-btn">Copiar JSON</button></div>
+</div></dialog>
 
 <dialog id="itemDialog"><form id="itemForm" class="modal">
   <div class="modal-head"><div><div class="kicker">NOVO REGISTRO</div><h2>Adicionar ao grimório</h2></div><button type="button" class="x" data-close="itemDialog">×</button></div>

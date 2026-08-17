@@ -3,7 +3,7 @@ const STORAGE_KEY="arcana-v5";
 const LEGACY_KEYS=["arcana-activity-hub-v4","arcana-activity-hub-v3","arcana-activity-hub-v2"];
 const STARTER_CONTENT_VERSION=1;
 const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vaultPath:"",lastSyncAt:null,noteCount:0,fichamentoCount:0,attachmentCount:0,flashcardCount:0,conflicts:0,autoSync:"after_session",openUrl:"",error:null};
-const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120}],items:[],playlists:[{id:"main-playlist",name:"Playlist de foco",url:"",lastSyncAt:null,lastSyncError:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]},starterContentVersion:0};
+const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]},starterContentVersion:0};
 const STARTER_TRACKS=[
   {id:"track-electronics",name:"Eletrônica",sigil:"☿",subtitle:"Circuitos · FPGA · RISC-V · Verificação",description:"Trilha técnica de sistemas embarcados, lógica digital, FPGA, arquitetura de computadores, RISC-V, SystemVerilog, UVM e VLSI.",weeklyGoal:240},
   {id:"track-finance",name:"Finanças",sigil:"♃",subtitle:"Planejamento · Mercados · Investimentos · Portfólio",description:"Trilha para construir uma base sólida de finanças pessoais, mercados financeiros, investimentos, portfólio e finanças corporativas.",weeklyGoal:120}
@@ -28,14 +28,15 @@ const STARTER_COURSES=[
   {id:"course-fin-07",track:"track-finance",title:"Fundamentals of Finance",source:"Coursera · University of Pennsylvania (Wharton)",url:"https://www.coursera.org/learn/finance-fundamentals",estimatedMinutes:600,important:true,urgent:false,description:"Juros simples e compostos, NPV, anuidades, perpetuidades e fundamentos de corporate finance.",catalogOrder:7}
 ];
 const STARTER_PLAYLISTS=[
-  {id:"playlist-learning-main",name:"Playlist de aprendizado",url:"https://youtube.com/playlist?list=PLNur2Ccbfc5k&si=NshejZYaJ3tQjxPF",lastSyncAt:null,lastSyncError:null}
+  {id:"playlist-learning-main",youtubePlaylistId:"PLNur2Ccbfc5k",name:"Playlist de aprendizado",url:"https://www.youtube.com/playlist?list=PLNur2Ccbfc5k",enabled:true,createdAt:"2026-08-17T00:00:00.000Z",updatedAt:"2026-08-17T00:00:00.000Z",lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}
 ];
 let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),syncing=false;
 let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,currentReviewNote=null;
-let youtubeCatalogMeta={generatedAt:null,lastLoadedAt:null,error:null};
+let youtubeCatalogMeta={version:null,generatedAt:null,lastLoadedAt:null,playlistIds:[],playlistCount:0,videoCount:0,error:null};
 let obsidianAutoSyncHandle=null,obsidianSyncInFlight=false;
 const NOTE_TYPE_LABELS={literature:"Fichamento",permanent:"Permanente",concept:"Conceito",question:"Pergunta",insight:"Insight",quote:"Citação",reference:"Referência",next_action:"Ação",quick:"Rápida",session:"Sessão"};
 const $=id=>document.getElementById(id);
+const YOUTUBE_PLAYLIST_ID_RE=/^[A-Za-z0-9_-]{8,}$/;
 
 function loadState(){
   try{
@@ -61,8 +62,8 @@ function normalize(s){
   s.weeklyProgress=s.weeklyProgress&&typeof s.weeklyProgress==="object"?s.weeklyProgress:{};
   s.starterContentVersion=Math.max(0,Number(s.starterContentVersion)||0);
   s.activeTrack=s.tracks.some(t=>t?.id===s.activeTrack)?s.activeTrack:(s.tracks[0]?.id||null);
+  s.playlists=s.playlists.map((playlist,index)=>normalizePlaylistRecord(playlist,index));
   s.activePlaylist=s.playlists.some(p=>p?.id===s.activePlaylist)?s.activePlaylist:(s.playlists[0]?.id||null);
-  s.playlists.forEach(p=>{p.youtubePlaylistId=p.youtubePlaylistId||youtubePlaylistIdFromUrl(p.url)||"";p.catalogGeneratedAt=p.catalogGeneratedAt||null});
   s.tracks.forEach(t=>{if(t?.id&&!Object.prototype.hasOwnProperty.call(s.weeklyProgress,t.id)){s.weeklyProgress[t.id]=0}});
   s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=Array.isArray(i.modules)?i.modules:[];i.notes=typeof i.notes==="string"?i.notes:"";i.description=typeof i.description==="string"?i.description:"";i.catalogOrder=Number(i.catalogOrder)||0});
   s.youtubeQueue.forEach(v=>{v.catalogManaged=v.catalogManaged!==false;v.activeInCatalog=v.activeInCatalog!==false;v.archivedAt=v.archivedAt||null});
@@ -72,7 +73,7 @@ function migrate(old){
   const s=structuredClone(DEFAULT_STATE);
   if(old.activeTrack)s.activeTrack=old.activeTrack;if(old.tracks)s.tracks=old.tracks;if(old.items)s.items=old.items;if(old.inbox)s.inbox=old.inbox;if(old.weeklyProgress)s.weeklyProgress=old.weeklyProgress;if(old.shortcuts)s.shortcuts=old.shortcuts;
   if(old.youtubeQueue)s.youtubeQueue=old.youtubeQueue;
-  if(old.youtube?.playlistUrl)s.playlists=[{id:"main-playlist",name:old.youtube.playlistName||"Playlist de foco",url:old.youtube.playlistUrl,lastSyncAt:old.youtube.lastSyncAt||null,lastSyncError:old.youtube.lastSyncError||null}];
+  if(old.youtube?.playlistUrl)s.playlists=[{id:"main-playlist",youtubePlaylistId:youtubePlaylistIdFromUrl(old.youtube.playlistUrl)||"",name:old.youtube.playlistName||"Playlist de foco",url:old.youtube.playlistUrl,enabled:true,createdAt:old.youtube.lastSyncAt||null,updatedAt:old.youtube.lastSyncAt||null,lastSyncAt:old.youtube.lastSyncAt||null,lastSyncError:old.youtube.lastSyncError||null,catalogGeneratedAt:null,catalogTitle:null}];
   if(old.youtubeDailyGlobal)s.youtubeDaily=old.youtubeDailyGlobal;
   if(old.youtube)s.youtubeSettings={...s.youtubeSettings,mode:old.youtube.mode||"either",minutes:old.youtube.minutes||45,count:old.youtube.count||3,hideAfterLimit:old.youtube.hideAfterLimit!==false};
   s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=i.modules||[];i.notes=i.notes||""});
@@ -242,15 +243,86 @@ function obsidianModeLabel(value){
 function obsidianEnvironmentLabel(){
   return isLocalBackend()?"Arcana Local com sincronização direta disponível":"GitHub Pages/estático com exportação e importação de vault ZIP"
 }
+function canonicalYoutubePlaylistUrl(playlistId){
+  return `https://www.youtube.com/playlist?list=${encodeURIComponent(String(playlistId||"").trim())}`
+}
+function normalizeYoutubePlaylistInput(raw){
+  const value=String(raw||"").trim();
+  if(!value){
+    throw new Error("URL não informada.")
+  }
+  const candidate=value.includes("://")?value:`https://${value}`;
+  let url;
+  try{
+    url=new URL(candidate)
+  }catch{
+    throw new Error("Use uma URL de playlist do YouTube.")
+  }
+  const host=url.hostname.toLowerCase();
+  if(!["youtube.com","www.youtube.com","m.youtube.com"].includes(host)){
+    throw new Error("Use uma URL de playlist do YouTube.")
+  }
+  const playlistId=(url.searchParams.get("list")||"").trim();
+  if(!playlistId){
+    throw new Error("A URL precisa conter o parâmetro list da playlist.")
+  }
+  if(!YOUTUBE_PLAYLIST_ID_RE.test(playlistId)){
+    throw new Error("ID de playlist inválido.")
+  }
+  return {youtubePlaylistId:playlistId,url:canonicalYoutubePlaylistUrl(playlistId)}
+}
 function youtubePlaylistIdFromUrl(raw){
   if(!raw){
     return ""
   }
   try{
-    const url=new URL(raw,appBaseUrl());
-    return (url.searchParams.get("list")||"").trim()
+    return normalizeYoutubePlaylistInput(raw).youtubePlaylistId
   }catch{
     return ""
+  }
+}
+function normalizePlaylistRecord(playlist,index=0){
+  const input=playlist&&typeof playlist==="object"?playlist:{};
+  const now=new Date().toISOString();
+  const createdAt=input.createdAt||input.updatedAt||input.lastSyncAt||input.catalogGeneratedAt||now;
+  const updatedAt=input.updatedAt||input.createdAt||input.lastSyncAt||input.catalogGeneratedAt||createdAt;
+  const fallbackId=String(input.id||`playlist-${index+1}`).trim()||`playlist-${index+1}`;
+  const fallbackName=String(input.name||`Playlist ${index+1}`).trim()||`Playlist ${index+1}`;
+  let youtubePlaylistId=String(input.youtubePlaylistId||"").trim();
+  let url=String(input.url||"").trim();
+  if(!youtubePlaylistId&&url){
+    youtubePlaylistId=youtubePlaylistIdFromUrl(url)
+  }
+  if(!url&&youtubePlaylistId){
+    url=canonicalYoutubePlaylistUrl(youtubePlaylistId)
+  }
+  if(url){
+    try{
+      const normalizedUrl=normalizeYoutubePlaylistInput(url);
+      youtubePlaylistId=normalizedUrl.youtubePlaylistId;
+      url=normalizedUrl.url
+    }catch{
+      if(youtubePlaylistId){
+        url=canonicalYoutubePlaylistUrl(youtubePlaylistId)
+      }
+    }
+  }
+  if(!url&&youtubePlaylistId){
+    url=canonicalYoutubePlaylistUrl(youtubePlaylistId)
+  }
+  return {
+    ...input,
+    id:fallbackId,
+    youtubePlaylistId,
+    name:fallbackName,
+    url,
+    enabled:input.enabled!==false,
+    createdAt,
+    updatedAt,
+    lastSyncAt:input.lastSyncAt||null,
+    lastSyncError:input.lastSyncError||null,
+    catalogGeneratedAt:input.catalogGeneratedAt||null,
+    catalogTitle:input.catalogTitle||null
   }
 }
 function playlistCatalogId(playlist){
@@ -261,6 +333,13 @@ function playlistCatalogId(playlist){
 }
 function publishedCatalogUrl(){
   return new URL("./data/youtube/catalog.json",appBaseUrl()).toString()
+}
+function publishedCatalogRequestUrl(force=false){
+  const url=new URL(publishedCatalogUrl());
+  if(force){
+    url.searchParams.set("_arcana",Date.now().toString())
+  }
+  return url.toString()
 }
 function playlistPendingCount(playlist){
   return state.youtubeQueue.filter(v=>v.playlistId===playlist?.id&&v.activeInCatalog!==false&&itemProgress(v)<100).length
@@ -284,6 +363,69 @@ function catalogSyncNote(playlist){
     return ""
   }
   return `Catálogo público atualizado em ${stamp}`
+}
+function catalogPlaylistIds(){
+  return Array.isArray(youtubeCatalogMeta.playlistIds)?youtubeCatalogMeta.playlistIds:[]
+}
+function playlistPublishedInCatalog(playlist){
+  const catalogId=playlistCatalogId(playlist);
+  return !!catalogId&&catalogPlaylistIds().includes(catalogId)
+}
+function playlistAwaitingCatalog(playlist){
+  if(isLocalBackend()){
+    return false
+  }
+  const catalogId=playlistCatalogId(playlist);
+  if(!catalogId||youtubeCatalogMeta.error||!youtubeCatalogMeta.lastLoadedAt){
+    return false
+  }
+  return !playlistPublishedInCatalog(playlist)
+}
+function playlistStatusSummary(playlist){
+  if(!playlist){
+    return {tone:"muted",label:"Sem playlist",message:"Nenhuma playlist ativa.",detail:""}
+  }
+  if(playlist.lastSyncError){
+    return {tone:"error",label:"Erro",message:`Erro: ${playlist.lastSyncError}`,detail:"O Arcana preservou a fila local e não descartou seu progresso."}
+  }
+  if(playlist.enabled===false){
+    return {tone:"muted",label:"Pausada",message:"Playlist pausada.",detail:"Ative novamente quando quiser voltar a sincronizar esta fila."}
+  }
+  if(isLocalBackend()){
+    if(playlist.lastSyncAt){
+      return {tone:"ok",label:"Arcana Local",message:`Sincronizada localmente em ${new Date(playlist.lastSyncAt).toLocaleString("pt-BR")}`,detail:"Este navegador pode atualizar a playlist direto com yt-dlp."}
+    }
+    return {tone:"local",label:"Arcana Local",message:"Pronta para sincronizar com yt-dlp.",detail:"No Arcana Local, a playlist pode ser atualizada imediatamente sem depender do catálogo público."}
+  }
+  if(playlistAwaitingCatalog(playlist)){
+    return {tone:"pending",label:"Aguardando catálogo",message:"Aguardando catálogo público.",detail:"A playlist já foi salva no seu IndexedDB, mas ainda não apareceu em data/youtube/catalog.json."}
+  }
+  if(playlistPublishedInCatalog(playlist)){
+    if(playlist.lastSyncAt){
+      return {tone:"ok",label:"Publicado",message:`Sincronizada em ${new Date(playlist.lastSyncAt).toLocaleString("pt-BR")}`,detail:"Os metadados públicos foram aplicados sem apagar seu progresso local."}
+    }
+    return {tone:"ok",label:"Catálogo disponível",message:"Catálogo público disponível para sincronizar.",detail:"Clique em sincronizar para trazer os vídeos publicados para esta playlist."}
+  }
+  if(youtubeCatalogMeta.error&&!playlist.lastSyncAt){
+    return {tone:"muted",label:"Sem catálogo",message:"Catálogo público indisponível agora.",detail:youtubeCatalogMeta.error}
+  }
+  return {tone:"muted",label:"Local",message:"Ainda não sincronizada.",detail:"Salve uma URL canônica de playlist para conectar esta fila ao catálogo público."}
+}
+function playlistStatusChip(playlist){
+  const status=playlistStatusSummary(playlist);
+  return `<span class="status-chip ${status.tone}">${esc(status.label)}</span>`
+}
+function catalogRequestPayload(playlist){
+  const catalogId=playlistCatalogId(playlist);
+  if(!catalogId){
+    return ""
+  }
+  return JSON.stringify({
+    id:catalogId,
+    name:playlist.name,
+    url:playlist.url||canonicalYoutubePlaylistUrl(catalogId),
+    enabled:playlist.enabled!==false
+  },null,2)
 }
 function normalizeCatalogVideo(entry,pos){
   if(!entry||typeof entry!=="object"){
@@ -317,11 +459,21 @@ function normalizePublishedCatalog(data){
     if(!id){
       throw new Error(`Playlist inválida na posição ${pos+1}.`)
     }
+    const canonicalUrl=canonicalYoutubePlaylistUrl(id);
+    let url=canonicalUrl;
+    if(playlist.url){
+      try{
+        const normalizedUrl=normalizeYoutubePlaylistInput(String(playlist.url).trim());
+        url=normalizedUrl.youtubePlaylistId===id?normalizedUrl.url:canonicalUrl
+      }catch{
+        url=canonicalUrl
+      }
+    }
     const videos=Array.isArray(playlist.videos)?playlist.videos.map((entry,index)=>normalizeCatalogVideo(entry,index)).filter(Boolean):[];
     return {
       id,
       name:String(playlist.name||playlist.title||`Playlist ${pos+1}`).trim()||`Playlist ${pos+1}`,
-      url:String(playlist.url||`https://www.youtube.com/playlist?list=${id}`).trim(),
+      url,
       videos
     }
   }).filter(Boolean);
@@ -332,7 +484,7 @@ function normalizePublishedCatalog(data){
   }
 }
 async function fetchPublishedCatalog(force=false){
-  const response=await fetch(publishedCatalogUrl(),{cache:force?"no-store":"default"});
+  const response=await fetch(publishedCatalogRequestUrl(force),{cache:"no-store"});
   const text=await response.text();
   if(!response.ok){
     throw new Error(`Catálogo público indisponível (${response.status}).`)
@@ -344,7 +496,15 @@ async function fetchPublishedCatalog(force=false){
     throw new Error("Catálogo público retornou JSON inválido.")
   }
   const catalog=normalizePublishedCatalog(data);
-  youtubeCatalogMeta={generatedAt:catalog.generatedAt||null,lastLoadedAt:new Date().toISOString(),error:null};
+  youtubeCatalogMeta={
+    version:catalog.version||1,
+    generatedAt:catalog.generatedAt||null,
+    lastLoadedAt:new Date().toISOString(),
+    playlistIds:catalog.playlists.map(playlist=>playlist.id),
+    playlistCount:catalog.playlists.length,
+    videoCount:catalog.playlists.reduce((total,playlist)=>total+playlist.videos.length,0),
+    error:null
+  };
   return catalog
 }
 function catalogPlaylistStateId(catalogPlaylist){
@@ -362,9 +522,12 @@ function ensurePlaylistFromCatalog(catalogPlaylist){
       local.name=catalogPlaylist.name
     }
     local.youtubePlaylistId=catalogId;
+    local.catalogTitle=catalogPlaylist.name;
+    local.updatedAt=new Date().toISOString();
     return local
   }
-  local={id:catalogPlaylistStateId(catalogPlaylist),name:catalogPlaylist.name,url:catalogPlaylist.url,youtubePlaylistId:catalogId,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null};
+  const now=new Date().toISOString();
+  local={id:catalogPlaylistStateId(catalogPlaylist),youtubePlaylistId:catalogId,name:catalogPlaylist.name,url:catalogPlaylist.url,enabled:true,createdAt:now,updatedAt:now,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:catalogPlaylist.name};
   state.playlists.push(local);
   if(!state.activePlaylist){
     state.activePlaylist=local.id
@@ -395,7 +558,7 @@ function applyPublishedCatalog(catalog,{targetPlaylist=null}={}){
     }
     const match=catalog.playlists.find(playlist=>playlist.id===catalogId);
     if(!match){
-      throw new Error("Esta playlist ainda não está publicada no catálogo público.")
+      return 0
     }
     mergePlaylistData(catalogPlaylistToSyncData(match,catalog),targetPlaylist);
     return 1
@@ -411,9 +574,6 @@ function applyPublishedCatalog(catalog,{targetPlaylist=null}={}){
 async function refreshPublishedCatalog(force=false){
   const catalog=await fetchPublishedCatalog(force);
   const merged=applyPublishedCatalog(catalog);
-  if(!merged){
-    throw new Error("Nenhuma playlist publicada foi encontrada no catálogo.")
-  }
   await save(false,"youtube-catalog");
   return merged
 }
@@ -644,10 +804,13 @@ async function saveTrack(e){e.preventDefault();const f=e.currentTarget,fields=f.
 function deleteTrack(){const id=$("trackForm").elements.id.value;if(!id||state.tracks.length<=1){return}if(!confirm("Excluir esta trilha e seus itens?")){return}state.tracks=state.tracks.filter(t=>t.id!==id);state.items=state.items.filter(i=>i.track!==id);state.activeTrack=state.tracks[0].id;save();$("trackDialog").close()}
 
 function renderYoutube(){
-  $("playlistTabs").innerHTML=state.playlists.map(p=>`<button class="playlist-tab ${p.id===state.activePlaylist?"active":""}" onclick="setPlaylist('${p.id}')"><strong>${esc(p.name)}</strong><span>${playlistPendingCount(p)} pendentes</span></button>`).join("");
+  $("playlistTabs").innerHTML=state.playlists.map(p=>{
+    const status=playlistStatusSummary(p);
+    return `<button class="playlist-tab ${p.id===state.activePlaylist?"active":""}" onclick="setPlaylist('${p.id}')"><strong>${esc(p.name)}</strong><span>${playlistPendingCount(p)} pendentes</span><div class="playlist-status-line">${playlistStatusChip(p)}<span>${esc(status.label)}</span></div></button>`
+  }).join("");
   const p=activePlaylist();$("activePlaylistName").textContent=p?.name||"Sem playlist";
-  const status=p?.lastSyncError?`Erro: ${p.lastSyncError}`:p?.lastSyncAt?`Sincronizada em ${new Date(p.lastSyncAt).toLocaleString("pt-BR")}`:"Ainda não sincronizada";
-  $("playlistSyncStatus").className=`sync-status ${p?.lastSyncError?"error":p?.lastSyncAt?"ok":""}`;$("playlistSyncStatus").textContent=syncing?"Sincronizando…":status;
+  const status=playlistStatusSummary(p);
+  $("playlistSyncStatus").className=`sync-status ${syncing?"pending":status.tone}`;$("playlistSyncStatus").textContent=syncing?"Sincronizando…":status.message;
   const syncBtn=$("syncPlaylistBtn");
   if(syncBtn){
     syncBtn.disabled=syncing;
@@ -660,6 +823,9 @@ function renderYoutube(){
   }
   if(p){
     panelLines.push(`<div class="hint">${playlistPendingCount(p)} vídeos ativos na fila${archivedCount?` · ${archivedCount} preservados no histórico local`:""}</div>`)
+  }
+  if(status.detail){
+    panelLines.push(`<div class="hint">${esc(status.detail)}</div>`)
   }
   const catalogNote=catalogSyncNote(p);
   if(catalogNote){
@@ -702,8 +868,76 @@ function videoRow(v,n,today){
   return `<div class="video-row">${v.thumbnail?`<img class="video-thumb" src="${esc(v.thumbnail)}">`:"<div class='num'>▶</div>"}<div class="grow"><strong>${esc(v.title)}</strong><span>${esc(v.channel||"YouTube")} · ${dur} ${today?`· vídeo ${n+1} de hoje`:""} · ${noteCount(v.id)} notas</span></div><button class="mini-btn" onclick="openFocus('${v.id}','youtube')">Assistir</button><button class="mini-btn" onclick="openFichamentoForSource('${v.id}','youtube')">Fichamento</button><button class="mini-btn" onclick="openNotes('${v.id}','youtube')">Notas</button></div>`
 }
 function setPlaylist(id){state.activePlaylist=id;save();renderYoutube()}
-function openPlaylistDialog(id=null){const f=$("playlistForm"),fields=f.elements;f.reset();fields.id.value="";if(id){const p=state.playlists.find(x=>x.id===id);$("playlistDialogTitle").textContent="Editar playlist";fields.id.value=p.id;fields.name.value=p.name;fields.url.value=p.url;$("deletePlaylistBtn").classList.remove("hidden")}else{$("playlistDialogTitle").textContent="Nova playlist";$("deletePlaylistBtn").classList.add("hidden")}$("playlistDialog").showModal()}
-async function savePlaylist(e){e.preventDefault();const f=e.currentTarget,fields=f.elements,id=fields.id.value,name=fields.name.value.trim(),url=fields.url.value.trim();if(id){Object.assign(state.playlists.find(p=>p.id===id),{name,url})}else{const nid=crypto.randomUUID();state.playlists.push({id:nid,name,url,lastSyncAt:null,lastSyncError:null});state.activePlaylist=nid}save(false);$("playlistDialog").close();await syncPlaylist()}
+function setPlaylistFormError(message=""){const el=$("playlistFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
+function setPlaylistSaving(saving){const btn=$("playlistSaveBtn");if(!btn){return}btn.disabled=saving;btn.textContent=saving?"Salvando...":"Salvar"}
+function openPlaylistDialog(id=null){
+  const f=$("playlistForm"),fields=f.elements;
+  f.reset();
+  setPlaylistFormError();
+  setPlaylistSaving(false);
+  fields.id.value="";
+  fields.enabled.checked=true;
+  if(id){
+    const p=state.playlists.find(x=>x.id===id);
+    $("playlistDialogTitle").textContent="Editar playlist";
+    fields.id.value=p.id;
+    fields.name.value=p.name;
+    fields.url.value=p.url;
+    fields.enabled.checked=p.enabled!==false;
+    $("deletePlaylistBtn").classList.toggle("hidden",state.playlists.length<=1)
+  }else{
+    $("playlistDialogTitle").textContent="Nova playlist";
+    $("deletePlaylistBtn").classList.add("hidden")
+  }
+  $("playlistDialog").showModal()
+}
+async function savePlaylist(e){
+  e.preventDefault();
+  const f=e.currentTarget,fields=f.elements,id=fields.id.value,name=fields.name.value.trim(),rawUrl=fields.url.value.trim(),enabled=fields.enabled.checked;
+  setPlaylistFormError();
+  if(!name){
+    setPlaylistFormError("Informe um nome para salvar a playlist.");
+    fields.name.focus();
+    return
+  }
+  let normalizedUrl;
+  try{
+    normalizedUrl=normalizeYoutubePlaylistInput(rawUrl)
+  }catch(err){
+    setPlaylistFormError(err.message||"Não consegui entender a URL da playlist.");
+    fields.url.focus();
+    return
+  }
+  const previous=structuredClone(state);
+  const next=structuredClone(state);
+  const now=new Date().toISOString();
+  const payload={name,url:normalizedUrl.url,youtubePlaylistId:normalizedUrl.youtubePlaylistId,enabled,updatedAt:now,lastSyncError:null};
+  if(id){
+    const playlist=next.playlists.find(p=>p.id===id);
+    if(!playlist){
+      setPlaylistFormError("Esta playlist não existe mais. Atualize a página e tente novamente.");
+      return
+    }
+    Object.assign(playlist,payload)
+  }else{
+    const nid=crypto.randomUUID();
+    next.playlists.push({id:nid,createdAt:now,catalogGeneratedAt:null,catalogTitle:null,lastSyncAt:null,...payload});
+    next.activePlaylist=nid
+  }
+  state=normalize(next);
+  setPlaylistSaving(true);
+  try{
+    await save(false,"playlist");
+    $("playlistDialog").close();
+    renderAll();
+    await syncPlaylist()
+  }catch(err){
+    state=previous;
+    setPlaylistFormError(`Não consegui salvar a playlist: ${err.message||"erro de armazenamento"}.`);
+  }finally{
+    setPlaylistSaving(false)
+  }
+}
 function deletePlaylist(){const id=$("playlistForm").elements.id.value;if(state.playlists.length<=1){return alert("Mantenha pelo menos uma playlist.")}if(!confirm("Excluir esta playlist e sua fila local?")){return}state.playlists=state.playlists.filter(p=>p.id!==id);state.youtubeQueue=state.youtubeQueue.filter(v=>v.playlistId!==id);state.activePlaylist=state.playlists[0].id;save();$("playlistDialog").close()}
 function mergePlaylistData(data,p){
   if(!Array.isArray(data.items)){
@@ -716,7 +950,30 @@ function mergePlaylistData(data,p){
     const o=old.get(videoId)||old.get(v.url);
     const mins=v.durationSeconds?Math.max(1,Math.round(v.durationSeconds/60)):v.estimatedMinutes||o?.estimatedMinutes;
     const position=Math.max(0,(Number(v.position)||pos+1)-1);
-    return {id:o?.id||crypto.randomUUID(),videoId,playlistId:p.id,youtubePlaylistId:data.playlistId||o?.youtubePlaylistId||"",kind:"youtube",title:v.title,url:v.url||`https://www.youtube.com/watch?v=${videoId}`,channel:v.channel||o?.channel||"YouTube",thumbnail:v.thumbnail||o?.thumbnail||"",estimatedMinutes:mins,progress:o?.progress??0,status:o?.status||statusFromProgress(o?.progress||0),notes:o?.notes||"",important:o?.important??true,urgent:o?.urgent??false,track:o?.track||null,createdAt:o?.createdAt||new Date().toISOString(),position,catalogManaged:true,activeInCatalog:true,archivedAt:null}
+    return {
+      ...(o||{}),
+      id:o?.id||crypto.randomUUID(),
+      videoId,
+      playlistId:p.id,
+      youtubePlaylistId:data.playlistId||o?.youtubePlaylistId||playlistCatalogId(p)||"",
+      kind:"youtube",
+      title:v.title,
+      url:v.url||o?.url||`https://www.youtube.com/watch?v=${videoId}`,
+      channel:v.channel||o?.channel||"YouTube",
+      thumbnail:v.thumbnail||o?.thumbnail||"",
+      estimatedMinutes:mins,
+      progress:o?.progress??0,
+      status:o?.status||statusFromProgress(o?.progress||0),
+      notes:o?.notes||"",
+      important:o?.important??true,
+      urgent:o?.urgent??false,
+      track:o?.track||null,
+      createdAt:o?.createdAt||new Date().toISOString(),
+      position,
+      catalogManaged:true,
+      activeInCatalog:true,
+      archivedAt:null
+    }
   });
   const activeIds=new Set(fresh.map(v=>v.videoId||v.url));
   let carryPosition=fresh.length;
@@ -727,10 +984,14 @@ function mergePlaylistData(data,p){
     return {...v,activeInCatalog:false,archivedAt:v.archivedAt||new Date().toISOString(),position:Number(v.position)>=0?Number(v.position):carryPosition++}
   });
   state.youtubeQueue=state.youtubeQueue.filter(v=>v.playlistId!==p.id).concat(fresh,retained);
-  p.name=data.title||p.name;
-  p.url=p.url||`https://www.youtube.com/playlist?list=${data.playlistId||playlistCatalogId(p)}`;
+  if(!p.name){
+    p.name=data.title||p.name
+  }
+  p.catalogTitle=data.title||p.catalogTitle||null;
+  p.url=p.url||canonicalYoutubePlaylistUrl(data.playlistId||playlistCatalogId(p));
   p.youtubePlaylistId=data.playlistId||p.youtubePlaylistId||playlistCatalogId(p)||"";
   p.catalogGeneratedAt=data.generatedAt||p.catalogGeneratedAt||youtubeCatalogMeta.generatedAt||null;
+  p.updatedAt=new Date().toISOString();
   p.lastSyncAt=new Date().toISOString();
   p.lastSyncError=null
 }
@@ -745,7 +1006,7 @@ function addYoutubeUrlToQueue(url,title="YouTube"){
   const p=activePlaylist(),videoId=youtubeVideoId(url)||url;
   if(!p){return}
   if(state.youtubeQueue.some(v=>v.playlistId===p.id&&(v.videoId===videoId||v.url===url))){return}
-  state.youtubeQueue.push({id:crypto.randomUUID(),videoId,playlistId:p.id,kind:"youtube",title,url,channel:"YouTube",thumbnail:"",estimatedMinutes:0,progress:0,status:"nao_iniciado",notes:"",important:true,urgent:false,track:null,createdAt:new Date().toISOString(),position:state.youtubeQueue.filter(v=>v.playlistId===p.id).length,catalogManaged:false,activeInCatalog:true,archivedAt:null})
+  state.youtubeQueue.push({id:crypto.randomUUID(),videoId,playlistId:p.id,youtubePlaylistId:p.youtubePlaylistId||"",kind:"youtube",title,url,channel:"YouTube",thumbnail:"",estimatedMinutes:0,progress:0,status:"nao_iniciado",notes:"",important:true,urgent:false,track:null,createdAt:new Date().toISOString(),position:state.youtubeQueue.filter(v=>v.playlistId===p.id).length,catalogManaged:false,activeInCatalog:true,archivedAt:null})
 }
 function exportPlaylistFile(){
   const p=activePlaylist();
@@ -777,8 +1038,14 @@ async function syncPlaylist(){
       await save(false,"youtube-local-sync")
     }else{
       const catalog=await fetchPublishedCatalog(true);
-      applyPublishedCatalog(catalog,{targetPlaylist:p});
-      await save(false,"youtube-catalog-sync")
+      const merged=applyPublishedCatalog(catalog,{targetPlaylist:p});
+      if(!merged){
+        p.lastSyncError=null;
+        p.updatedAt=new Date().toISOString();
+        await save(false,"youtube-awaiting-catalog")
+      }else{
+        await save(false,"youtube-catalog-sync")
+      }
     }
   }catch(e){p.lastSyncError=e.message||String(e);await save(false,"youtube-sync-error")}finally{syncing=false;renderAll()}
 }
@@ -948,7 +1215,98 @@ function renderCalendar(){
   $("calendarGrid").innerHTML=html;$("recentSessions").innerHTML=[...state.sessions].reverse().slice(0,12).map(s=>`<div class="session-row"><div class="grow"><strong>${esc(s.title)}</strong><span>${new Date(s.timestamp).toLocaleString("pt-BR")} · ${s.minutes} min</span></div><span class="tag">+${Math.max(10,s.minutes*2)} XP</span></div>`).join("")||`<div class="hint">Nenhuma sessão registrada.</div>`
 }
 
-function renderSettings(){const f=$("youtubeSettingsForm"),s=state.youtubeSettings;if(!f){return}const local=isLocalBackend(),connected=!!state.obsidian.connected;f.mode.value=s.mode;f.minutes.value=s.minutes;f.count.value=s.count;f.hideAfterLimit.checked=s.hideAfterLimit;if($("environmentStatus")){$("environmentStatus").textContent=`Ambiente: ${local?"Arcana Local disponível para yt-dlp":"estático/GitHub Pages"} · dados primários em IndexedDB do navegador.`}$("backupStatus").innerHTML=`<p class="hint">${state.lastAutoBackup?`Último snapshot automático: ${new Date(state.lastAutoBackup).toLocaleString("pt-BR")}`:"Nenhum snapshot automático ainda."}</p>`;if($("obsidianEnvironmentStatus")){$("obsidianEnvironmentStatus").textContent=`Ambiente: ${obsidianEnvironmentLabel()}`;}if($("obsidianVaultStatus")){$("obsidianVaultStatus").innerHTML=`<p class="hint">${connected?`Vault: ${esc(state.obsidian.vaultName||"sem nome")} · ${esc(state.obsidian.vaultPath||"")}`:"Nenhum vault conectado."}</p><p class="hint">${connected&&state.obsidian.lastSyncAt?`Última sincronização: ${new Date(state.obsidian.lastSyncAt).toLocaleString("pt-BR")}`:local?"Conecte um vault para sincronização bidirecional.":"Use exportação/importação para mover notas entre Arcana Online e Obsidian."}</p>${state.obsidian.error?`<p class="hint">Erro: ${esc(state.obsidian.error)}</p>`:""}`;}if($("obsidianStats")){$("obsidianStats").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Notas</span><strong>${state.obsidian.noteCount||0}</strong></div><div class="profile-stat"><span>Fichamentos</span><strong>${state.obsidian.fichamentoCount||0}</strong></div><div class="profile-stat"><span>Anexos</span><strong>${state.obsidian.attachmentCount||0}</strong></div><div class="profile-stat"><span>Conflitos</span><strong>${state.obsidian.conflicts||0}</strong></div></div>`;}if($("obsidianAutoSync")){$("obsidianAutoSync").value=state.obsidian.autoSync||"after_session";$("obsidianAutoSync").disabled=!local;}if($("obsidianAutoSyncNote")){$("obsidianAutoSyncNote").textContent=`Autosync atual: ${obsidianModeLabel(state.obsidian.autoSync)}.`;}if($("obsidianConnectBtn")){$("obsidianConnectBtn").disabled=!local;}if($("obsidianSyncBtn")){$("obsidianSyncBtn").disabled=!local||!connected;}if($("obsidianPullBtn")){$("obsidianPullBtn").disabled=!local||!connected;}if($("obsidianPushBtn")){$("obsidianPushBtn").disabled=!local||!connected;}if($("obsidianDisconnectBtn")){$("obsidianDisconnectBtn").disabled=!local||!connected;}if($("obsidianOpenBtn")){$("obsidianOpenBtn").disabled=!local||!state.obsidian.openUrl;}renderSnapshots()}
+function renderCatalogRequestDialog(){
+  const dialogTitle=$("catalogRequestTitle"),help=$("catalogRequestHelp"),json=$("catalogRequestJson"),status=$("catalogRequestStatus");
+  const playlist=activePlaylist();
+  if(!playlist){
+    return
+  }
+  const payload=catalogRequestPayload(playlist);
+  if(dialogTitle){
+    dialogTitle.textContent=playlist.name||"Adicionar ao catálogo"
+  }
+  if(json){
+    json.value=payload
+  }
+  if(status){
+    status.textContent=""
+  }
+  if(help){
+    if(payload){
+      help.innerHTML=`<p class="hint">1. Copie o JSON abaixo.</p><p class="hint">2. Cole o objeto dentro de <code>data/youtube/playlists.json</code>, em <code>playlists[]</code>.</p><p class="hint">3. Faça commit e rode o workflow <code>Sync YouTube Catalog</code>. Quando o <code>catalog.json</code> publicar esta playlist, o Arcana Online vai sair de “Aguardando catálogo”.</p>`
+    }else{
+      help.innerHTML=`<p class="hint">Salve primeiro uma URL canônica de playlist do YouTube para gerar o bloco de catálogo.</p>`
+    }
+  }
+}
+function openCatalogRequestDialog(){
+  renderCatalogRequestDialog();
+  $("catalogRequestDialog").showModal()
+}
+async function copyCatalogRequestJson(){
+  const field=$("catalogRequestJson"),status=$("catalogRequestStatus");
+  if(!field||!field.value.trim()){
+    if(status){
+      status.textContent="Nada para copiar ainda."
+    }
+    return
+  }
+  try{
+    if(navigator.clipboard?.writeText){
+      await navigator.clipboard.writeText(field.value)
+    }else{
+      field.focus();
+      field.select?.()
+    }
+    if(status){
+      status.textContent="JSON copiado."
+    }
+  }catch(err){
+    if(status){
+      status.textContent=err.message||"Não consegui copiar automaticamente."
+    }
+  }
+}
+function renderSettings(){
+  const f=$("youtubeSettingsForm"),s=state.youtubeSettings;
+  if(!f){return}
+  const local=isLocalBackend(),connected=!!state.obsidian.connected;
+  f.mode.value=s.mode;
+  f.minutes.value=s.minutes;
+  f.count.value=s.count;
+  f.hideAfterLimit.checked=s.hideAfterLimit;
+  if($("environmentStatus")){
+    $("environmentStatus").textContent=`Ambiente: ${local?"Arcana Local disponível para yt-dlp":"estático/GitHub Pages"} · dados primários em IndexedDB do navegador.`
+  }
+  if($("youtubeCatalogStatus")){
+    const generatedAt=formatCatalogStamp(youtubeCatalogMeta.generatedAt);
+    const loadedAt=formatCatalogStamp(youtubeCatalogMeta.lastLoadedAt);
+    $("youtubeCatalogStatus").innerHTML=`<p class="hint">${local?"No Arcana Local, as playlists sincronizam direto com yt-dlp.":"No Arcana Online, o catálogo público é a fonte de metadados publicada pelo GitHub Pages."}</p><p class="hint">${youtubeCatalogMeta.error?`Erro do catálogo: ${esc(youtubeCatalogMeta.error)}`:`Catálogo público: ${youtubeCatalogMeta.playlistCount||0} playlists · ${youtubeCatalogMeta.videoCount||0} vídeos${generatedAt?` · gerado em ${esc(generatedAt)}`:""}${loadedAt?` · carregado em ${esc(loadedAt)}`:""}.`}</p>`
+  }
+  if($("youtubePlaylistDiagnostics")){
+    $("youtubePlaylistDiagnostics").innerHTML=state.playlists.map(playlist=>{
+      const status=playlistStatusSummary(playlist);
+      const catalogId=playlistCatalogId(playlist)||"sem list";
+      return `<div class="diag-row"><div class="grow"><strong>${esc(playlist.name)}</strong><span>${esc(catalogId)} · ${esc(playlist.url||"sem URL")}</span></div>${playlistStatusChip(playlist)}<span class="diag-text">${esc(status.message)}</span></div>`
+    }).join("")||`<div class="hint">Nenhuma playlist configurada.</div>`
+  }
+  if($("refreshCatalogBtn")){
+    $("refreshCatalogBtn").disabled=local
+  }
+  $("backupStatus").innerHTML=`<p class="hint">${state.lastAutoBackup?`Último snapshot automático: ${new Date(state.lastAutoBackup).toLocaleString("pt-BR")}`:"Nenhum snapshot automático ainda."}</p>`;
+  if($("obsidianEnvironmentStatus")){$("obsidianEnvironmentStatus").textContent=`Ambiente: ${obsidianEnvironmentLabel()}`;}
+  if($("obsidianVaultStatus")){$("obsidianVaultStatus").innerHTML=`<p class="hint">${connected?`Vault: ${esc(state.obsidian.vaultName||"sem nome")} · ${esc(state.obsidian.vaultPath||"")}`:"Nenhum vault conectado."}</p><p class="hint">${connected&&state.obsidian.lastSyncAt?`Última sincronização: ${new Date(state.obsidian.lastSyncAt).toLocaleString("pt-BR")}`:local?"Conecte um vault para sincronização bidirecional.":"Use exportação/importação para mover notas entre Arcana Online e Obsidian."}</p>${state.obsidian.error?`<p class="hint">Erro: ${esc(state.obsidian.error)}</p>`:""}`;}
+  if($("obsidianStats")){$("obsidianStats").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Notas</span><strong>${state.obsidian.noteCount||0}</strong></div><div class="profile-stat"><span>Fichamentos</span><strong>${state.obsidian.fichamentoCount||0}</strong></div><div class="profile-stat"><span>Anexos</span><strong>${state.obsidian.attachmentCount||0}</strong></div><div class="profile-stat"><span>Conflitos</span><strong>${state.obsidian.conflicts||0}</strong></div></div>`;}
+  if($("obsidianAutoSync")){$("obsidianAutoSync").value=state.obsidian.autoSync||"after_session";$("obsidianAutoSync").disabled=!local;}
+  if($("obsidianAutoSyncNote")){$("obsidianAutoSyncNote").textContent=`Autosync atual: ${obsidianModeLabel(state.obsidian.autoSync)}.`;}
+  if($("obsidianConnectBtn")){$("obsidianConnectBtn").disabled=!local;}
+  if($("obsidianSyncBtn")){$("obsidianSyncBtn").disabled=!local||!connected;}
+  if($("obsidianPullBtn")){$("obsidianPullBtn").disabled=!local||!connected;}
+  if($("obsidianPushBtn")){$("obsidianPushBtn").disabled=!local||!connected;}
+  if($("obsidianDisconnectBtn")){$("obsidianDisconnectBtn").disabled=!local||!connected;}
+  if($("obsidianOpenBtn")){$("obsidianOpenBtn").disabled=!local||!state.obsidian.openUrl;}
+  renderSnapshots()
+}
 async function renderSnapshots(){if(!$("snapshotList")||!window.ArcanaStorage?.ready){return}try{const snaps=await ArcanaStorage.listSnapshots();$("snapshotList").innerHTML=snaps.length?snaps.map(s=>`<option value="${esc(s.id)}">${new Date(s.createdAt).toLocaleString("pt-BR")} · ${esc(s.reason||"auto")}</option>`).join(""):`<option value="">Nenhum snapshot</option>`}catch(e){$("snapshotList").innerHTML=`<option value="">Snapshots indisponíveis</option>`}}
 async function autoBackup(reason="auto"){try{if(window.ArcanaStorage?.ready){await ArcanaStorage.snapshot(reason,state);state.lastAutoBackup=new Date().toISOString();await ArcanaStorage.saveState(state)}else{localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}renderSettings()}catch(e){console.warn("[Arcana] snapshot failed",e)}}
 let backupDebounce=null;function scheduleAutoBackup(reason="change"){clearTimeout(backupDebounce);backupDebounce=setTimeout(()=>autoBackup(reason),1800)}
@@ -1022,7 +1380,7 @@ async function initApp(){
     try{
       await refreshPublishedCatalog(false);
     }catch(e){
-      youtubeCatalogMeta.error=e.message||String(e);
+      youtubeCatalogMeta={...youtubeCatalogMeta,error:e.message||String(e)};
     }
     renderAll()
   }
@@ -1033,9 +1391,12 @@ $("regenPlanBtn").onclick=generatePlan;$("todayMinutes").onchange=generatePlan;
 $("newTrackBtn").onclick=()=>openTrackDialog();$("editTrackBtn").onclick=()=>openTrackDialog(state.activeTrack);$("trackForm").onsubmit=saveTrack;$("deleteTrackBtn").onclick=deleteTrack;$("addCourseBtn").onclick=()=>openItemDialog("course");
 $("newPlaylistBtn").onclick=()=>openPlaylistDialog();$("editPlaylistBtn").onclick=()=>openPlaylistDialog(state.activePlaylist);$("playlistForm").onsubmit=savePlaylist;$("deletePlaylistBtn").onclick=deletePlaylist;$("syncPlaylistBtn").onclick=syncPlaylist;
 $("exportPlaylistBtn").onclick=exportPlaylistFile;
+$("requestCatalogBtn").onclick=openCatalogRequestDialog;
+$("copyCatalogRequestBtn").onclick=()=>copyCatalogRequestJson().catch(()=>{});
 $("searchInput").oninput=renderLibrary;$("libraryTypeFilter").onchange=renderLibrary;$("priorityFilter").onchange=renderLibrary;
 $("captureBtn").onclick=captureInbox;$("inboxInput").onkeydown=e=>{if(e.key==="Enter")captureInbox()};
 $("youtubeSettingsForm").onsubmit=e=>{e.preventDefault();const f=e.currentTarget;state.youtubeSettings={mode:f.mode.value,minutes:Number(f.minutes.value)||0,count:Number(f.count.value)||0,hideAfterLimit:f.hideAfterLimit.checked};save()};
+$("refreshCatalogBtn").onclick=async()=>{try{await refreshPublishedCatalog(true);renderAll()}catch(err){youtubeCatalogMeta={...youtubeCatalogMeta,error:err.message||String(err)};renderAll();alert(err.message||String(err))}};
 $("backupNowBtn").onclick=()=>autoBackup("manual");
 $("exportFullBackupBtn").onclick=()=>ArcanaStorage.downloadFullBackup(state);
 $("fullBackupImportInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await importFullBackupFile(f)}catch(err){alert(err.message)}e.target.value=""};

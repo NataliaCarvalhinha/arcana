@@ -1,6 +1,10 @@
-const CACHE_NAME="arcana-shell-v5";
+const CACHE_NAME="arcana-shell-v6";
 const APP_SHELL=["./","./index.html","./styles.css","./db.js","./app.js","./manifest.webmanifest","./assets/icons/arcana.svg"];
 const YOUTUBE_CATALOG_RE=/\/data\/youtube\/catalog\.json$/;
+
+function catalogCacheRequest(url){
+  return new Request(`${url.origin}${url.pathname}`);
+}
 
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()))
@@ -19,11 +23,11 @@ self.addEventListener("fetch",event=>{
     event.respondWith(fetch(event.request).then(response=>{
       if(response.ok){
         const copy=response.clone();
-        caches.open(CACHE_NAME).then(cache=>cache.put(event.request,copy))
+        caches.open(CACHE_NAME).then(cache=>cache.put(catalogCacheRequest(url),copy))
       }
       return response
     }).catch(async()=>{
-      const found=await caches.match(event.request);
+      const found=await caches.match(catalogCacheRequest(url));
       if(found){
         return found
       }
