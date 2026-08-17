@@ -27,6 +27,9 @@ function normalize(s){
   s.inbox=Array.isArray(s.inbox)?s.inbox:[];
   s.youtubeSettings={...d.youtubeSettings,...(s.youtubeSettings||{})};
   s.dailyPlan=s.dailyPlan||d.dailyPlan;
+  s.weeklyProgress=s.weeklyProgress&&typeof s.weeklyProgress==="object"?s.weeklyProgress:{};
+  s.activeTrack=s.tracks.some(t=>t?.id===s.activeTrack)?s.activeTrack:(s.tracks[0]?.id||null);
+  s.tracks.forEach(t=>{if(t?.id&&!Object.prototype.hasOwnProperty.call(s.weeklyProgress,t.id)){s.weeklyProgress[t.id]=0}});
   return s
 }
 function migrate(old){
@@ -63,7 +66,20 @@ function dayKey(d=new Date()){return d.toLocaleDateString("en-CA")}
 function esc(v=""){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 function fmtMin(m){m=Math.round(Number(m)||0);return m<60?`${m} min`:`${Math.floor(m/60)}h${m%60?` ${m%60}m`:""}`}
 function trackById(id){return state.tracks.find(t=>t.id===id)}
-function track(){return trackById(state.activeTrack)||state.tracks[0]}
+function ensureActiveTrack(){
+  if(!Array.isArray(state.tracks)){state.tracks=[]}
+  if(!state.weeklyProgress||typeof state.weeklyProgress!=="object"){state.weeklyProgress={}}
+  for(const t of state.tracks){
+    if(t?.id&&!Object.prototype.hasOwnProperty.call(state.weeklyProgress,t.id)){state.weeklyProgress[t.id]=0}
+  }
+  if(!state.tracks.length){
+    state.activeTrack=null;
+    return null
+  }
+  if(!trackById(state.activeTrack)){state.activeTrack=state.tracks[0].id}
+  return trackById(state.activeTrack)
+}
+function track(){return ensureActiveTrack()}
 function activePlaylist(){return state.playlists.find(p=>p.id===state.activePlaylist)||state.playlists[0]}
 function priorityCode(i){return i.important?(i.urgent?"IU":"I"):(i.urgent?"U":"N")}
 function priorityLabel(i){return i.important?(i.urgent?"Importante + urgente":"Importante"):(i.urgent?"Urgente":"Baixa prioridade")}
@@ -153,7 +169,10 @@ function generatePlan(){
   state.dailyPlan.items=chosen;save(false);renderDailyPlan()
 }
 function renderDailyPlan(){
-  if(state.dailyPlan.date!==dayKey()||!state.dailyPlan.items.length)generatePlan();
+  if(state.dailyPlan.date!==dayKey()){
+    generatePlan();
+    return
+  }
   $("todayMinutes").value=String(state.dailyPlan.minutes||60);
   $("dailyPlan").innerHTML=state.dailyPlan.items.length?state.dailyPlan.items.map((p,n)=>`<div class="plan-item"><div class="num">${n+1}</div><div class="grow"><strong>${esc(p.title)}</strong><span>${p.minutes} min ${p.track?`· ${esc(trackById(p.track)?.name||"")}`:p.type==="review"?"· Revisão":"· YouTube"}</span></div><button class="mini-btn" onclick="${p.type==="review"?"showView('review')":`openFocus('${p.id}','${p.type}')`}">${p.type==="review"?"Revisar":"Focar"}</button></div>`).join(""):`<div class="hint">Nada pendente para hoje.</div>`
 }
@@ -161,6 +180,11 @@ function renderHomeYoutube(){
   const v=todaysYoutube()[0];$("homeYoutube").innerHTML=v?videoRow(v,0,true):`<div class="hint">Sem vídeo liberado agora.</div>`
 }
 function renderHomeTracks(){
+  ensureActiveTrack();
+  if(!state.tracks.length){
+    $("homeTracks").innerHTML=`<div class="hint">Crie sua primeira trilha para organizar cursos e estudos.</div>`;
+    return
+  }
   $("homeTracks").innerHTML=state.tracks.map(t=>{const arr=state.items.filter(i=>i.track===t.id),avg=arr.length?Math.round(arr.reduce((a,b)=>a+itemProgress(b),0)/arr.length):0;return `<div class="track-row"><div class="num">${esc(t.sigil||"☽")}</div><div class="grow"><strong>${esc(t.name)}</strong><span>${avg}% concluído</span><div class="progress"><div style="width:${avg}%"></div></div></div></div>`}).join("")
 }
 function renderHomePriority(){
@@ -169,8 +193,15 @@ function renderHomePriority(){
 }
 
 function renderTracks(){
+  const t=ensureActiveTrack();
   $("trackTabs").innerHTML=state.tracks.map(t=>`<button class="track-tab ${t.id===state.activeTrack?"active":""}" onclick="setTrack('${t.id}')"><strong>${esc(t.sigil||"☽")} ${esc(t.name)}</strong><span>${esc(t.subtitle||"")}</span></button>`).join("");
-  const t=track();$("trackHero").innerHTML=`<h2>${esc(t.sigil||"☽")} ${esc(t.name)}</h2><div class="kicker">${esc(t.subtitle||"")}</div><p>${esc(t.description||"")}</p>`;
+  if(!t){
+    $("trackHero").innerHTML=`<h2>Nova trilha</h2><div class="kicker">Nenhuma trilha ativa</div><p>Crie sua primeira trilha para começar a organizar cursos, fontes e sessões.</p>`;
+    $("trackCourses").innerHTML=`<div class="hint">Nenhum curso ainda.</div>`;
+    $("trackProfile").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Cursos</span><strong>0</strong></div><div class="profile-stat"><span>Concluídos</span><strong>0</strong></div><div class="profile-stat"><span>Progresso</span><strong>0%</strong></div><div class="profile-stat"><span>Meta semanal</span><strong>0m</strong></div></div>`;
+    return
+  }
+  $("trackHero").innerHTML=`<h2>${esc(t.sigil||"☽")} ${esc(t.name)}</h2><div class="kicker">${esc(t.subtitle||"")}</div><p>${esc(t.description||"")}</p>`;
   const courses=state.items.filter(i=>i.track===t.id&&i.kind==="course");
   $("trackCourses").innerHTML=courses.length?courses.map(i=>courseRow(i)).join(""):`<div class="hint">Nenhum curso ainda.</div>`;
   const avg=courses.length?Math.round(courses.reduce((a,b)=>a+itemProgress(b),0)/courses.length):0,done=courses.filter(i=>itemProgress(i)>=100).length;
@@ -179,7 +210,7 @@ function renderTracks(){
 function courseRow(i){
   const p=itemProgress(i),nc=noteCount(i.id);return `<div class="course-row"><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${priorityLabel(i)} · ${nc} notas</span><div class="progress"><div style="width:${p}%"></div></div>${i.modules?.length?`<div class="module-list">${i.modules.map(m=>`<div class="module ${m.done?"done":""}"><span>${m.done?"✓":"○"} ${esc(m.title)}</span><span>${m.minutes||0}m</span></div>`).join("")}</div>`:""}</div><button class="mini-btn" onclick="editItem('${i.id}')">Editar</button><button class="mini-btn" onclick="openFichamentoForSource('${i.id}','item')">Fichamento</button><button class="mini-btn" onclick="openNotes('${i.id}','item')">Notas</button></div>`
 }
-function setTrack(id){state.activeTrack=id;save();renderTracks()}
+function setTrack(id){if(!trackById(id)){return}state.activeTrack=id;save();renderTracks()}
 function setTrackFormError(message=""){const el=$("trackFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
 function setTrackSaving(saving){const btn=$("trackSaveBtn");if(!btn){return}btn.disabled=saving;btn.textContent=saving?"Salvando...":"Salvar"}
 function makeTrackId(name,tracks=state.tracks){let base=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"trilha",nid=base,n=2;while(tracks.some(t=>t.id===nid)){nid=`${base}-${n++}`}return nid}
@@ -303,7 +334,8 @@ function renderLibrary(){
 }
 function libraryCard(i){const p=itemProgress(i),tr=trackById(i.track);return `<article class="library-item"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><h3>${esc(i.title)}</h3><div class="meta"><span>${esc(tr?.name||"Sem trilha")}</span><span>${esc(i.source||i.kind)}</span><span>${p}%</span><span>${noteCount(i.id)} notas</span></div><div class="progress"><div style="width:${p}%"></div></div>${i.notes?`<p class="hint">${esc(i.notes).slice(0,180)}</p>`:""}<div class="item-actions"><button class="mini-btn" onclick="openFocus('${i.id}','item')">Focar</button><button class="mini-btn" onclick="editItem('${i.id}')">Editar</button><button class="mini-btn" onclick="openFichamentoForSource('${i.id}','item')">Fichamento</button><button class="mini-btn" onclick="openNotes('${i.id}','item')">Notas</button></div></article>`}
 function openItemDialog(kind="course",id=null){
-  const f=$("itemForm"),fields=f.elements;f.reset();fields.id.value=id||"";fields.track.innerHTML=state.tracks.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");fields.track.value=state.activeTrack;fields.kind.value=kind;renderModuleEditor();
+  const active=ensureActiveTrack();
+  const f=$("itemForm"),fields=f.elements;f.reset();fields.id.value=id||"";fields.track.innerHTML=state.tracks.length?state.tracks.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join(""):`<option value="">Sem trilha</option>`;fields.track.value=active?.id||"";fields.kind.value=kind;renderModuleEditor();
   if(id){const i=state.items.find(x=>x.id===id);if(!i){return}["kind","track","title","url","source","estimatedMinutes","progress","notes"].forEach(k=>{if(fields[k]){fields[k].value=i[k]??""}});fields.important.value=String(i.important!==false);fields.urgent.value=String(!!i.urgent);renderModuleEditor(i.modules||[])}
   $("itemDialog").showModal()
 }
@@ -464,6 +496,15 @@ function renderSettings(){const f=$("youtubeSettingsForm"),s=state.youtubeSettin
 async function renderSnapshots(){if(!$("snapshotList")||!window.ArcanaStorage?.ready){return}try{const snaps=await ArcanaStorage.listSnapshots();$("snapshotList").innerHTML=snaps.length?snaps.map(s=>`<option value="${esc(s.id)}">${new Date(s.createdAt).toLocaleString("pt-BR")} · ${esc(s.reason||"auto")}</option>`).join(""):`<option value="">Nenhum snapshot</option>`}catch(e){$("snapshotList").innerHTML=`<option value="">Snapshots indisponíveis</option>`}}
 async function autoBackup(reason="auto"){try{if(window.ArcanaStorage?.ready){await ArcanaStorage.snapshot(reason,state);state.lastAutoBackup=new Date().toISOString();await ArcanaStorage.saveState(state)}else{localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}renderSettings()}catch(e){console.warn("[Arcana] snapshot failed",e)}}
 let backupDebounce=null;function scheduleAutoBackup(reason="change"){clearTimeout(backupDebounce);backupDebounce=setTimeout(()=>autoBackup(reason),1800)}
+
+if(typeof window!=="undefined"){
+  window.ArcanaDebug={
+    state:()=>structuredClone(state),
+    tracks:()=>structuredClone(state.tracks),
+    storageState:()=>window.ArcanaStorage?.loadState(DEFAULT_STATE),
+    store:name=>window.ArcanaStorage?.list(name)
+  }
+}
 
 function renderAll(){renderHome();renderTracks();renderYoutube();renderLibrary();renderInbox();renderCalendar();renderSettings();$("sideDate").textContent=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});$("streakSide").textContent=`${state.streak} dias de sequência`}
 

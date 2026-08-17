@@ -51,6 +51,12 @@ const ArcanaStorage=(()=>{
   async function saveState(state){
     await req(tx("appState","readwrite").put({key:"main",value:structuredClone(state),updatedAt:new Date().toISOString()}))
   }
+  async function list(name){
+    if(!stores.includes(name)){
+      throw new Error("Store desconhecida")
+    }
+    return req(tx(name).getAll())
+  }
   async function migrateLocalStorage({storageKey,legacyKeys,defaultState,normalize,migrate}){
     const done=await getMeta("localStorageMigrationVersion");
     if(done>=MIGRATION_VERSION){
@@ -410,7 +416,7 @@ const ArcanaStorage=(()=>{
     throw new Error("Rota estática não implementada")
   }
 
-  return {init,loadState,saveState,snapshot,listSnapshots,restoreSnapshot,downloadFullBackup,importFullBackup,downloadVault,importVault,canHandle,route,get ready(){return ready},log}
+  return {init,loadState,saveState,list,snapshot,listSnapshots,restoreSnapshot,downloadFullBackup,importFullBackup,downloadVault,importVault,canHandle,route,get ready(){return ready},log}
 })();
 if(typeof window!=="undefined"){
   window.ArcanaStorage=ArcanaStorage
