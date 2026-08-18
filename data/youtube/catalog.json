@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-17T13:35:13Z",
+  "generatedAt": "2026-08-18T04:52:04Z",
   "playlists": [
     {
       "id": "PLNur2Ccbfc5k",
@@ -3006,7 +3006,7 @@
         },
         {
           "id": "dZJbORri0ro",
-          "title": "O Primeiro Vídeo Que Gostaria De Ter Assistido Sobre Como Controlar a Ansiedade",
+          "title": "The First Video I Wish I Had Watched on How to Control Anxiety",
           "url": "https://www.youtube.com/watch?v=dZJbORri0ro",
           "channel": "Filipe Deschamps",
           "duration": 5138,
@@ -4127,7 +4127,7 @@
           "channel": "PELEJA",
           "duration": 1109,
           "position": 458,
-          "thumbnail": "https://i.ytimg.com/vi_lc/LUyS_owuyck/hqdefault_en.jpg?sqp=CIScjNQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBqLzl_8DMhIwaHR0cHM6Ly9pLnl0aW1nLmNvbS92aS9MVXlTX293dXljay9ocWRlZmF1bHQuanBn&rs=AOn4CLDoc0tNtFS2Tqk9XsVfgK85EvuYfw"
+          "thumbnail": "https://i.ytimg.com/vi_lc/LUyS_owuyck/hqdefault_en.jpg?sqp=CPjIj9QG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBqLzl_8DMhIwaHR0cHM6Ly9pLnl0aW1nLmNvbS92aS9MVXlTX293dXljay9ocWRlZmF1bHQuanBn&rs=AOn4CLA_xGX0Y6h3zyGFlQBx4lMfhq4MiQ"
         },
         {
           "id": "oyuboXYhEAw",
@@ -13292,22 +13292,22 @@
           "thumbnail": "https://i.ytimg.com/vi/qoXeMHCo8HA/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCcAMMxVaBpDyOMqY_3XQ9Oglzhww"
         },
         {
-          "id": "vkAZJmwO5pc",
-          "title": "TIER LIST OF THE BEST AND WORST EXPERIENCES",
-          "url": "https://www.youtube.com/watch?v=vkAZJmwO5pc",
-          "channel": "Experiência Flamino",
-          "duration": 1418,
-          "position": 1477,
-          "thumbnail": "https://i.ytimg.com/vi/vkAZJmwO5pc/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCTyXcAE-AAktpe5ANgsr9NNoRoNQ"
-        },
-        {
           "id": "vTGf1V4aqyU",
           "title": "How to buy your apartment through the Minha Casa Minha Vida program (step-by-step) | Aline Tófalo",
           "url": "https://www.youtube.com/watch?v=vTGf1V4aqyU",
           "channel": "Aline Tófalo",
           "duration": 1203,
+          "position": 1477,
+          "thumbnail": "https://i.ytimg.com/vi/vTGf1V4aqyU/hqdefault_custom_1.jpg?sqp=CPjIj9QG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLA6-z7Xsty8dv3Aq4Rhh1EhNSCvqw"
+        },
+        {
+          "id": "vkAZJmwO5pc",
+          "title": "TIER LIST OF THE BEST AND WORST EXPERIENCES",
+          "url": "https://www.youtube.com/watch?v=vkAZJmwO5pc",
+          "channel": "Experiência Flamino",
+          "duration": 1418,
           "position": 1478,
-          "thumbnail": "https://i.ytimg.com/vi/vTGf1V4aqyU/hqdefault_custom_2.jpg?sqp=CIScjNQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLC_o_Rr9HuOVVjueo6GRkanDPxg2g"
+          "thumbnail": "https://i.ytimg.com/vi/vkAZJmwO5pc/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCTyXcAE-AAktpe5ANgsr9NNoRoNQ"
         }
       ]
     },
