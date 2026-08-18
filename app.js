@@ -5,10 +5,10 @@ const STARTER_CONTENT_VERSION=2;
 const STARTER_CURRICULUM_VERSION=1;
 const CURRICULUM_FETCHED_AT="2026-08-17T00:00:00.000Z";
 const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vaultPath:"",lastSyncAt:null,noteCount:0,fichamentoCount:0,attachmentCount:0,flashcardCount:0,conflicts:0,autoSync:"manual",syncStatus:"saved",lastPush:{},openUrl:"",error:null};
-const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]},starterContentVersion:0,starterCurriculumVersion:0};
+const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120,progression:"sequential"}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]},starterContentVersion:0,starterCurriculumVersion:0};
 const STARTER_TRACKS=[
-  {id:"track-electronics",name:"Eletrônica",sigil:"☿",subtitle:"Circuitos · FPGA · RISC-V · Verificação",description:"Trilha técnica de sistemas embarcados, lógica digital, FPGA, arquitetura de computadores, RISC-V, SystemVerilog, UVM e VLSI.",weeklyGoal:240},
-  {id:"track-finance",name:"Finanças",sigil:"♃",subtitle:"Planejamento · Mercados · Investimentos · Portfólio",description:"Trilha para construir uma base sólida de finanças pessoais, mercados financeiros, investimentos, portfólio e finanças corporativas.",weeklyGoal:120}
+  {id:"track-electronics",name:"Eletrônica",sigil:"☿",subtitle:"Circuitos · FPGA · RISC-V · Verificação",description:"Trilha técnica de sistemas embarcados, lógica digital, FPGA, arquitetura de computadores, RISC-V, SystemVerilog, UVM e VLSI.",weeklyGoal:240,progression:"sequential"},
+  {id:"track-finance",name:"Finanças",sigil:"♃",subtitle:"Planejamento · Mercados · Investimentos · Portfólio",description:"Trilha para construir uma base sólida de finanças pessoais, mercados financeiros, investimentos, portfólio e finanças corporativas.",weeklyGoal:120,progression:"sequential"}
 ];
 const STARTER_COURSES=[
   {id:"course-elec-01",track:"track-electronics",title:"Microcontrollers: Basic Architecture and Design",source:"Coursera",url:"https://www.coursera.org/learn/microcontrollers-basic-architecture-and-design",estimatedMinutes:900,important:true,urgent:false,description:"Arquitetura de MCU, processador, memória, interfaces, desempenho, energia e custo.",catalogOrder:1},
@@ -238,6 +238,7 @@ function normalize(s){
   const d=structuredClone(DEFAULT_STATE);
   s={...d,...s};
   s.tracks=Array.isArray(s.tracks)?s.tracks:d.tracks;
+  s.tracks=s.tracks.map(t=>({...t,progression:t?.progression||"sequential"}));
   s.items=Array.isArray(s.items)?s.items:d.items;
   s.playlists=Array.isArray(s.playlists)&&s.playlists.length?s.playlists:d.playlists;
   s.youtubeQueue=Array.isArray(s.youtubeQueue)?s.youtubeQueue:[];
@@ -253,7 +254,7 @@ function normalize(s){
   s.playlists=s.playlists.map((playlist,index)=>normalizePlaylistRecord(playlist,index));
   s.activePlaylist=s.playlists.some(p=>p?.id===s.activePlaylist)?s.activePlaylist:(s.playlists[0]?.id||null);
   s.tracks.forEach(t=>{if(t?.id&&!Object.prototype.hasOwnProperty.call(s.weeklyProgress,t.id)){s.weeklyProgress[t.id]=0}});
-  s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=Array.isArray(i.modules)?i.modules:[];i.modules.forEach(m=>{m.lessons=Array.isArray(m.lessons)?m.lessons:[];m.progress=Number(m.progress)||0;m.status=m.status||statusFromProgress(m.progress)});i.notes=typeof i.notes==="string"?i.notes:"";i.description=typeof i.description==="string"?i.description:"";i.catalogOrder=Number(i.catalogOrder)||0});
+  s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=Array.isArray(i.modules)?i.modules:[];i.modules.forEach((m,moduleIndex)=>{m.lessons=Array.isArray(m.lessons)?m.lessons:[];m.order=Number(m.order)||moduleIndex+1;m.lessons.forEach((lesson,lessonIndex)=>{lesson.order=Number(lesson.order)||lessonIndex+1});m.progress=Number(m.progress)||0;m.status=m.status||statusFromProgress(m.progress)});i.notes=typeof i.notes==="string"?i.notes:"";i.description=typeof i.description==="string"?i.description:"";i.catalogOrder=Number(i.catalogOrder)||0;if(i.kind==="course"){i.order=Number(i.order)||Number(i.catalogOrder)||0}});
   s.youtubeQueue.forEach(v=>{v.catalogManaged=v.catalogManaged!==false;v.activeInCatalog=v.activeInCatalog!==false;v.archivedAt=v.archivedAt||null;const playlistId=youtubePlaylistIdFromUrl(v.youtubePlaylistId);if(playlistId){v.youtubePlaylistId=playlistId}});
   return s
 }
@@ -268,7 +269,7 @@ function migrate(old){
   return s
 }
 function starterCourse(seed){
-  return {id:seed.id,kind:"course",track:seed.track,title:seed.title,url:seed.url,source:seed.source,description:seed.description,estimatedMinutes:seed.estimatedMinutes,progress:0,status:"nao_iniciado",important:seed.important!==false,urgent:!!seed.urgent,modules:[],notes:"",catalogOrder:seed.catalogOrder,createdAt:new Date().toISOString()}
+  return {id:seed.id,kind:"course",track:seed.track,title:seed.title,url:seed.url,source:seed.source,description:seed.description,estimatedMinutes:seed.estimatedMinutes,progress:0,status:"nao_iniciado",important:seed.important!==false,urgent:!!seed.urgent,modules:[],notes:"",catalogOrder:seed.catalogOrder,order:seed.catalogOrder,createdAt:new Date().toISOString()}
 }
 function mergeStarterCourse(existing,seed){
   const base=starterCourse(seed);
@@ -279,6 +280,7 @@ function mergeStarterCourse(existing,seed){
   merged.notes=typeof existing.notes==="string"?existing.notes:base.notes;
   merged.important=existing.important??base.important;
   merged.urgent=existing.urgent??base.urgent;
+  merged.order=Number(existing.order)||Number(base.order)||Number(existing.catalogOrder)||0;
   merged.createdAt=existing.createdAt||base.createdAt;
   return merged
 }
@@ -393,7 +395,7 @@ function starterTrackSeedFor(track){
 }
 function mergeDuplicateStarterTrack(existing,duplicate,seed){
   const merged={...duplicate,...existing,id:seed.id};
-  for(const key of ["name","sigil","subtitle","description","weeklyGoal"]){
+  for(const key of ["name","sigil","subtitle","description","weeklyGoal","progression"]){
     if((merged[key]===undefined||merged[key]===null||merged[key]==="")&&duplicate[key]!==undefined&&duplicate[key]!==null&&duplicate[key]!==""){
       merged[key]=duplicate[key]
     }
@@ -570,7 +572,44 @@ function ensureActiveTrack(){
 }
 function track(){return ensureActiveTrack()}
 function activePlaylist(){return state.playlists.find(p=>p.id===state.activePlaylist)||state.playlists[0]}
-function courseOrderValue(item){const order=Number(item?.catalogOrder);return order>0?order:Number.MAX_SAFE_INTEGER}
+function sequenceOrderValue(item,index=0){
+  const order=Number(item?.order);
+  if(Number.isFinite(order)&&order>0){
+    return order
+  }
+  const catalogOrder=Number(item?.catalogOrder);
+  if(Number.isFinite(catalogOrder)&&catalogOrder>0){
+    return catalogOrder
+  }
+  return index+1
+}
+function courseOrderValue(item){const order=sequenceOrderValue(item,Number.MAX_SAFE_INTEGER-1);return order>0?order:Number.MAX_SAFE_INTEGER}
+function orderedCoursesForTrack(trackId){
+  return state.items.filter(i=>i?.track===trackId&&i.kind==="course").sort((a,b)=>courseOrderValue(a)-courseOrderValue(b)||String(a.createdAt||"").localeCompare(String(b.createdAt||""))||String(a.title||"").localeCompare(String(b.title||""),"pt-BR"))
+}
+function orderedModules(course){
+  return (Array.isArray(course?.modules)?course.modules:[]).map((module,index)=>({module,index})).sort((a,b)=>sequenceOrderValue(a.module,a.index)-sequenceOrderValue(b.module,b.index)).map(entry=>entry.module)
+}
+function orderedLessons(module){
+  return (Array.isArray(module?.lessons)?module.lessons:[]).map((lesson,index)=>({lesson,index})).sort((a,b)=>sequenceOrderValue(a.lesson,a.index)-sequenceOrderValue(b.lesson,b.index)).map(entry=>entry.lesson)
+}
+function assignCourseOrder(course){
+  if(course?.kind!=="course"){
+    return course
+  }
+  const current=Number(course.order);
+  if(Number.isFinite(current)&&current>0){
+    return course
+  }
+  const catalogOrder=Number(course.catalogOrder);
+  if(Number.isFinite(catalogOrder)&&catalogOrder>0){
+    course.order=catalogOrder;
+    return course
+  }
+  const maxOrder=state.items.filter(item=>item?.kind==="course"&&item.track===course.track&&item.id!==course.id).reduce((max,item)=>Math.max(max,Number(item.order)||Number(item.catalogOrder)||0),0);
+  course.order=maxOrder+1;
+  return course
+}
 function priorityCode(i){return i.important?(i.urgent?"IU":"I"):(i.urgent?"U":"N")}
 function priorityLabel(i){return i.important?(i.urgent?"Importante + urgente":"Importante"):(i.urgent?"Urgente":"Baixa prioridade")}
 function score(i){const p=priorityCode(i);let s=p==="IU"?100:p==="I"?70:p==="U"?55:20;if(i.status==="em_andamento"){s+=15}if((i.estimatedMinutes||999)<=30){s+=6}return s-itemProgress(i)/10}
@@ -578,14 +617,16 @@ function boundedProgress(value){return Math.max(0,Math.min(100,Number(value)||0)
 function lessonProgress(lesson){return boundedProgress(lesson?.done?100:lesson?.progress)}
 function moduleProgress(module){
   if(module?.lessons?.length){
-    return Math.round(module.lessons.reduce((sum,lesson)=>sum+lessonProgress(lesson),0)/module.lessons.length)
+    const lessons=orderedLessons(module);
+    return Math.round(lessons.reduce((sum,lesson)=>sum+lessonProgress(lesson),0)/lessons.length)
   }
   return boundedProgress(module?.done?100:module?.progress)
 }
 function moduleDone(module){return moduleProgress(module)>=100}
 function childCourseProgress(child){
   if(child?.modules?.length){
-    return Math.round(child.modules.reduce((sum,module)=>sum+moduleProgress(module),0)/child.modules.length)
+    const modules=orderedModules(child);
+    return Math.round(modules.reduce((sum,module)=>sum+moduleProgress(module),0)/modules.length)
   }
   return boundedProgress(child?.progress)
 }
@@ -612,11 +653,117 @@ function itemProgress(i){
     return specializationProgress(i)
   }
   if(i?.kind==="course"&&i.modules?.length){
-    return Math.round(i.modules.reduce((sum,module)=>sum+moduleProgress(module),0)/i.modules.length)
+    const modules=orderedModules(i);
+    return Math.round(modules.reduce((sum,module)=>sum+moduleProgress(module),0)/modules.length)
   }
   return boundedProgress(i?.progress)
 }
 function statusFromProgress(p){return p>=100?"concluido":p>0?"em_andamento":"nao_iniciado"}
+function activeCourseForTrack(trackId){return orderedCoursesForTrack(trackId).find(course=>itemProgress(course)<100)||null}
+function courseSequenceState(course){
+  if(!course||course.kind!=="course"){
+    return "active"
+  }
+  if(itemProgress(course)>=100){
+    return "completed"
+  }
+  const active=activeCourseForTrack(course.track);
+  return !active||active.id===course.id?"active":"locked"
+}
+function activeModuleForCourse(course){return orderedModules(course).find(module=>moduleProgress(module)<100)||null}
+function moduleSequenceState(course,module){
+  if(courseSequenceState(course)==="locked"){
+    return "locked"
+  }
+  if(moduleProgress(module)>=100){
+    return "completed"
+  }
+  const active=activeModuleForCourse(course);
+  return !active||active.id===module?.id?"active":"locked"
+}
+function activeLessonForModule(module){return orderedLessons(module).find(lesson=>lessonProgress(lesson)<100)||null}
+function lessonSequenceState(course,module,lesson){
+  if(moduleSequenceState(course,module)==="locked"){
+    return "locked"
+  }
+  if(lessonProgress(lesson)>=100){
+    return "completed"
+  }
+  const active=activeLessonForModule(module);
+  return !active||active.id===lesson?.id?"active":"locked"
+}
+function sequenceStatusLabel(stateName){
+  return stateName==="completed"?"Concluído":stateName==="locked"?"Bloqueado":"Atual"
+}
+function activeRequirementTitle(id,scope){
+  if(scope==="lesson"){
+    const lesson=resourceByScope(id,"lesson"),module=lesson?resourceByScope(lesson.moduleId,"module"):null,active=module?activeLessonForModule(module):null;
+    return active?.title||"a aula ativa"
+  }
+  if(scope==="module"){
+    const module=resourceByScope(id,"module"),course=module?state.items.find(item=>item.id===module.courseId):null,active=course?activeModuleForCourse(course):null;
+    return active?.title||"o módulo ativo"
+  }
+  const item=state.items.find(candidate=>candidate.id===id),active=item?.track?activeCourseForTrack(item.track):null;
+  return active?.title||"o curso ativo"
+}
+function lockedFocusMessage(id,scope){
+  const title=activeRequirementTitle(id,scope);
+  if(scope==="lesson"){
+    return `Esta aula ainda está bloqueada.\n\nConclua primeiro: ${title}\n\nEstudar mesmo assim?`
+  }
+  if(scope==="module"){
+    return `Este módulo ainda está bloqueado.\n\nConclua primeiro: ${title}\n\nEstudar mesmo assim?`
+  }
+  return `Este curso ainda está bloqueado.\n\nConclua primeiro: ${title}\n\nEstudar mesmo assim?`
+}
+function focusLockState(id,scope){
+  if(scope==="item"){
+    const item=state.items.find(candidate=>candidate.id===id);
+    if(item?.kind==="course"){
+      return courseSequenceState(item)
+    }
+    return "active"
+  }
+  if(scope==="module"){
+    const module=resourceByScope(id,"module"),course=module?state.items.find(item=>item.id===module.courseId):null;
+    return module&&course?moduleSequenceState(course,module):"active"
+  }
+  if(scope==="lesson"){
+    const lesson=resourceByScope(id,"lesson"),module=lesson?resourceByScope(lesson.moduleId,"module"):null,course=lesson?state.items.find(item=>item.id===lesson.courseId):null;
+    return lesson&&module&&course?lessonSequenceState(course,module,lesson):"active"
+  }
+  return "active"
+}
+function getActiveLearningTarget(track){
+  const trackId=typeof track==="string"?track:track?.id;
+  const trackInfo=typeof track==="string"?trackById(track):track;
+  const course=activeCourseForTrack(trackId);
+  if(!course){
+    return null
+  }
+  const module=activeModuleForCourse(course);
+  const lesson=module?activeLessonForModule(module):null;
+  const target=lesson||module||course;
+  const type=lesson?"lesson":module?"module":"item";
+  return {
+    type,
+    id:target.id,
+    trackId,
+    track:trackId,
+    trackName:trackInfo?.name||"",
+    trackSigil:trackInfo?.sigil||"",
+    courseId:course.id,
+    courseTitle:course.title,
+    moduleId:module?.id||null,
+    moduleTitle:module?.title||"",
+    lessonId:lesson?.id||null,
+    lessonTitle:lesson?.title||"",
+    title:target.title,
+    estimatedMinutes:target.estimatedMinutes||module?.estimatedMinutes||course.estimatedMinutes||30,
+    prioritySource:course
+  }
+}
 function getDailyYT(){const k=dayKey();if(!state.youtubeDaily[k])state.youtubeDaily[k]={minutes:0,count:0};return state.youtubeDaily[k]}
 
 function isLocalBackend(){return ["localhost","127.0.0.1",""].includes(location.hostname)}
@@ -1332,11 +1479,11 @@ function nextCurriculumFocus(course){
   if(course?.kind!=="course"||!Array.isArray(course.modules)){
     return null
   }
-  const module=course.modules.find(candidate=>moduleProgress(candidate)<100);
+  const module=activeModuleForCourse(course);
   if(!module){
     return null
   }
-  const lesson=Array.isArray(module.lessons)?module.lessons.find(candidate=>lessonProgress(candidate)<100):null;
+  const lesson=activeLessonForModule(module);
   if(lesson){
     return {type:"lesson",id:lesson.id,title:lesson.title,detail:module.title,estimatedMinutes:lesson.estimatedMinutes||module.estimatedMinutes||course.estimatedMinutes||30}
   }
@@ -1345,16 +1492,24 @@ function nextCurriculumFocus(course){
 function generatePlan(){
   const mins=Number($("todayMinutes")?.value||state.dailyPlan.minutes||60);
   state.dailyPlan.minutes=mins;state.dailyPlan.date=dayKey();
-  let candidates=state.items.filter(i=>itemProgress(i)<100).sort((a,b)=>score(b)-score(a));
+  const targets=state.tracks.map(track=>getActiveLearningTarget(track)).filter(Boolean).sort((a,b)=>score(b.prioritySource)-score(a.prioritySource));
+  const looseCandidates=state.items.filter(i=>itemProgress(i)<100&&i.kind!=="course"&&(!trackById(i.track)||!activeCourseForTrack(i.track))).sort((a,b)=>score(b)-score(a));
+  let candidates=[...targets,...looseCandidates.map(i=>({type:"item",id:i.id,trackId:i.track||null,track:i.track||null,trackName:trackById(i.track)?.name||"",trackSigil:trackById(i.track)?.sigil||"",courseId:i.kind==="course"?i.id:null,courseTitle:i.title,moduleId:null,moduleTitle:"",lessonId:null,lessonTitle:"",title:i.title,estimatedMinutes:i.estimatedMinutes||30,prioritySource:i}))];
   let remaining=mins,chosen=[];
-  for(const i of candidates){
+  const scheduledCourseTracks=new Set();
+  for(const target of candidates){
     if(remaining<=0){
       break
     }
-    const next=nextCurriculumFocus(i);
-    const estimate=Number(next?.estimatedMinutes||i.estimatedMinutes||30);
+    if(target.trackId){
+      if(scheduledCourseTracks.has(target.trackId)){
+        continue
+      }
+      scheduledCourseTracks.add(target.trackId)
+    }
+    const estimate=Number(target.estimatedMinutes||30);
     const chunk=Math.min(remaining,Math.max(15,Math.min(45,estimate)));
-    chosen.push({type:next?.type||"item",id:next?.id||i.id,minutes:chunk,title:next?.title||i.title,detail:next?.detail||"",track:i.track});remaining-=chunk
+    chosen.push({...target,minutes:chunk,prioritySource:undefined});remaining-=chunk
   }
   const due=vaultNotes.filter(n=>n.reviewAt&&n.reviewAt<=dayKey()&&n.status!=="archived").length;
   if(due&&mins>=30){const rm=Math.min(20,Math.max(10,Math.floor(mins*.25)));chosen.unshift({type:"review",id:"review",minutes:rm,title:`Revisar ${due} nota${due>1?"s":""}`});remaining-=rm}
@@ -1371,8 +1526,10 @@ function renderDailyPlan(){
   $("todayMinutes").value=String(state.dailyPlan.minutes||60);
   $("dailyPlan").innerHTML=state.dailyPlan.items.length?state.dailyPlan.items.map((p,n)=>{
     const action=p.type==="review"?"navigateTo('review')":`openFocus(${jsArg(p.id)},${jsArg(p.type)})`;
-    const context=p.detail?` · ${esc(p.detail)}`:p.track?` · ${esc(trackById(p.track)?.name||"")}`:p.type==="review"?" · Revisão":" · YouTube";
-    return `<div class="plan-item clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="num">${n+1}</div><div class="grow"><strong>${esc(p.title)}</strong><span>${p.minutes} min${context}</span></div><button class="mini-btn" onclick="event.stopPropagation();${action}">${p.type==="review"?"Revisar":"Focar"}</button></div>`
+    const trackLabel=p.trackName?`${p.trackSigil?`${esc(p.trackSigil)} `:""}${esc(p.trackName)}`:p.type==="review"?"Revisão":p.type==="youtube"?"YouTube":"";
+    const hierarchy=[p.courseTitle,p.moduleTitle,p.lessonTitle].filter(Boolean);
+    const context=hierarchy.length?hierarchy.map(esc).join(" · "):p.detail?esc(p.detail):trackLabel;
+    return `<div class="plan-item clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="num">${n+1}</div><div class="grow">${trackLabel?`<span class="kicker">${trackLabel}</span>`:""}<strong>${esc(p.title)}</strong><span>${context?`${context} · `:""}${p.minutes} min</span></div><button class="mini-btn" onclick="event.stopPropagation();${action}">${p.type==="review"?"Revisar":"Focar"}</button></div>`
   }).join(""):`<div class="hint">Nada pendente para hoje.</div>`
 }
 function renderHomeYoutube(){
@@ -1384,7 +1541,7 @@ function renderHomeTracks(){
     $("homeTracks").innerHTML=`<div class="hint">Crie sua primeira trilha para organizar cursos e estudos.</div>`;
     return
   }
-  $("homeTracks").innerHTML=state.tracks.map(t=>{const arr=state.items.filter(i=>i.track===t.id),avg=arr.length?Math.round(arr.reduce((a,b)=>a+itemProgress(b),0)/arr.length):0;return `<div class="track-row clickable-row" role="button" tabindex="0" onclick="navigateTo('tracks',{trackId:${jsArg(t.id)}})" onkeydown="activateRow(event,this)"><div class="num">${esc(t.sigil||"☽")}</div><div class="grow"><strong>${esc(t.name)}</strong><span>${avg}% concluído</span><div class="progress"><div style="width:${avg}%"></div></div></div></div>`}).join("")
+  $("homeTracks").innerHTML=state.tracks.map(t=>{const courses=orderedCoursesForTrack(t.id),arr=courses.length?courses:state.items.filter(i=>i.track===t.id),avg=arr.length?Math.round(arr.reduce((a,b)=>a+itemProgress(b),0)/arr.length):0;return `<div class="track-row clickable-row" role="button" tabindex="0" onclick="navigateTo('tracks',{trackId:${jsArg(t.id)}})" onkeydown="activateRow(event,this)"><div class="num">${esc(t.sigil||"☽")}</div><div class="grow"><strong>${esc(t.name)}</strong><span>${avg}% concluído</span><div class="progress"><div style="width:${avg}%"></div></div></div></div>`}).join("")
 }
 function renderHomePriority(){
   const arr=state.items.filter(i=>itemProgress(i)<100).sort((a,b)=>score(b)-score(a)).slice(0,5);
@@ -1400,8 +1557,8 @@ function renderTracks(){
     $("trackProfile").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Cursos</span><strong>0</strong></div><div class="profile-stat"><span>Concluídos</span><strong>0</strong></div><div class="profile-stat"><span>Progresso</span><strong>0%</strong></div><div class="profile-stat"><span>Meta semanal</span><strong>0m</strong></div></div>`;
     return
   }
-  $("trackHero").innerHTML=`<h2>${esc(t.sigil||"☽")} ${esc(t.name)}</h2><div class="kicker">${esc(t.subtitle||"")}</div><p>${esc(t.description||"")}</p>`;
-  const courses=state.items.filter(i=>i.track===t.id&&i.kind==="course").sort((a,b)=>courseOrderValue(a)-courseOrderValue(b)||String(a.createdAt||"").localeCompare(String(b.createdAt||""))||a.title.localeCompare(b.title,"pt-BR"));
+  $("trackHero").innerHTML=`<h2>${esc(t.sigil||"☽")} ${esc(t.name)}</h2><div class="kicker">${esc(t.subtitle||"")}</div><p>${esc(t.description||"")}</p><p class="hint">Progressão: sequencial. Arcana libera um curso, um módulo e uma aula ativa por vez; conteúdo futuro continua visível para consulta.</p>`;
+  const courses=orderedCoursesForTrack(t.id);
   $("trackCourses").innerHTML=courses.length?courses.map(i=>courseRow(i)).join(""):`<div class="hint">Nenhum curso ainda.</div>`;
   const avg=courses.length?Math.round(courses.reduce((a,b)=>a+itemProgress(b),0)/courses.length):0,done=courses.filter(i=>itemProgress(i)>=100).length;
   $("trackProfile").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Cursos</span><strong>${courses.length}</strong></div><div class="profile-stat"><span>Concluídos</span><strong>${done}</strong></div><div class="profile-stat"><span>Progresso</span><strong>${avg}%</strong></div><div class="profile-stat"><span>Meta semanal</span><strong>${t.weeklyGoal||0}m</strong></div></div>`
@@ -1419,31 +1576,31 @@ function toggleCourseCurriculum(event,id){
   renderTracks()
 }
 function lessonRow(course,module,lesson){
-  const progress=lessonProgress(lesson),done=progress>=100;
-  return `<div class="lesson-row ${done?"done":""}"><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(lesson.id)},'lesson')">${done?"Concluída":"Focar"}</button><div class="grow"><strong>${esc(lesson.title)}</strong><span>${progress}%${lesson.estimatedMinutes?` · ${fmtMin(lesson.estimatedMinutes)}`:""}</span></div><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(lesson.id)},'lesson')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(lesson.id)},'lesson')">Notas</button></div>`
+  const progress=lessonProgress(lesson),sequence=lessonSequenceState(course,module,lesson),done=sequence==="completed",locked=sequence==="locked";
+  return `<div class="lesson-row ${done?"done":""} ${locked?"locked":""}"><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(lesson.id)},'lesson')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${done?"Concluída":locked?"Estudar mesmo assim":"Focar"}</button><div class="grow"><strong>${esc(lesson.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${lesson.estimatedMinutes?` · ${fmtMin(lesson.estimatedMinutes)}`:""}</span></div><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(lesson.id)},'lesson')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(lesson.id)},'lesson')">Notas</button></div>`
 }
 function moduleRow(course,module){
-  const progress=moduleProgress(module),done=progress>=100,lessons=Array.isArray(module.lessons)?module.lessons:[];
+  const progress=moduleProgress(module),sequence=moduleSequenceState(course,module),done=sequence==="completed",locked=sequence==="locked",lessons=orderedLessons(module);
   const lessonLabel=lessons.length?` · ${lessons.length} aula${lessons.length>1?"s":""}`:"";
-  return `<div class="module ${done?"done":""}" id="${esc(module.id||"")}"><div class="module-main"><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(module.id)},'module')">${done?"Concluído":"Focar"}</button><div class="grow"><strong>${esc(module.title)}</strong><span>${progress}%${module.estimatedMinutes?` · ${fmtMin(module.estimatedMinutes)}`:""}${lessonLabel}</span><div class="progress"><div style="width:${progress}%"></div></div></div><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(module.id)},'module')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(module.id)},'module')">Notas</button></div>${lessons.length?`<div class="lesson-list">${lessons.map(lesson=>lessonRow(course,module,lesson)).join("")}</div>`:""}</div>`
+  return `<div class="module ${done?"done":""} ${locked?"locked":""}" id="${esc(module.id||"")}"><div class="module-main"><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(module.id)},'module')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${done?"Concluído":locked?"Estudar mesmo assim":"Focar"}</button><div class="grow"><strong>${esc(module.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${module.estimatedMinutes?` · ${fmtMin(module.estimatedMinutes)}`:""}${lessonLabel}</span><div class="progress"><div style="width:${progress}%"></div></div></div><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(module.id)},'module')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(module.id)},'module')">Notas</button></div>${lessons.length?`<div class="lesson-list">${lessons.map(lesson=>lessonRow(course,module,lesson)).join("")}</div>`:""}</div>`
 }
 function childCourseRow(child){
   const progress=childCourseProgress(child);
   return `<div class="module child-course"><div class="module-main"><div class="grow"><strong>${esc(child.title)}</strong><span>${progress}%${child.estimatedMinutes?` · ${fmtMin(child.estimatedMinutes)}`:""}</span><div class="progress"><div style="width:${progress}%"></div></div></div>${child.sourceUrl?`<a class="mini-btn" href="${esc(child.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Fonte</a>`:""}</div></div>`
 }
 function courseRow(i){
-  const p=itemProgress(i),nc=noteCount(i.id),counts=curriculumCounts(i),expanded=expandedCourseId===i.id;
+  const p=itemProgress(i),nc=noteCount(i.id),counts=curriculumCounts(i),expanded=expandedCourseId===i.id,sequence=courseSequenceState(i),locked=sequence==="locked";
   const lessonMeta=counts.lessons?` · ${counts.lessons} aula${counts.lessons>1?"s":""}`:"";
   const curriculumMeta=counts.modules?`${counts.modules} módulo${counts.modules>1?"s":""}${lessonMeta}`:"currículo oficial";
   const children=Array.isArray(i.childCourses)?i.childCourses:[];
-  return `<div class="course-row clickable-row ${expanded?"expanded":""}" role="button" tabindex="0" onclick="toggleCourseCurriculum(event,${jsArg(i.id)})" onkeydown="activateRow(event,this)"><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${priorityLabel(i)} · ${nc} notas · ${curriculumMeta}</span><div class="progress"><div style="width:${p}%"></div></div>${expanded?`<div class="module-list">${children.length?children.map(childCourseRow).join(""):""}${i.modules?.length?i.modules.map(module=>moduleRow(i,module)).join(""):`<div class="hint">Currículo oficial sem aulas detalhadas.</div>`}</div>`:""}</div><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(i.id)},'item')">${p>=100?"Rever":"Focar"}</button><button class="mini-btn" onclick="event.stopPropagation();editItem(${jsArg(i.id)})">Editar</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(i.id)},'item')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(i.id)},'item')">Notas</button></div>`
+  return `<div class="course-row clickable-row ${expanded?"expanded":""} ${locked?"locked":""}" role="button" tabindex="0" onclick="toggleCourseCurriculum(event,${jsArg(i.id)})" onkeydown="activateRow(event,this)"><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${sequenceStatusLabel(sequence)} · ${priorityLabel(i)} · ${nc} notas · ${curriculumMeta}</span><div class="progress"><div style="width:${p}%"></div></div>${expanded?`<div class="module-list">${children.length?children.map(childCourseRow).join(""):""}${i.modules?.length?orderedModules(i).map(module=>moduleRow(i,module)).join(""):`<div class="hint">Currículo oficial sem aulas detalhadas.</div>`}</div>`:""}</div><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(i.id)},'item')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${p>=100?"Rever":locked?"Estudar mesmo assim":"Focar"}</button><button class="mini-btn" onclick="event.stopPropagation();editItem(${jsArg(i.id)})">Editar</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(i.id)},'item')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(i.id)},'item')">Notas</button></div>`
 }
 function setTrack(id){if(!trackById(id)){missingTarget();return}state.activeTrack=id;save();renderTracks()}
 function setTrackFormError(message=""){const el=$("trackFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
 function setTrackSaving(saving){const btn=$("trackSaveBtn");if(!btn){return}btn.disabled=saving;btn.textContent=saving?"Salvando...":"Salvar"}
 function makeTrackId(name,tracks=state.tracks){let base=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"trilha",nid=base,n=2;while(tracks.some(t=>t.id===nid)){nid=`${base}-${n++}`}return nid}
 function openTrackDialog(id=null){const f=$("trackForm"),fields=f.elements;f.reset();setTrackFormError();setTrackSaving(false);fields.id.value="";if(id){const t=trackById(id);if(!t){openTrackDialog();return}$("trackDialogTitle").textContent="Editar trilha";Object.keys(t).forEach(k=>{if(fields[k]){fields[k].value=t[k]??""}});$("deleteTrackBtn").classList.toggle("hidden",state.tracks.length<=1)}else{$("trackDialogTitle").textContent="Nova trilha";fields.sigil.value="☽";fields.weeklyGoal.value=120;$("deleteTrackBtn").classList.add("hidden")}$("trackDialog").showModal()}
-async function saveTrack(e){e.preventDefault();const f=e.currentTarget,fields=f.elements,id=fields.id.value,name=fields.name.value.trim(),weeklyGoal=Number(fields.weeklyGoal.value)||0;setTrackFormError();if(!name){setTrackFormError("Informe um nome para salvar a trilha.");fields.name.focus();return}if(weeklyGoal<0){setTrackFormError("A meta semanal não pode ser negativa.");fields.weeklyGoal.focus();return}const previous=structuredClone(state),next=structuredClone(state),payload={name,sigil:fields.sigil.value.trim()||"☽",subtitle:fields.subtitle.value.trim(),description:fields.description.value.trim(),weeklyGoal};if(id){const existing=next.tracks.find(t=>t.id===id);if(!existing){setTrackFormError("Esta trilha não existe mais. Atualize a página e tente novamente.");return}Object.assign(existing,payload)}else{const nid=makeTrackId(name,next.tracks);next.tracks.push({id:nid,...payload});next.activeTrack=nid;next.weeklyProgress=next.weeklyProgress||{};if(!Object.prototype.hasOwnProperty.call(next.weeklyProgress,nid)){next.weeklyProgress[nid]=0}}state=next;setTrackSaving(true);try{await save(false,"track");$("trackDialog").close();renderAll()}catch(err){state=previous;setTrackFormError(`Não consegui salvar a trilha: ${err.message||"erro de armazenamento"}.`)}finally{setTrackSaving(false)}}
+async function saveTrack(e){e.preventDefault();const f=e.currentTarget,fields=f.elements,id=fields.id.value,name=fields.name.value.trim(),weeklyGoal=Number(fields.weeklyGoal.value)||0;setTrackFormError();if(!name){setTrackFormError("Informe um nome para salvar a trilha.");fields.name.focus();return}if(weeklyGoal<0){setTrackFormError("A meta semanal não pode ser negativa.");fields.weeklyGoal.focus();return}const previous=structuredClone(state),next=structuredClone(state),payload={name,sigil:fields.sigil.value.trim()||"☽",subtitle:fields.subtitle.value.trim(),description:fields.description.value.trim(),weeklyGoal,progression:"sequential"};if(id){const existing=next.tracks.find(t=>t.id===id);if(!existing){setTrackFormError("Esta trilha não existe mais. Atualize a página e tente novamente.");return}Object.assign(existing,payload)}else{const nid=makeTrackId(name,next.tracks);next.tracks.push({id:nid,...payload});next.activeTrack=nid;next.weeklyProgress=next.weeklyProgress||{};if(!Object.prototype.hasOwnProperty.call(next.weeklyProgress,nid)){next.weeklyProgress[nid]=0}}state=next;setTrackSaving(true);try{await save(false,"track");$("trackDialog").close();renderAll()}catch(err){state=previous;setTrackFormError(`Não consegui salvar a trilha: ${err.message||"erro de armazenamento"}.`)}finally{setTrackSaving(false)}}
 function deleteTrack(){const id=$("trackForm").elements.id.value;if(!id||state.tracks.length<=1){return}if(!confirm("Excluir esta trilha e seus itens?")){return}state.tracks=state.tracks.filter(t=>t.id!==id);state.items=state.items.filter(i=>i.track!==id);state.activeTrack=state.tracks[0].id;save();$("trackDialog").close()}
 
 function renderYoutube(){
@@ -1710,7 +1867,7 @@ function openItemDialog(kind="course",id=null){
 function editItem(id){openItemDialog("course",id)}
 function renderModuleEditor(modules=[]){const f=$("itemForm"),show=f.elements.kind.value==="course";$("moduleEditor").classList.toggle("hidden",!show);if(show){$("moduleRows").innerHTML=modules.map((m,n)=>moduleInput(m,n)).join("")}}
 function moduleInput(m={},n=Date.now()){return `<div class="module-input-row"><input data-module-title value="${esc(m.title||"")}" placeholder="Nome do módulo/aula"><input data-module-minutes type="number" min="0" value="${m.minutes||0}" placeholder="min"><button type="button" class="x" onclick="this.parentElement.remove()">×</button></div>`}
-function saveItem(e){e.preventDefault();const f=e.currentTarget,fields=f.elements,id=fields.id.value;let i=id?state.items.find(x=>x.id===id):{id:crypto.randomUUID(),createdAt:new Date().toISOString()};Object.assign(i,{kind:fields.kind.value,track:fields.track.value,title:fields.title.value.trim(),url:fields.url.value.trim(),source:fields.source.value.trim(),important:fields.important.value==="true",urgent:fields.urgent.value==="true",estimatedMinutes:Number(fields.estimatedMinutes.value)||0,progress:Number(fields.progress.value)||0,notes:fields.notes.value});i.status=statusFromProgress(i.progress);if(i.kind==="course"){i.modules=[...document.querySelectorAll("#moduleRows .module-input-row")].map(r=>({title:r.querySelector("[data-module-title]").value.trim(),minutes:Number(r.querySelector("[data-module-minutes]").value)||0,done:false})).filter(m=>m.title)}if(!id){state.items.push(i)}save();$("itemDialog").close()}
+function saveItem(e){e.preventDefault();const f=e.currentTarget,fields=f.elements,id=fields.id.value;let i=id?state.items.find(x=>x.id===id):{id:crypto.randomUUID(),createdAt:new Date().toISOString()};Object.assign(i,{kind:fields.kind.value,track:fields.track.value,title:fields.title.value.trim(),url:fields.url.value.trim(),source:fields.source.value.trim(),important:fields.important.value==="true",urgent:fields.urgent.value==="true",estimatedMinutes:Number(fields.estimatedMinutes.value)||0,progress:Number(fields.progress.value)||0,notes:fields.notes.value});i.status=statusFromProgress(i.progress);if(i.kind==="course"){assignCourseOrder(i);const oldModules=Array.isArray(i.modules)?i.modules:[];i.modules=[...document.querySelectorAll("#moduleRows .module-input-row")].map((r,index)=>{const title=r.querySelector("[data-module-title]").value.trim(),existing=oldModules[index]||{};return {id:existing.id||crypto.randomUUID(),title,minutes:Number(r.querySelector("[data-module-minutes]").value)||0,estimatedMinutes:Number(r.querySelector("[data-module-minutes]").value)||0,progress:Number(existing.progress)||0,status:existing.status||"nao_iniciado",done:!!existing.done,order:Number(existing.order)||index+1,lessons:Array.isArray(existing.lessons)?existing.lessons:[]}}).filter(m=>m.title)}if(!id){state.items.push(i)}save();$("itemDialog").close()}
 
 function detectInbox(text){
   const t=text.trim(),low=t.toLowerCase();let type="manual";
@@ -1739,11 +1896,12 @@ function sourceTypeForResource(resource,scope){
   return resource?.sourceType||resource?.kind||scope||"resource"
 }
 function sourcePayloadForResource(resource,scope,extra={}){
-  return {title:resource.title,url:resource.url||"",kind:resource.kind||scope,courseId:resource.courseId||null,moduleId:resource.moduleId||null,lessonId:scope==="lesson"?resource.id:resource.lessonId||null,timestamp:extra.timestamp||"",minutes:extra.minutes||0}
+  return {title:resource.title,url:resource.url||"",kind:resource.kind||scope,trackId:resource.track||resource.trackId||null,courseId:resource.courseId||(scope==="item"&&resource.kind==="course"?resource.id:null),moduleId:resource.moduleId||null,lessonId:scope==="lesson"?resource.id:resource.lessonId||null,timestamp:extra.timestamp||"",minutes:extra.minutes||0}
 }
 async function saveNotes(){
   if(!notesRef)return;const i=resourceByScope(notesRef.id,notesRef.scope);if(!i)return;
-  const payload={title:`Notas - ${i.title}`,type:"quick",content:$("notesText").value,trackId:i.track||null,sourceType:sourceTypeForResource(i,notesRef.scope),sourceId:i.id,tags:["nota"],source:sourcePayloadForResource(i,notesRef.scope)};
+  const source=sourcePayloadForResource(i,notesRef.scope);
+  const payload={title:`Notas - ${i.title}`,type:"quick",content:$("notesText").value,trackId:i.track||null,sourceType:sourceTypeForResource(i,notesRef.scope),sourceId:i.id,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,tags:["nota"],source};
   try{
     const data=notesRef.noteId?await api(`/api/notes/${encodeURIComponent(notesRef.noteId)}`,{method:"PUT",body:JSON.stringify(payload)}):await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
     i.vaultNoteId=data.note.id;i.notes=(data.note.excerpt||"").slice(0,180);state.obsidian.syncStatus="saved";save(false);await loadVaultNotes();$("notesDialog").close()
@@ -1752,7 +1910,7 @@ async function saveNotes(){
 
 function findFocus(id,scope){return resourceByScope(id,scope)}
 async function openFocus(id,scope){
-  const i=findFocus(id,scope);if(!i){missingTarget();return}focusRef={id,scope};focusNoteId=i.focusDraftNoteId||null;timer=0;updateTimer();$("focusTitle").textContent=i.title;$("focusOpenLink").href=i.url||"#";let vid=null;try{const u=new URL(i.url);vid=u.hostname.includes("youtu.be")?u.pathname.slice(1):u.searchParams.get("v")}catch{};$("playerWrap").innerHTML=scope==="youtube"&&vid?`<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0" allowfullscreen></iframe>`:`<div class="player-placeholder">Abra o recurso e use o cronômetro para registrar a sessão.</div>`;
+  const i=findFocus(id,scope);if(!i){missingTarget();return}const lockState=focusLockState(id,scope);if(lockState==="locked"&&!confirm(lockedFocusMessage(id,scope))){return}focusRef={id,scope};focusNoteId=i.focusDraftNoteId||null;timer=0;updateTimer();$("focusTitle").textContent=i.title;$("focusOpenLink").href=i.url||"#";let vid=null;try{const u=new URL(i.url);vid=u.hostname.includes("youtu.be")?u.pathname.slice(1):u.searchParams.get("v")}catch{};$("playerWrap").innerHTML=scope==="youtube"&&vid?`<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0" allowfullscreen></iframe>`:`<div class="player-placeholder">Abra o recurso e use o cronômetro para registrar a sessão.</div>`;
   $("focusTimestamp").value="";$("focusSaveState").textContent="Rascunho ainda não salvo.";
   if(focusNoteId){try{const data=await api(`/api/notes/${encodeURIComponent(focusNoteId)}`);$("focusNotesText").value=data.note.content||"";$("focusSaveState").textContent="Rascunho recuperado do vault."}catch{$("focusNotesText").value=noteTemplate("session",`Sessão - ${i.title}`)}}
   else{$("focusNotesText").value=noteTemplate("session",`Sessão - ${i.title}`)}
@@ -1765,7 +1923,8 @@ function updateTimer(){const h=String(Math.floor(timer/3600)).padStart(2,"0"),m=
 async function closeFocus(saveDraft=true){clearTimeout(focusSaveTimer);if(saveDraft){await saveFocusDraft(false)}pauseTimer();$("focusDialog").close()}
 async function completeFocus(){
   if(!focusRef)return;const i=findFocus(focusRef.id,focusRef.scope);if(!i)return;const mins=Math.max(1,Math.round(timer/60));
-  const session={id:crypto.randomUUID(),date:dayKey(),timestamp:new Date().toISOString(),minutes:mins,title:i.title,type:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,courseId:i.courseId||null,moduleId:i.moduleId||(focusRef.scope==="module"?i.id:null),lessonId:focusRef.scope==="lesson"?i.id:null,track:i.track||null};
+  const source=sourcePayloadForResource(i,focusRef.scope,{minutes:mins});
+  const session={id:crypto.randomUUID(),date:dayKey(),timestamp:new Date().toISOString(),minutes:mins,title:i.title,type:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,trackId:i.track||null,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,track:i.track||null};
   state.sessions.push(session);
   clearTimeout(focusSaveTimer);
   await saveFocusDraft(true,session.id,mins);
@@ -1804,7 +1963,8 @@ function updateStreak(){const today=dayKey(),y=new Date();y.setDate(y.getDate()-
 
 async function saveFocusDraft(done=false,sessionId=null,minutes=0){
   if(!focusRef||!$("focusNotesText"))return;const i=findFocus(focusRef.id,focusRef.scope);if(!i)return;
-  const payload={title:`Sessão - ${i.title}`,type:"session",content:$("focusNotesText").value,trackId:i.track||null,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,sessionId:sessionId||null,tags:done?["sessao","concluida"]:["sessao","rascunho"],source:sourcePayloadForResource(i,focusRef.scope,{timestamp:$("focusTimestamp").value||"",minutes})};
+  const source=sourcePayloadForResource(i,focusRef.scope,{timestamp:$("focusTimestamp").value||"",minutes});
+  const payload={title:`Sessão - ${i.title}`,type:"session",content:$("focusNotesText").value,trackId:i.track||null,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,sessionId:sessionId||null,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,tags:done?["sessao","concluida"]:["sessao","rascunho"],source};
   try{
     const data=focusNoteId?await api(`/api/notes/${encodeURIComponent(focusNoteId)}`,{method:"PUT",body:JSON.stringify(payload)}):await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
     focusNoteId=data.note.id;i.focusDraftNoteId=focusNoteId;$("focusSaveState").textContent=done?"Sessão salva no vault.":"Rascunho salvo no vault.";save(false);loadVaultNotes()
@@ -1877,7 +2037,7 @@ function renderVaultEditor(targetId){
 }
 function activePayload(){
   const type=$("vaultType").value;
-  return {title:$("vaultTitle").value.trim()||"Untitled Note",type,content:$("vaultContent").value,trackId:$("vaultTrack").value==="all"?null:$("vaultTrack").value,tags:splitTags($("vaultTags").value),favorite:$("vaultFavorite").checked,reviewAt:$("vaultReviewAt").value||null,sourceType:activeVaultNote?.sourceType||null,sourceId:activeVaultNote?.sourceId||null,sessionId:activeVaultNote?.sessionId||null,relatedNoteIds:activeVaultNote?.relatedNoteIds||[],source:activeVaultNote?.source||{}}
+  return {title:$("vaultTitle").value.trim()||"Untitled Note",type,content:$("vaultContent").value,trackId:$("vaultTrack").value==="all"?null:$("vaultTrack").value,tags:splitTags($("vaultTags").value),favorite:$("vaultFavorite").checked,reviewAt:$("vaultReviewAt").value||null,sourceType:activeVaultNote?.sourceType||null,sourceId:activeVaultNote?.sourceId||null,sessionId:activeVaultNote?.sessionId||null,courseId:activeVaultNote?.courseId||null,moduleId:activeVaultNote?.moduleId||null,lessonId:activeVaultNote?.lessonId||null,relatedNoteIds:activeVaultNote?.relatedNoteIds||[],source:activeVaultNote?.source||{}}
 }
 async function saveActiveVaultNote(){
   if(!activeVaultNote)return;
@@ -1890,10 +2050,10 @@ async function newVaultNote(type="permanent"){
 }
 async function newFichamento(source=null){
   const title=source?.title||"Novo fichamento",sourceType=source?.sourceType||"book";
-  const data=await api("/api/notes",{method:"POST",body:JSON.stringify({title,type:"literature",content:literatureTemplate(title,sourceType),trackId:source?.track||state.activeTrack,sourceType,sourceId:source?.id||null,tags:["fichamento"],source:source||{}})});
+  const data=await api("/api/notes",{method:"POST",body:JSON.stringify({title,type:"literature",content:literatureTemplate(title,sourceType),trackId:source?.trackId||source?.track||state.activeTrack,sourceType,sourceId:source?.id||null,courseId:source?.courseId||null,moduleId:source?.moduleId||null,lessonId:source?.lessonId||null,tags:["fichamento"],source:source||{}})});
   activeVaultNote=data.note;if($("vaultEditorPane")){$("vaultEditorPane").innerHTML=`<div class="hint">Selecione uma nota.</div>`}showView("fichamentos");renderVaultEditor("fichamentoEditor");await loadVaultNotes()
 }
-function openFichamentoForSource(id,scope){const i=resourceByScope(id,scope);if(!i){missingTarget();return}newFichamento({id:i.id,title:i.title,url:i.url||"",track:i.track||null,sourceType:sourceTypeForResource(i,scope),channel:i.channel||"",source:i.source||"",courseId:i.courseId||null,moduleId:i.moduleId||(scope==="module"?i.id:null),lessonId:scope==="lesson"?i.id:null})}
+function openFichamentoForSource(id,scope){const i=resourceByScope(id,scope);if(!i){missingTarget();return}const source=sourcePayloadForResource(i,scope);newFichamento({id:i.id,title:i.title,url:i.url||"",trackId:source.trackId,track:source.trackId,sourceType:sourceTypeForResource(i,scope),channel:i.channel||"",source:i.source||"",courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId})}
 async function promoteActiveSelection(){
   const ta=document.querySelector(".view.active #vaultContent")||$("notesText");const selected=ta.value.slice(ta.selectionStart,ta.selectionEnd).trim();const title=(selected.split("\n")[0]||prompt("Título da nota permanente")||"Ideia permanente").slice(0,90);
   const data=await api("/api/notes",{method:"POST",body:JSON.stringify({title,type:"permanent",content:noteTemplate("permanent",title)+(selected?`\n\n> ${selected}\n`:""),trackId:activeVaultNote?.trackId||state.activeTrack,relatedNoteIds:activeVaultNote?[activeVaultNote.id]:[],tags:["ideia"]})});

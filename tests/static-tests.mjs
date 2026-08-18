@@ -88,6 +88,14 @@ assert.match(index, /id="playlistSaveBtn" type="submit"/, "playlist save button 
 assert.match(index, /id="catalogRequestDialog"/, "catalog request dialog is present");
 assert.match(index, /id="copyCatalogRequestBtn"/, "catalog request dialog exposes copy action");
 assert.doesNotMatch(app, /state\.dailyPlan\.date!==dayKey\(\)\|\|!state\.dailyPlan\.items\.length/, "empty daily plans do not recursively regenerate");
+assert.match(app, /function activeCourseForTrack/, "learning paths expose one active course per track");
+assert.match(app, /function courseSequenceState/, "course sequence state controls locked course progression");
+assert.match(app, /function moduleSequenceState/, "module sequence state controls locked module progression");
+assert.match(app, /function lessonSequenceState/, "lesson sequence state controls locked lesson progression");
+assert.match(app, /function getActiveLearningTarget/, "daily plan resolves one active target per track");
+assert.match(app, /confirm\(lockedFocusMessage\(id,scope\)\)/, "locked focus requires explicit manual override");
+assert.match(app, /courseId:source\.courseId/, "focus and vault payloads preserve exact curriculum ids");
+assert.match(app, /progression:"sequential"/, "tracks default to sequential progression");
 assert.doesNotMatch(app, /\$\("trackForm"\)\.id\.value|const f=e\.currentTarget,id=f\.id\.value/, "track flow does not read colliding form properties");
 assert.match(db, /async function list\(name\)/, "storage exposes a store inspection helper");
 assert.match(db, /tracks","courses","modules"/, "IndexedDB schema still contains domain stores");
@@ -127,7 +135,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v9/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v10/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -355,10 +363,41 @@ await vm.runInContext(`(async()=>{
   if(!$("trackTabs").innerHTML.includes("Eletrônica")||!$("trackCourses").innerHTML.includes("Microcontrollers: Basic Architecture and Design")){throw new Error("seeded track catalog did not render")}
   if(!state.dailyPlan.items.length||$("dailyPlan").innerHTML.includes("Nada pendente")){throw new Error("seeded courses did not generate a daily plan")}
   if(!state.dailyPlan.items.some(p=>p.type==="module"||p.type==="lesson")){throw new Error("daily plan should target the next unfinished module or lesson")}
+  const planCourseTracks=new Set();
+  for(const entry of state.dailyPlan.items){
+    if(entry.type==="review"||entry.type==="youtube"){
+      continue
+    }
+    const resource=resourceByScope(entry.id,entry.type);
+    const course=entry.type==="item"?resource:state.items.find(item=>item.id===resource?.courseId);
+    if(course?.kind==="course"&&course.track){
+      if(planCourseTracks.has(course.track)){throw new Error("daily plan should not schedule two courses from the same track")}
+      planCourseTracks.add(course.track)
+    }
+  }
+  if(!planCourseTracks.has("track-electronics")||!planCourseTracks.has("track-finance")){throw new Error("daily plan should schedule one active course from each available track")}
+  if(activeCourseForTrack("track-electronics").id!=="course-elec-01"){throw new Error("first unfinished electronics course should be active")}
+  if(activeCourseForTrack("track-finance").id!=="course-fin-01"){throw new Error("first unfinished finance course should be active")}
+  const learningPlan=state.dailyPlan.items.filter(entry=>entry.type!=="review"&&entry.type!=="youtube");
+  if(!learningPlan.every(entry=>entry.trackId&&entry.courseId)){throw new Error("daily plan learning entries should carry track and course ids")}
+  if(!learningPlan.some(entry=>entry.trackId==="track-finance"&&entry.courseId==="course-fin-01")){throw new Error("daily plan should schedule the active finance course")}
+  if(learningPlan.some(entry=>entry.trackId==="track-finance"&&entry.courseId==="course-fin-02")){throw new Error("daily plan should not skip to Financial Markets before finance planning is complete")}
+  const financeTarget=getActiveLearningTarget(trackById("track-finance"));
+  if(financeTarget.courseId!=="course-fin-01"||!financeTarget.moduleId){throw new Error("finance target should resolve into the first unfinished course/module")}
+  const futureFinance=state.items.find(i=>i.id==="course-fin-02");
+  futureFinance.progress=20;futureFinance.status="em_andamento";futureFinance.important=true;futureFinance.urgent=true;
+  if(courseSequenceState(futureFinance)!=="locked"){throw new Error("out-of-order historical progress should stay locked until earlier courses complete")}
+  generatePlan();
+  if(state.dailyPlan.items.some(entry=>entry.trackId==="track-finance"&&entry.courseId==="course-fin-02")){throw new Error("urgent future finance progress should not override the active sequential course")}
+  if(futureFinance.progress!==20){throw new Error("out-of-order progress should be preserved")}
+  if(courseSequenceState(state.items.find(i=>i.id==="course-elec-02"))!=="locked"){throw new Error("later courses in a track should start locked")}
   state=structuredClone(seededFresh);
   state.activeTrack="track-electronics";
   expandedCourseId="course-elec-08";
   renderTracks();
+  if(!$("trackHero").innerHTML.includes("Progressão: sequencial")){throw new Error("track hero should explain sequential progression")}
+  if(!$("trackCourses").innerHTML.includes("Estudar mesmo assim")){throw new Error("locked future curriculum should remain viewable with explicit override")}
+  if(!$("trackCourses").innerHTML.includes("openFichamentoForSource")||!$("trackCourses").innerHTML.includes("openNotes")){throw new Error("locked curriculum should keep notes and fichamentos available")}
   if(!$("trackCourses").innerHTML.includes("module-elec-08-01")||!$("trackCourses").innerHTML.includes("lesson-elec-08-01-01")){throw new Error("expanded courses should render module and lesson ids for navigation")}
   if(resourceByScope("module-elec-08-01","module").sourceType!=="module"){throw new Error("module resources should be addressable by scope")}
   if(resourceByScope("lesson-elec-08-01-01","lesson").sourceType!=="lesson"){throw new Error("lesson resources should be addressable by scope")}
@@ -366,6 +405,14 @@ await vm.runInContext(`(async()=>{
   elec08.modules[0].lessons[0].progress=100;
   elec08.modules[0].lessons[0].done=true;
   if(moduleProgress(elec08.modules[0])!==20||itemProgress(elec08)<=0){throw new Error("course progress should derive from lesson and module progress")}
+  const elec01=state.items.find(i=>i.id==="course-elec-01");
+  const elec02ForSequence=state.items.find(i=>i.id==="course-elec-02");
+  elec01.modules.forEach(module=>{module.lessons.forEach(lesson=>{lesson.progress=100;lesson.done=true;lesson.status="concluido"});module.progress=100;module.done=true;module.status="concluido"});
+  elec01.progress=itemProgress(elec01);elec01.status=statusFromProgress(elec01.progress);
+  if(courseSequenceState(elec02ForSequence)!=="active"){throw new Error("completing a course should unlock the next course in the track")}
+  state.items.filter(i=>i.track==="track-electronics"&&i.kind==="course"&&courseOrderValue(i)<courseOrderValue(elec08)).forEach(course=>{course.modules.forEach(module=>{module.lessons.forEach(lesson=>{lesson.progress=100;lesson.done=true;lesson.status="concluido"});module.progress=100;module.done=true;module.status="concluido"});(course.childCourses||[]).forEach(child=>{child.progress=100;child.status="concluido";child.done=true});course.progress=100;course.status="concluido";course.done=true});
+  if(moduleSequenceState(elec08,elec08.modules[1])!=="locked"){throw new Error("later modules should be locked until the active module is complete")}
+  if(elec08.modules[0].lessons[1]&&lessonSequenceState(elec08,elec08.modules[0],elec08.modules[0].lessons[1])!=="active"){throw new Error("lesson completion should unlock the next lesson in the same module")}
   const elec02=state.items.find(i=>i.id==="course-elec-02");
   const elec03=state.items.find(i=>i.id==="course-elec-03");
   elec02.modules.forEach(module=>{module.progress=100;module.done=true;module.status="concluido"});
@@ -555,6 +602,7 @@ await vm.runInContext(`(async()=>{
   if(state.tracks.length!==1){throw new Error("first track was not added")}
   if(state.activeTrack!=="tarot"){throw new Error("first track was not activated")}
   if(state.weeklyProgress.tarot!==0){throw new Error("first track progress was not initialized")}
+  if(state.tracks[0].progression!=="sequential"){throw new Error("new tracks should default to sequential progression")}
   if(!$("trackTabs").innerHTML.includes("Tarot")||!$("trackHero").innerHTML.includes("Tarot")){throw new Error("first track did not render")}
 
   __savedState=await ArcanaStorage.loadState(DEFAULT_STATE);
