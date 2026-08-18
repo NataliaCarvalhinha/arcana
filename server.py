@@ -24,7 +24,7 @@ INLINE_TAG_RE=re.compile(r"(^|\s)#([A-Za-z0-9_/-]+)")
 NOTE_DIRS=("literature","permanent","sessions","quick","archive")
 IDEA_TYPES={"permanent","concept","question","insight","quote","reference","next_action"}
 NOTE_TYPES=IDEA_TYPES|{"literature","session","quick"}
-OBSIDIAN_AUTO_SYNC={"manual","after_note_save","after_session","every_5_minutes"}
+OBSIDIAN_AUTO_SYNC={"manual","after_session"}
 OBSIDIAN_DIRS=(
     "00 Inbox",
     "10 Fichamentos/Cursos",
@@ -43,7 +43,8 @@ OBSIDIAN_DIRS=(
     "80 Flashcards",
     "90 Arquivo",
     "Attachments",
-    "Templates",
+    "Tracks",
+    "Courses",
 )
 
 class PlaylistInputError(ValueError):
@@ -185,6 +186,14 @@ def atomic_write(path, text):
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp,path)
+    try:
+        dir_fd=os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except OSError:
+        pass
 
 def atomic_write_bytes(path, data):
     path.parent.mkdir(parents=True,exist_ok=True)
@@ -194,6 +203,14 @@ def atomic_write_bytes(path, data):
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp,path)
+    try:
+        dir_fd=os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except OSError:
+        pass
 
 def slugify(text, fallback="note"):
     text=unicodedata.normalize("NFKD",str(text or "")).encode("ascii","ignore").decode("ascii")
@@ -333,7 +350,7 @@ def read_note_file(path):
     return note
 
 def load_local_config():
-    default={"obsidian":{"connected":False,"vaultPath":"","vaultName":"","lastSyncAt":None,"autoSync":"after_session","tracked":{},"conflicts":[]}}
+    default={"obsidian":{"connected":False,"vaultPath":"","vaultName":"","lastSyncAt":None,"autoSync":"manual","tracked":{},"conflicts":[],"lastPush":{}}}
     if not LOCAL_CONFIG_PATH.exists():
         return default
     try:
@@ -342,11 +359,13 @@ def load_local_config():
         return default
     obs={**default["obsidian"],**(data.get("obsidian") if isinstance(data.get("obsidian"),dict) else {})}
     if obs.get("autoSync") not in OBSIDIAN_AUTO_SYNC:
-        obs["autoSync"]="after_session"
+        obs["autoSync"]="manual"
     if not isinstance(obs.get("tracked"),dict):
         obs["tracked"]={}
     if not isinstance(obs.get("conflicts"),list):
         obs["conflicts"]=[]
+    if not isinstance(obs.get("lastPush"),dict):
+        obs["lastPush"]={}
     return {"obsidian":obs}
 
 def save_local_config(config):
@@ -359,11 +378,13 @@ def update_obsidian_config(**updates):
     config=load_local_config()
     current={**config["obsidian"],**updates}
     if current.get("autoSync") not in OBSIDIAN_AUTO_SYNC:
-        current["autoSync"]="after_session"
+        current["autoSync"]="manual"
     if not isinstance(current.get("tracked"),dict):
         current["tracked"]={}
     if not isinstance(current.get("conflicts"),list):
         current["conflicts"]=[]
+    if not isinstance(current.get("lastPush"),dict):
+        current["lastPush"]={}
     config["obsidian"]=current
     save_local_config(config)
     return current
@@ -372,10 +393,22 @@ def resolve_vault_path(raw_path):
     raw=(raw_path or "").strip()
     if not raw:
         raise ValueError("Informe o caminho da pasta do vault.")
+    if "\x00" in raw:
+        raise ValueError("Caminho inválido.")
     path=Path(os.path.expanduser(raw))
     if not path.is_absolute():
         path=(ROOT/path)
     return path.resolve()
+
+def validate_vault_root(raw_path):
+    path=resolve_vault_path(raw_path)
+    if not path.exists():
+        raise FileNotFoundError("A pasta do vault não existe.")
+    if not path.is_dir():
+        raise ValueError("O caminho informado não é uma pasta.")
+    if not os.access(path, os.W_OK):
+        raise PermissionError("A pasta do vault não está gravável.")
+    return path
 
 def ensure_within(root, candidate):
     root=root.resolve()
@@ -400,6 +433,13 @@ def obsidian_literature_folder(source_type=None):
         return "Podcasts"
     return "Outros"
 
+def obsidian_safe_filename(title, fallback="Arcana"):
+    text=unicodedata.normalize("NFC", str(title or fallback))
+    text=re.sub(r"[\x00-\x1f\x7f/\\]+", " ", text)
+    text=re.sub(r'[<>:"|?*]+', " ", text)
+    text=re.sub(r"\s+", " ", text).strip(" .")
+    return (text or fallback)[:120]
+
 def obsidian_note_folder(note):
     if note.get("status")=="archived":
         return "90 Arquivo"
@@ -419,7 +459,35 @@ def obsidian_note_folder(note):
     return "20 Notas Permanentes"
 
 def obsidian_note_relative_path(note):
-    return Path(obsidian_note_folder(note))/f"{slugify(note.get('title') or 'note')}-{note['id']}.md"
+    title=obsidian_safe_filename(note.get("title") or "Nota")
+    return Path(obsidian_note_folder(note))/f"{title}.md"
+
+def obsidian_link(title):
+    return f"[[{str(title or 'Sem titulo').replace(']', '').replace('[', '')}]]"
+
+def arcana_frontmatter(meta):
+    lines=["---","arcana_managed: true",f"arcana_id: {yaml_scalar(meta.get('arcana_id'))}"]
+    for key in ["type","title","track","track_id","course","course_id","module","module_id","lesson","lesson_id","source","source_type","source_id","created","updated","review_at","status","favorite"]:
+        if key in meta:
+            lines.append(f"{key}: {yaml_scalar(meta.get(key))}")
+    tags=meta.get("tags") if isinstance(meta.get("tags"),list) else []
+    lines.append("tags:")
+    if tags:
+        for tag in sorted(set(str(tag).strip().lstrip("#") for tag in tags if str(tag).strip())):
+            lines.append(f"  - {yaml_scalar(tag)}")
+    else:
+        lines.append("  []")
+    lines.append("---")
+    return "\n".join(lines)
+
+def obsidian_file(rel_path, text, arcana_id, kind, updated=""):
+    if unsafe_obsidian_relpath(rel_path):
+        raise ValueError(f"Caminho Obsidian inseguro: {rel_path}")
+    return {"path":rel_path,"text":text.rstrip()+"\n","arcana_id":arcana_id,"type":kind,"updated":updated}
+
+def unsafe_obsidian_relpath(rel_path):
+    parts=Path(str(rel_path)).parts
+    return (not rel_path or str(rel_path).startswith("/") or "\\" in str(rel_path) or ".." in parts or any("\x00" in part for part in parts))
 
 def dump_obsidian_markdown(note):
     tags=sorted(set((note.get("tags") or [])+[x[1].strip() for x in INLINE_TAG_RE.findall(note.get("content") or "") if x[1].strip()]))
@@ -454,156 +522,321 @@ def dump_obsidian_markdown(note):
     ])
     return "\n".join(lines).rstrip()+"\n"
 
-def obsidian_title_from_content(content, fallback):
-    first=(content or "").strip().splitlines()
-    if first and first[0].startswith("# "):
-        return first[0][2:].strip() or fallback
-    return fallback
+def obsidian_enriched_note(note, lookups):
+    source=note.get("source") if isinstance(note.get("source"),dict) else {}
+    source_id=note.get("sourceId") or source.get("lessonId") or source.get("moduleId") or source.get("courseId")
+    course=lookups["courses"].get(source.get("courseId") or note.get("courseId") or (lookups["course_by_lesson"].get(source_id) if source_id else ""))
+    module=lookups["modules"].get(source.get("moduleId") or note.get("moduleId") or (lookups["module_by_lesson"].get(source_id) if source_id else ""))
+    lesson=lookups["lessons"].get(source.get("lessonId") or note.get("lessonId") or source_id)
+    track=lookups["tracks"].get(note.get("trackId") or (course or {}).get("trackId"))
+    return {**note,"sourceId":source_id or note.get("sourceId"),"_course":course,"_module":module,"_lesson":lesson,"_track":track}
 
-def should_skip_obsidian_file(path, meta):
-    rel=path.as_posix()
-    if "/Templates/" in rel:
-        return True
-    if path.name in {"Arcana Index.md","README.md"}:
-        return True
-    if str(meta.get("arcana_kind") or "") in {"index","template","track_index"}:
-        return True
-    if "/80 Flashcards/" in rel:
-        return True
-    return False
-
-def obsidian_note_type_from_path(path, meta):
-    if meta.get("type") in NOTE_TYPES:
-        return meta["type"]
-    rel=path.as_posix()
-    if "/10 Fichamentos/" in rel:
-        return "literature"
-    if "/00 Inbox/" in rel:
-        return "quick"
-    if "/30 Conceitos/" in rel:
-        return "concept"
-    if "/40 Perguntas/" in rel:
-        return "question"
-    if "/50 Sessões/" in rel:
-        return "session"
-    if "/60 Fontes/" in rel:
-        return "reference"
-    return "permanent"
-
-def obsidian_source_type_from_path(path, meta):
-    if meta.get("source_type") or meta.get("sourceType"):
-        return meta.get("source_type") or meta.get("sourceType")
-    rel=path.as_posix()
-    if "/10 Fichamentos/Cursos/" in rel:
-        return "course"
-    if "/10 Fichamentos/Livros/" in rel:
-        return "book"
-    if "/10 Fichamentos/Papers/" in rel:
-        return "paper"
-    if "/10 Fichamentos/Artigos/" in rel:
-        return "article"
-    if "/10 Fichamentos/Videos/" in rel:
-        return "video"
-    if "/10 Fichamentos/Podcasts/" in rel:
-        return "podcast"
-    return None
-
-def parse_source_field(value):
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str) and value.strip():
-        try:
-            return json.loads(value)
-        except Exception:
-            return {"label":value}
-    return {}
-
-def import_obsidian_note(path, vault_root, tracked_paths=None):
-    tracked_paths=tracked_paths or {}
-    text=path.read_text(encoding="utf-8")
-    meta, content=parse_frontmatter(text)
-    if should_skip_obsidian_file(path.relative_to(vault_root), meta):
-        return None
-    title=meta.get("title") or obsidian_title_from_content(content, path.stem.rsplit("-",1)[0].replace("-", " "))
-    inline_tags=[match[1].strip() for match in INLINE_TAG_RE.findall(content) if match[1].strip()]
-    note_id=meta.get("arcana_id") or meta.get("id") or tracked_paths.get(path.relative_to(vault_root).as_posix())
-    note={
-        "id":note_id,
-        "title":title.strip() or "Nota importada",
-        "type":obsidian_note_type_from_path(path.relative_to(vault_root), meta),
-        "content":content,
-        "tags":sorted(set((meta.get("tags") if isinstance(meta.get("tags"),list) else [])+inline_tags)),
-        "trackId":meta.get("track") or meta.get("trackId"),
-        "sourceType":obsidian_source_type_from_path(path.relative_to(vault_root), meta),
-        "sourceId":meta.get("source_id") or meta.get("sourceId"),
-        "sessionId":meta.get("session_id") or meta.get("sessionId"),
-        "createdAt":meta.get("created") or meta.get("createdAt") or datetime.fromtimestamp(path.stat().st_mtime).astimezone().isoformat(timespec="seconds"),
-        "updatedAt":meta.get("updated") or meta.get("updatedAt") or datetime.fromtimestamp(path.stat().st_mtime).astimezone().isoformat(timespec="seconds"),
-        "favorite":bool(meta.get("favorite", False)),
-        "reviewAt":meta.get("review_at") or meta.get("reviewAt"),
-        "status":meta.get("status") or ("archived" if "90 Arquivo" in path.parts else "active"),
-        "source":parse_source_field(meta.get("source")),
+def obsidian_note_markdown(note):
+    tags=sorted(set((note.get("tags") or [])+[x[1].strip() for x in INLINE_TAG_RE.findall(note.get("content") or "") if x[1].strip()]))
+    course=note.get("_course") or {}
+    module=note.get("_module") or {}
+    lesson=note.get("_lesson") or {}
+    track=note.get("_track") or {}
+    meta={
+        "arcana_id":note.get("id"),
+        "type":note.get("type") or "permanent",
+        "title":note.get("title") or "Nota",
+        "track":track.get("name") or "",
+        "track_id":note.get("trackId") or track.get("id") or "",
+        "course":course.get("title") or "",
+        "course_id":course.get("id") or "",
+        "module":module.get("title") or "",
+        "module_id":module.get("id") or "",
+        "lesson":lesson.get("title") or "",
+        "lesson_id":lesson.get("id") or "",
+        "source_type":note.get("sourceType") or "",
+        "source_id":note.get("sourceId") or "",
+        "created":note.get("createdAt") or "",
+        "updated":note.get("updatedAt") or "",
+        "review_at":note.get("reviewAt") or "",
+        "status":note.get("status") or "active",
+        "favorite":bool(note.get("favorite")),
+        "tags":tags,
     }
-    return default_note(note)
+    body=[f"# {note.get('title') or 'Nota'}"]
+    if course or module or lesson:
+        body.extend(["","## Contexto"])
+        if course:
+            body.append(f"- Curso: {obsidian_link(course.get('title'))}")
+        if module:
+            body.append(f"- Modulo: {module.get('title')}")
+        if lesson:
+            body.append(f"- Licao: {lesson.get('title')}")
+    if note.get("sourceType") or note.get("sourceId"):
+        body.extend(["","## Fonte",f"- Tipo: {note.get('sourceType') or 'fonte'}",f"- ID: {note.get('sourceId') or ''}"])
+    content=(note.get("content") or "").strip()
+    if content:
+        body.extend(["","## Nota","",content])
+    return f"{arcana_frontmatter(meta)}\n\n"+"\n".join(body).rstrip()+"\n"
 
-def iter_arcana_notes():
-    notes=[]
-    ensure_vault()
-    for folder in NOTE_DIRS:
-        for path in sorted((NOTE_ROOT/folder).glob("*.md")):
-            try:
-                notes.append(read_note_file(path))
-            except Exception:
-                pass
-    return notes
+def build_obsidian_lookups(payload):
+    state=payload.get("state") if isinstance(payload.get("state"),dict) else {}
+    tracks={str(t.get("id")):t for t in state.get("tracks",[]) if isinstance(t,dict) and t.get("id")}
+    courses={}
+    modules={}
+    lessons={}
+    course_by_lesson={}
+    module_by_lesson={}
+    for item in state.get("items",[]) if isinstance(state.get("items"),list) else []:
+        if not isinstance(item,dict):
+            continue
+        if item.get("kind")=="course" or item.get("modules"):
+            courses[item.get("id")]=item
+            for module in item.get("modules") or []:
+                if not isinstance(module,dict):
+                    continue
+                modules[module.get("id")]=module
+                for lesson in module.get("lessons") or []:
+                    if isinstance(lesson,dict) and lesson.get("id"):
+                        lessons[lesson["id"]]=lesson
+                        course_by_lesson[lesson["id"]]=item.get("id")
+                        module_by_lesson[lesson["id"]]=module.get("id")
+    return {"tracks":tracks,"courses":courses,"modules":modules,"lessons":lessons,"course_by_lesson":course_by_lesson,"module_by_lesson":module_by_lesson}
 
-def ensure_obsidian_vault_structure(vault_root, notes=None):
-    vault_root.mkdir(parents=True, exist_ok=True)
-    for rel_dir in OBSIDIAN_DIRS:
-        (vault_root/rel_dir).mkdir(parents=True, exist_ok=True)
-    notes=notes or iter_arcana_notes()
-    atomic_write(ensure_within(vault_root, vault_root/"Arcana Index.md"), obsidian_index_markdown(notes))
-    atomic_write(ensure_within(vault_root, vault_root/"README.md"), "\n".join([
-        "# Arcana + Obsidian",
-        "",
-        "Vault gerado pelo Arcana em Markdown padrão e compatível com Obsidian.",
-        "",
-        "- `Arcana Index.md` resume as notas gerenciadas.",
-        "- `Templates/` inclui modelos iniciais.",
-        "- `Attachments/` é reservado para anexos relativos.",
-    ]))
-    atomic_write(ensure_within(vault_root, vault_root/"Templates/Permanent Note.md"), "---\narcana_kind: template\ntype: permanent\n---\n\n# Nova nota permanente\n\n## Ideia atômica\n\n\n## Conexões\n\n- [[Outra nota]]\n")
-    atomic_write(ensure_within(vault_root, vault_root/"Templates/Fichamento.md"), "---\narcana_kind: template\ntype: literature\n---\n\n# Novo fichamento\n\n## Dados da fonte\n\n- Tipo:\n- Autor/canal:\n- URL/ISBN/DOI:\n\n## Resumo\n\n\n## Citações\n\n- \n")
-    atomic_write(ensure_within(vault_root, vault_root/"Templates/Session Note.md"), "---\narcana_kind: template\ntype: session\n---\n\n# Sessão\n\n## Registro\n\n\n## Conceitos\n\n\n## Próximas ações\n\n- [ ] \n")
-    tracks={}
+def obsidian_course_markdown(course, lookups):
+    track=lookups["tracks"].get(course.get("trackId"))
+    meta={"arcana_id":course.get("id"),"type":"course","title":course.get("title") or course.get("name") or "Curso","track":(track or {}).get("name") or "","track_id":course.get("trackId") or "","course":course.get("title") or course.get("name") or "","course_id":course.get("id") or "","created":course.get("createdAt") or "","updated":course.get("updatedAt") or "","status":course.get("status") or "active","tags":["arcana/course"]}
+    lines=[f"# {meta['title']}","","## Modulos"]
+    for module in course.get("modules") or []:
+        lines.extend(["",f"### {module.get('title') or 'Modulo'}"])
+        for lesson in module.get("lessons") or []:
+            title=lesson.get("title") if isinstance(lesson,dict) else str(lesson)
+            done="x" if isinstance(lesson,dict) and lesson.get("done") else " "
+            url=(lesson.get("url") if isinstance(lesson,dict) else "") or ""
+            suffix=f" - {url}" if url else ""
+            lines.append(f"- [{done}] {title}{suffix}")
+    return f"{arcana_frontmatter(meta)}\n\n"+"\n".join(lines).rstrip()+"\n"
+
+def obsidian_track_markdown(track, courses, notes):
+    title=track.get("name") or track.get("title") or "Trilha"
+    meta={"arcana_id":track.get("id"),"type":"track","title":title,"track":title,"track_id":track.get("id") or "","created":track.get("createdAt") or "","updated":track.get("updatedAt") or "","status":"active","tags":["arcana/track"]}
+    lines=[f"# {title}","","## Cursos"]
+    for course in courses:
+        lines.append(f"- {obsidian_link(course.get('title') or course.get('name'))}")
+    lines.extend(["","## Notas"])
     for note in notes:
-        if note.get("trackId"):
-            tracks.setdefault(note["trackId"], []).append(note)
-    for track_id, items in tracks.items():
-        atomic_write(ensure_within(vault_root, vault_root/"60 Fontes"/f"track-{slugify(track_id)}.md"), "\n".join([
-            "---",
-            "arcana_kind: track_index",
-            f"track: {yaml_scalar(track_id)}",
-            "---",
-            "",
-            f"# Track {track_id}",
-            "",
-            *[f"- [[{note['title']}]]" for note in sorted(items, key=lambda item:(item.get('title') or '').lower())],
-        ]))
+        lines.append(f"- {obsidian_link(note.get('title'))}")
+    return f"{arcana_frontmatter(meta)}\n\n"+"\n".join(lines).rstrip()+"\n"
 
-def obsidian_index_markdown(notes):
+def obsidian_source_files(notes):
+    out={}
+    for note in notes:
+        source=note.get("source") if isinstance(note.get("source"),dict) else {}
+        source_id=note.get("sourceId") or source.get("id") or source.get("lessonId") or source.get("moduleId") or source.get("courseId")
+        url=source.get("url") or source.get("canonicalUrl") or ""
+        title=source.get("title") or note.get("sourceTitle") or ""
+        if not source_id and not url:
+            continue
+        sid=f"source-{source_id or slugify(url, 'fonte')}"
+        if sid in out:
+            continue
+        label=title or source_id or url or "Fonte Arcana"
+        meta={"arcana_id":sid,"type":"source","title":label,"source":label,"source_type":note.get("sourceType") or source.get("type") or "source","source_id":source_id or "","created":note.get("createdAt") or "","updated":note.get("updatedAt") or "","status":"active","tags":["arcana/source"]}
+        lines=[f"# {label}","","## Metadados"]
+        if url:
+            lines.append(f"- URL: {url}")
+        if source.get("channel"):
+            lines.append(f"- Canal: {source.get('channel')}")
+        if source.get("timestamp"):
+            lines.append(f"- Timestamp: {source.get('timestamp')}")
+        lines.extend(["","## Notas relacionadas",f"- {obsidian_link(note.get('title'))}"])
+        out[sid]=obsidian_file((Path("60 Fontes")/f"{obsidian_safe_filename(label)}.md").as_posix(), f"{arcana_frontmatter(meta)}\n\n"+"\n".join(lines), sid, "source", meta["updated"])
+    return list(out.values())
+
+def render_obsidian_export(payload):
+    payload=payload if isinstance(payload,dict) else {}
+    lookups=build_obsidian_lookups(payload)
+    files=[]
+    notes=[]
+    for raw in payload.get("notes") or []:
+        if isinstance(raw,dict) and raw.get("id"):
+            notes.append(obsidian_enriched_note(default_note(raw), lookups))
+    for raw in payload.get("fichamentos") or []:
+        if isinstance(raw,dict) and raw.get("id") and not any(n.get("id")==raw.get("id") for n in notes):
+            notes.append(obsidian_enriched_note(default_note({**raw,"type":raw.get("type") or "literature"}), lookups))
+    for note in sorted(notes, key=lambda item:(obsidian_note_folder(item), item.get("title") or "", item.get("id") or "")):
+        rel_path=obsidian_note_relative_path(note).as_posix()
+        files.append(obsidian_file(rel_path, obsidian_note_markdown(note), note["id"], note.get("type") or "note", note.get("updatedAt") or ""))
+    state=payload.get("state") if isinstance(payload.get("state"),dict) else {}
+    courses=[item for item in state.get("items",[]) if isinstance(item,dict) and (item.get("kind")=="course" or item.get("modules"))]
+    for course in courses:
+        if not course.get("id"):
+            continue
+        rel_path=(Path("Courses")/f"{obsidian_safe_filename(course.get('title') or course.get('name') or 'Curso')}.md").as_posix()
+        files.append(obsidian_file(rel_path, obsidian_course_markdown(course, lookups), course.get("id"), "course", course.get("updatedAt") or ""))
+    for track in state.get("tracks",[]) if isinstance(state.get("tracks"),list) else []:
+        if not isinstance(track,dict) or not track.get("id"):
+            continue
+        track_courses=[course for course in courses if course.get("trackId")==track.get("id")]
+        track_notes=[note for note in notes if note.get("trackId")==track.get("id")]
+        rel_path=(Path("Tracks")/f"{obsidian_safe_filename(track.get('name') or track.get('title') or 'Trilha')}.md").as_posix()
+        files.append(obsidian_file(rel_path, obsidian_track_markdown(track, track_courses, track_notes), track.get("id"), "track", track.get("updatedAt") or ""))
+    for card in payload.get("flashcards") or []:
+        if not isinstance(card,dict) or not card.get("id"):
+            continue
+        title=card.get("front") or "Flashcard"
+        meta={"arcana_id":card.get("id"),"type":"flashcard","title":title,"source_id":card.get("sourceNoteId") or "","created":card.get("createdAt") or "","updated":card.get("updatedAt") or "","review_at":card.get("reviewAt") or "","status":"active","tags":card.get("tags") if isinstance(card.get("tags"),list) else []}
+        body=f"# {title}\n\n## Verso\n\n{card.get('back') or ''}"
+        files.append(obsidian_file((Path("80 Flashcards")/f"{obsidian_safe_filename(title, 'Flashcard')}.md").as_posix(), f"{arcana_frontmatter(meta)}\n\n{body}", card["id"], "flashcard", card.get("updatedAt") or ""))
+    files.extend(obsidian_source_files(notes))
+    files.append(obsidian_file("Arcana Index.md", obsidian_index_markdown(notes, courses, state.get("tracks") or []), "arcana-index", "index", ""))
+    files.append(obsidian_file("README - Arcana.md", obsidian_readme_markdown(), "arcana-readme", "readme", ""))
+    return dedupe_obsidian_files(files)
+
+def dedupe_obsidian_files(files):
+    used={}
+    out=[]
+    for file in files:
+        rel=file["path"]
+        if rel in used and used[rel]!=file["arcana_id"]:
+            stem=Path(rel).stem
+            suffix=Path(rel).suffix
+            parent=Path(rel).parent
+            n=2
+            while True:
+                candidate=(parent/f"{stem} - {n}{suffix}").as_posix()
+                if candidate not in used:
+                    rel=candidate
+                    break
+                n+=1
+            file={**file,"path":rel}
+        used[rel]=file["arcana_id"]
+        out.append(file)
+    return out
+
+def ensure_obsidian_vault_structure(vault_root):
+    for rel_dir in OBSIDIAN_DIRS:
+        ensure_within(vault_root, vault_root/rel_dir).mkdir(parents=True, exist_ok=True)
+
+def obsidian_index_markdown(notes, courses=None, tracks=None):
+    courses=courses or []
+    tracks=tracks or []
     grouped={}
     for note in notes:
         grouped.setdefault(obsidian_note_folder(note), []).append(note)
-    lines=["---","arcana_kind: index","title: Arcana Index","---","","# Arcana Index","","## Estrutura"]
-    for folder in sorted(grouped):
-        lines.append(f"- [[{folder}]]")
+    meta={"arcana_id":"arcana-index","type":"index","title":"Arcana Index","status":"active","tags":["arcana/index"]}
+    lines=[arcana_frontmatter(meta),"","# Arcana Index","","## Estrutura"]
+    for rel_dir in OBSIDIAN_DIRS:
+        lines.append(f"- `{rel_dir}/`")
+    lines.extend(["","## Trilhas"])
+    for track in tracks:
+        if isinstance(track,dict):
+            lines.append(f"- {obsidian_link(track.get('name') or track.get('title'))}")
+    lines.extend(["","## Cursos"])
+    for course in courses:
+        lines.append(f"- {obsidian_link(course.get('title') or course.get('name'))}")
     lines.extend(["","## Notas"])
     for folder in sorted(grouped):
         lines.extend(["",f"### {folder}"])
         for note in sorted(grouped[folder], key=lambda item:(item.get("title") or "").lower()):
-            lines.append(f"- [[{note['title']}]]")
+            lines.append(f"- {obsidian_link(note.get('title'))}")
     return "\n".join(lines).rstrip()+"\n"
+
+def obsidian_readme_markdown():
+    meta={"arcana_id":"arcana-readme","type":"readme","title":"README - Arcana","status":"active","tags":["arcana/readme"]}
+    lines=[
+        arcana_frontmatter(meta),
+        "",
+        "# Arcana + Obsidian",
+        "",
+        "Este vault contem arquivos gerados pelo Arcana Bridge Phase 1.",
+        "",
+        "## Regra de seguranca",
+        "",
+        "O Arcana so atualiza arquivos com `arcana_managed: true` e `arcana_id` correspondente. Arquivos seus, `Welcome.md` e `.obsidian/` permanecem fora do controle do Arcana.",
+        "",
+        "## Direcao",
+        "",
+        "Phase 1 e somente Arcana -> Markdown -> Obsidian. Importacao direta do Obsidian para o Arcana ainda nao faz parte desta fase.",
+    ]
+    return "\n".join(lines).rstrip()+"\n"
+
+def scan_obsidian_managed(vault_root):
+    managed={}
+    by_path={}
+    for path in vault_root.rglob("*.md"):
+        if ".obsidian" in path.relative_to(vault_root).parts:
+            continue
+        try:
+            try:
+                meta,_=parse_frontmatter(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+        except Exception:
+            continue
+        is_managed=meta.get("arcana_managed") is True or str(meta.get("arcana_managed") or "").lower()=="true"
+        arcana_id=str(meta.get("arcana_id") or "")
+        rel_path=path.relative_to(vault_root).as_posix()
+        by_path[rel_path]={"path":path,"meta":meta,"managed":is_managed,"arcana_id":arcana_id}
+        if is_managed and arcana_id:
+            managed[arcana_id]=path
+    return managed, by_path
+
+def alternate_obsidian_path(vault_root, rel_path, by_path):
+    path=Path(rel_path)
+    stem=path.stem
+    suffix=path.suffix or ".md"
+    parent=path.parent
+    n=2
+    while True:
+        candidate=(parent/f"{stem} - Arcana {n}{suffix}").as_posix()
+        if candidate not in by_path and not (vault_root/candidate).exists():
+            return candidate
+        n+=1
+
+def write_obsidian_export(vault_root, files):
+    ensure_obsidian_vault_structure(vault_root)
+    managed, by_path=scan_obsidian_managed(vault_root)
+    stats={"ok":True,"created":0,"updated":0,"unchanged":0,"errors":[],"warnings":[],"files":[]}
+    tracked={}
+    for file in files:
+        try:
+            rel_path=file["path"]
+            arcana_id=str(file["arcana_id"])
+            existing=managed.get(arcana_id)
+            desired_rel=rel_path
+            if existing:
+                target=existing
+                desired_rel=existing.relative_to(vault_root).as_posix()
+                wanted=ensure_within(vault_root, vault_root/rel_path)
+                wanted_collision=by_path.get(rel_path)
+                if wanted.resolve()!=existing.resolve() and (not wanted_collision or (wanted_collision["managed"] and wanted_collision["arcana_id"]==arcana_id)):
+                    target=wanted
+                    desired_rel=rel_path
+            else:
+                target=ensure_within(vault_root, vault_root/desired_rel)
+                collision=by_path.get(desired_rel)
+                if collision and (not collision["managed"] or collision["arcana_id"]!=arcana_id):
+                    desired_rel=alternate_obsidian_path(vault_root, desired_rel, by_path)
+                    target=ensure_within(vault_root, vault_root/desired_rel)
+                    stats["warnings"].append({"file":rel_path,"writtenAs":desired_rel,"reason":"collision_with_unmanaged_or_other_arcana_id"})
+            previous_text=target.read_text(encoding="utf-8") if target.exists() else None
+            if previous_text==file["text"]:
+                stats["unchanged"]+=1
+            else:
+                existed=target.exists()
+                atomic_write(target, file["text"])
+                if existed:
+                    stats["updated"]+=1
+                else:
+                    stats["created"]+=1
+            if existing and existing.exists() and existing.resolve()!=target.resolve():
+                meta,_=parse_frontmatter(existing.read_text(encoding="utf-8"))
+                if (meta.get("arcana_managed") is True or str(meta.get("arcana_managed") or "").lower()=="true") and str(meta.get("arcana_id") or "")==arcana_id:
+                    existing.unlink()
+            tracked[arcana_id]={"vaultRelativePath":desired_rel,"lastArcanaUpdated":file.get("updated") or "","lastVaultMtime":target.stat().st_mtime_ns}
+            stats["files"].append(desired_rel)
+            by_path[desired_rel]={"path":target,"meta":{"arcana_id":arcana_id,"arcana_managed":True},"managed":True,"arcana_id":arcana_id}
+            managed[arcana_id]=target
+        except Exception as exc:
+            stats["ok"]=False
+            stats["errors"].append({"file":file.get("path"),"error":str(exc)})
+    return stats, tracked
 
 def obsidian_status_payload(obs=None):
     obs=obs or obsidian_config()
@@ -613,12 +846,13 @@ def obsidian_status_payload(obs=None):
         "vaultName":obs.get("vaultName") or "",
         "vaultPath":obs.get("vaultPath") or "",
         "lastSyncAt":obs.get("lastSyncAt"),
-        "autoSync":obs.get("autoSync") or "after_session",
+        "autoSync":obs.get("autoSync") or "manual",
         "noteCount":0,
         "fichamentoCount":0,
         "attachmentCount":0,
         "flashcardCount":0,
         "conflicts":len(obs.get("conflicts") or []),
+        "lastPush":obs.get("lastPush") or {},
         "openUrl":"",
     }
     if not payload["connected"]:
@@ -629,108 +863,43 @@ def obsidian_status_payload(obs=None):
     if vault_root.exists():
         notes=[]
         for path in vault_root.rglob("*.md"):
+            if ".obsidian" in path.relative_to(vault_root).parts:
+                continue
             rel=path.relative_to(vault_root)
             meta,_=parse_frontmatter(path.read_text(encoding="utf-8"))
-            if should_skip_obsidian_file(rel, meta):
-                continue
-            notes.append(path)
+            managed=meta.get("arcana_managed") is True or str(meta.get("arcana_managed") or "").lower()=="true"
+            if managed:
+                notes.append((path,meta))
         payload["noteCount"]=len(notes)
-        payload["fichamentoCount"]=len([path for path in notes if "10 Fichamentos" in path.as_posix()])
+        payload["fichamentoCount"]=len([path for path,_ in notes if "10 Fichamentos" in path.as_posix()])
         payload["attachmentCount"]=len([path for path in (vault_root/"Attachments").rglob("*") if path.is_file()])
-        payload["flashcardCount"]=len([path for path in (vault_root/"80 Flashcards").glob("*.md")])
+        payload["flashcardCount"]=len([path for path,meta in notes if meta.get("type")=="flashcard" or "80 Flashcards" in path.as_posix()])
     return payload
 
-def write_flashcards_to_obsidian(vault_root):
-    cards=load_flashcards_meta()
-    flash_dir=ensure_within(vault_root, vault_root/"80 Flashcards")
-    flash_dir.mkdir(parents=True, exist_ok=True)
-    for card in cards.values():
-        path=ensure_within(vault_root, flash_dir/f"{slugify(card.get('front') or 'flashcard', 'flashcard')}-{card['id']}.md")
-        content="\n".join([
-            "---",
-            f"arcana_id: {yaml_scalar(card.get('id'))}",
-            "arcana_kind: flashcard",
-            f"created: {yaml_scalar(card.get('createdAt'))}",
-            f"updated: {yaml_scalar(card.get('updatedAt'))}",
-            "---",
-            "",
-            f"# {card.get('front') or 'Flashcard'}",
-            "",
-            "## Back",
-            "",
-            card.get("excerpt") or "",
-        ])
-        atomic_write(path, content.rstrip()+"\n")
-
-def push_obsidian_vault():
+def obsidian_reindex_preview():
     obs=obsidian_config()
     if not obs.get("connected") or not obs.get("vaultPath"):
         raise ValueError("Conecte um vault Obsidian primeiro.")
     vault_root=resolve_vault_path(obs["vaultPath"])
-    notes=iter_arcana_notes()
-    ensure_obsidian_vault_structure(vault_root, notes)
-    tracked={**obs.get("tracked", {})}
-    conflicts=[]
-    for note in notes:
-        target_rel=obsidian_note_relative_path(note).as_posix()
-        target=ensure_within(vault_root, vault_root/target_rel)
-        previous=tracked.get(note["id"], {})
-        old_rel=previous.get("vaultRelativePath")
-        old_path=ensure_within(vault_root, vault_root/old_rel) if old_rel else None
-        current_vault_mtime=old_path.stat().st_mtime_ns if old_path and old_path.exists() else None
-        arcana_changed=note.get("updatedAt")!=previous.get("lastArcanaUpdated")
-        vault_changed=current_vault_mtime is not None and previous.get("lastVaultMtime") not in {None, current_vault_mtime}
-        if previous and arcana_changed and vault_changed:
-            conflicts.append({"noteId":note["id"],"title":note["title"],"file":old_rel or target_rel,"reason":"Arcana e vault mudaram desde a última sincronização."})
-            continue
-        atomic_write(target, dump_obsidian_markdown(note))
-        if old_path and old_path.exists() and old_path.resolve()!=target.resolve():
-            try:
-                old_path.unlink()
-            except Exception:
-                pass
-        tracked[note["id"]]={"vaultRelativePath":target_rel,"lastArcanaUpdated":note.get("updatedAt"),"lastVaultMtime":target.stat().st_mtime_ns}
-    write_flashcards_to_obsidian(vault_root)
-    obs=update_obsidian_config(vaultPath=str(vault_root),vaultName=vault_root.name,connected=True,lastSyncAt=now_iso(),tracked=tracked,conflicts=conflicts)
-    return obsidian_status_payload(obs)
+    managed,_=scan_obsidian_managed(vault_root)
+    folders={}
+    for path in managed.values():
+        folder=path.relative_to(vault_root).parent.as_posix()
+        folders[folder]=folders.get(folder,0)+1
+    return {"ok":True,"managedFiles":len(managed),"folders":folders,"phase":"arcana_to_obsidian_only"}
 
-def pull_obsidian_vault():
+def push_obsidian_vault(payload=None):
     obs=obsidian_config()
     if not obs.get("connected") or not obs.get("vaultPath"):
         raise ValueError("Conecte um vault Obsidian primeiro.")
     vault_root=resolve_vault_path(obs["vaultPath"])
     if not vault_root.exists():
         raise FileNotFoundError("O vault configurado não existe mais.")
-    tracked={**obs.get("tracked", {})}
-    tracked_paths={state.get("vaultRelativePath"):note_id for note_id,state in tracked.items() if state.get("vaultRelativePath")}
-    conflicts=[]
-    imported=0
-    for path in sorted(vault_root.rglob("*.md")):
-        rel=path.relative_to(vault_root).as_posix()
-        note=import_obsidian_note(path, vault_root, tracked_paths)
-        if not note:
-            continue
-        existing=tracked.get(note["id"] or "", {})
-        try:
-            current=read_note_file(note_path_by_id(note["id"])) if note.get("id") else None
-        except Exception:
-            current=None
-        arcana_changed=bool(current and existing and current.get("updatedAt")!=existing.get("lastArcanaUpdated"))
-        vault_changed=bool(existing and existing.get("lastVaultMtime") not in {None, path.stat().st_mtime_ns})
-        if existing and current and arcana_changed and vault_changed:
-            conflicts.append({"noteId":current["id"],"title":current["title"],"file":rel,"reason":"Arcana e vault mudaram desde a última sincronização."})
-            continue
-        saved,_=save_note(note, note.get("id"))
-        tracked[saved["id"]]={"vaultRelativePath":rel,"lastArcanaUpdated":saved.get("updatedAt"),"lastVaultMtime":path.stat().st_mtime_ns}
-        imported+=1
-    obs=update_obsidian_config(vaultPath=str(vault_root),vaultName=vault_root.name,connected=True,lastSyncAt=now_iso(),tracked=tracked,conflicts=conflicts)
+    files=render_obsidian_export(payload or {})
+    result, tracked=write_obsidian_export(vault_root, files)
+    obs=update_obsidian_config(vaultPath=str(vault_root),vaultName=vault_root.name,connected=True,lastSyncAt=now_iso(),tracked={**obs.get("tracked",{}),**tracked},conflicts=result["warnings"],lastPush={k:result[k] for k in ["ok","created","updated","unchanged","errors","warnings"]})
     status=obsidian_status_payload(obs)
-    status["importedNotes"]=imported
-    return status
-
-def sync_obsidian_vault():
-    pull_obsidian_vault()
-    return push_obsidian_vault()
+    return {**result,"obsidian":status}
 
 def load_index():
     ensure_vault()
@@ -970,7 +1139,7 @@ class Handler(SimpleHTTPRequestHandler):
                 data=vault_zip_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type","application/zip")
-                self.send_header("Content-Disposition",f'attachment; filename="arcana-vault-{datetime.now().strftime("%Y%m%d-%H%M%S")}.zip"')
+                self.send_header("Content-Disposition",f'attachment; filename="Arcana-Obsidian-Vault-{datetime.now().strftime("%Y-%m-%d")}.zip"')
                 self.send_header("Cache-Control","no-store")
                 self.send_header("Content-Length",str(len(data)))
                 self.end_headers()
@@ -1018,20 +1187,25 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.json({"flashcard":save_flashcard(read_json_body(self))},201)
             if p.path=="/api/obsidian/connect":
                 data=read_json_body(self)
-                vault_root=resolve_vault_path(data.get("path"))
-                auto_sync=data.get("autoSync") if data.get("autoSync") in OBSIDIAN_AUTO_SYNC else "after_session"
-                ensure_obsidian_vault_structure(vault_root)
+                vault_root=validate_vault_root(data.get("vaultPath") or data.get("path"))
+                auto_sync=data.get("autoSync") if data.get("autoSync") in OBSIDIAN_AUTO_SYNC else "manual"
                 obs=update_obsidian_config(connected=True,vaultPath=str(vault_root),vaultName=vault_root.name,lastSyncAt=obsidian_config().get("lastSyncAt"),autoSync=auto_sync)
                 return self.json({"obsidian":obsidian_status_payload(obs)},201)
+            if p.path=="/api/obsidian/reindex-preview":
+                return self.json(obsidian_reindex_preview())
             if p.path=="/api/obsidian/sync":
-                return self.json({"obsidian":sync_obsidian_vault()})
+                data=read_json_body(self)
+                result=push_obsidian_vault(data.get("payload") or data)
+                return self.json(result)
             if p.path=="/api/obsidian/pull":
-                return self.json({"obsidian":pull_obsidian_vault()})
+                return self.json({"error":"Obsidian -> Arcana não faz parte da Phase 1."},405)
             if p.path=="/api/obsidian/push":
-                return self.json({"obsidian":push_obsidian_vault()})
+                data=read_json_body(self)
+                result=push_obsidian_vault(data.get("payload") or data)
+                return self.json(result)
             if p.path=="/api/obsidian/disconnect":
                 current=obsidian_config()
-                obs=update_obsidian_config(connected=False,vaultPath="",vaultName="",tracked={},conflicts=[],lastSyncAt=current.get("lastSyncAt"))
+                obs=update_obsidian_config(connected=False,vaultPath="",vaultName="",tracked={},conflicts=[],lastSyncAt=current.get("lastSyncAt"),lastPush=current.get("lastPush") or {})
                 return self.json({"obsidian":obsidian_status_payload(obs)})
         except Exception as e:
             return self.json({"error":str(e)},400)

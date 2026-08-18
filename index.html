@@ -268,31 +268,22 @@
 	            <button id="backupNowBtn" class="gold-btn">Criar snapshot</button>
 	            <button id="exportFullBackupBtn" class="ghost-btn">Exportar backup</button>
 	            <label class="ghost-btn file-label">Importar backup<input id="fullBackupImportInput" type="file" accept="application/json"></label>
-	            <button id="exportVaultBtn" class="ghost-btn">Exportar Vault Obsidian</button>
-	            <label class="ghost-btn file-label">Importar Vault Obsidian<input id="vaultImportInput" type="file" accept=".zip,application/zip"></label>
-	            <button id="reindexVaultBtn" class="ghost-btn">Reindexar vault</button>
+	            <button id="exportVaultBtn" class="ghost-btn">Exportar Vault para Obsidian</button>
+	            <label class="ghost-btn file-label">Importar Vault<input id="vaultImportInput" type="file" accept=".zip,application/zip"></label>
+	            <button id="reindexVaultBtn" class="ghost-btn">Reindexar notas locais</button>
 	          </div>
 	          <div class="snapshot-tools"><select id="snapshotList"></select><button id="restoreSnapshotBtn" class="ghost-btn">Restaurar snapshot</button></div>
 	        </article>
         <article class="card">
-          <div class="card-head"><div><div class="kicker">OBSIDIAN</div><h2>Integração do vault</h2></div></div>
+          <div class="card-head"><div><div class="kicker">☾ OBSIDIAN BRIDGE</div><h2>Integração do vault</h2></div></div>
           <div id="obsidianEnvironmentStatus" class="hint"></div>
           <div id="obsidianVaultStatus"></div>
-          <label>Autosync
-            <select id="obsidianAutoSync">
-              <option value="manual">Manual</option>
-              <option value="after_note_save">Após salvar nota</option>
-              <option value="after_session">Após sessão de estudo</option>
-              <option value="every_5_minutes">A cada 5 minutos</option>
-            </select>
-          </label>
+          <label class="check"><input id="obsidianAutoSync" type="checkbox"> Sincronizar após sessão de estudo</label>
           <p id="obsidianAutoSyncNote" class="hint"></p>
           <div id="obsidianStats"></div>
           <div class="item-actions">
             <button id="obsidianConnectBtn" class="gold-btn">Conectar Vault</button>
-            <button id="obsidianSyncBtn" class="ghost-btn">Sincronizar agora</button>
-            <button id="obsidianPullBtn" class="ghost-btn">Importar Vault</button>
-            <button id="obsidianPushBtn" class="ghost-btn">Exportar Vault</button>
+            <button id="obsidianSyncBtn" class="ghost-btn">Sincronizar para Obsidian</button>
             <button id="obsidianOpenBtn" class="ghost-btn">Abrir no Obsidian</button>
             <button id="obsidianDisconnectBtn" class="ghost-btn danger">Desconectar</button>
           </div>

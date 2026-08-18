@@ -32,11 +32,19 @@ Arcana also creates local IndexedDB snapshots and keeps the latest 10. Snapshots
 
 ## Knowledge Vault
 
-Use `Exportar vault ZIP` to download an `Arcana-Vault/` ZIP with Markdown notes, YAML frontmatter, wiki links, `index.json`, and flashcards JSON.
+Use `Exportar Vault para Obsidian` to download `Arcana-Obsidian-Vault-YYYY-MM-DD.zip` with Markdown notes, YAML frontmatter, wiki links, course/module/lesson context, source notes, indexes, and flashcards.
 
-Use `Importar vault ZIP` to restore a ZIP produced by Arcana. The static importer rejects unsafe paths and supports the uncompressed ZIPs Arcana exports.
+Use `Importar Vault` to restore a ZIP produced by Arcana or to import generic Markdown. The static importer rejects unsafe paths. Direct Obsidian -> Arcana reverse sync is not part of Phase 1.
 
-When running through `server.py`, Arcana attempts a one-time bridge from the older local Markdown vault into IndexedDB so the static backup/export tools include those notes.
+When running through `server.py`, Settings -> Integracoes -> Obsidian exposes the Obsidian Bridge Phase 1:
+
+- `Conectar Vault` stores the local vault path in `.arcana-local.json`, which is ignored by git.
+- `Sincronizar para Obsidian` writes Arcana-managed Markdown directly into that vault.
+- Arcana creates the root folders expected by the bridge, including `10 Fichamentos/`, `60 Fontes/`, `80 Flashcards/`, `Tracks/`, `Courses/`, `Arcana Index.md`, and `README - Arcana.md`.
+- Arcana only updates files marked with `arcana_managed: true` and the matching stable `arcana_id`. Existing Obsidian files, `Welcome.md`, and `.obsidian/` are preserved.
+- No deletion sync runs in Phase 1. Archived Arcana notes are written under `90 Arquivo/`.
+
+Attachments are reserved in `Attachments/`; current browser/local note records do not expose binary attachment blobs for export yet.
 
 ## PWA And Offline
 

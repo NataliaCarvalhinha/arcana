@@ -4,7 +4,7 @@ const LEGACY_KEYS=["arcana-activity-hub-v4","arcana-activity-hub-v3","arcana-act
 const STARTER_CONTENT_VERSION=2;
 const STARTER_CURRICULUM_VERSION=1;
 const CURRICULUM_FETCHED_AT="2026-08-17T00:00:00.000Z";
-const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vaultPath:"",lastSyncAt:null,noteCount:0,fichamentoCount:0,attachmentCount:0,flashcardCount:0,conflicts:0,autoSync:"after_session",openUrl:"",error:null};
+const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vaultPath:"",lastSyncAt:null,noteCount:0,fichamentoCount:0,attachmentCount:0,flashcardCount:0,conflicts:0,autoSync:"manual",syncStatus:"saved",lastPush:{},openUrl:"",error:null};
 const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[]},starterContentVersion:0,starterCurriculumVersion:0};
 const STARTER_TRACKS=[
   {id:"track-electronics",name:"Eletrônica",sigil:"☿",subtitle:"Circuitos · FPGA · RISC-V · Verificação",description:"Trilha técnica de sistemas embarcados, lógica digital, FPGA, arquitetura de computadores, RISC-V, SystemVerilog, UVM e VLSI.",weeklyGoal:240},
@@ -625,19 +625,13 @@ function appBaseUrl(){
   return document.baseURI||location.href||fallback
 }
 function obsidianModeLabel(value){
-  if(value==="after_note_save"){
-    return "após salvar nota"
-  }
   if(value==="after_session"){
     return "após sessão"
-  }
-  if(value==="every_5_minutes"){
-    return "a cada 5 minutos"
   }
   return "manual"
 }
 function obsidianEnvironmentLabel(){
-  return isLocalBackend()?"Arcana Local com sincronização direta disponível":"GitHub Pages/estático com exportação e importação de vault ZIP"
+  return isLocalBackend()?"Arcana Local com Obsidian Bridge direto":"Modo online: exportação ZIP e importação manual"
 }
 function canonicalYoutubePlaylistUrl(playlistId){
   const url=new URL("https://www.youtube.com/playlist");
@@ -1105,21 +1099,20 @@ async function refreshObsidianStatus(){
 function ensureObsidianAutoSyncLoop(){
   clearInterval(obsidianAutoSyncHandle);
   obsidianAutoSyncHandle=null;
-  if(state.obsidian.autoSync==="every_5_minutes"){
-    obsidianAutoSyncHandle=setInterval(()=>{queueObsidianAutoSync("every_5_minutes")},300000)
-  }
 }
-async function runObsidianSync(mode="sync",silent=false){
+async function runObsidianSync(mode="push",silent=false){
   if(!isLocalBackend()||!state.obsidian.connected||obsidianSyncInFlight){
     return state.obsidian
   }
   obsidianSyncInFlight=true;
+  applyObsidianStatus({syncStatus:"syncing"});
   try{
-    const data=await api(`/api/obsidian/${mode}`,{method:"POST",body:JSON.stringify({autoSync:state.obsidian.autoSync})});
-    applyObsidianStatus({available:true,...(data.obsidian||{})});
+    const payload=await ArcanaStorage.obsidianPayload(state);
+    const data=await api(`/api/obsidian/${mode==="sync"?"push":mode}`,{method:"POST",body:JSON.stringify({autoSync:state.obsidian.autoSync,payload})});
+    applyObsidianStatus({available:true,syncStatus:"synced",...(data.obsidian||{}),lastPush:{ok:data.ok,created:data.created,updated:data.updated,unchanged:data.unchanged,errors:data.errors||[],warnings:data.warnings||[]}});
     return state.obsidian
   }catch(e){
-    applyObsidianStatus({error:e.message||String(e)});
+    applyObsidianStatus({syncStatus:"saved",error:e.message||String(e)});
     if(!silent){
       alert(e.message||String(e))
     }
@@ -1132,17 +1125,10 @@ function queueObsidianAutoSync(reason){
   if(!isLocalBackend()||!state.obsidian.connected){
     return
   }
-  const mode=state.obsidian.autoSync||"after_session";
-  if(reason==="after_note_save"&&mode!=="after_note_save"){
+  if(reason!=="after_session"||state.obsidian.autoSync!=="after_session"){
     return
   }
-  if(reason==="after_session"&&mode!=="after_session"){
-    return
-  }
-  if(reason==="every_5_minutes"&&mode!=="every_5_minutes"){
-    return
-  }
-  Promise.resolve().then(()=>runObsidianSync("sync",true)).catch(()=>{})
+  Promise.resolve().then(()=>runObsidianSync("push",true)).catch(()=>{})
 }
 async function connectObsidianVault(){
   if(!isLocalBackend()){
@@ -1150,11 +1136,11 @@ async function connectObsidianVault(){
     return
   }
   const suggestion=state.obsidian.vaultPath||"";
-  const path=prompt("Caminho absoluto da pasta do seu vault Obsidian",suggestion);
+  const path=prompt("Caminho absoluto da pasta raiz do seu vault Obsidian",suggestion);
   if(path===null){
     return
   }
-  const data=await api("/api/obsidian/connect",{method:"POST",body:JSON.stringify({path:path.trim(),autoSync:state.obsidian.autoSync||"after_session"})});
+  const data=await api("/api/obsidian/connect",{method:"POST",body:JSON.stringify({vaultPath:path.trim(),autoSync:state.obsidian.autoSync||"manual"})});
   applyObsidianStatus({available:true,...(data.obsidian||{})})
 }
 async function disconnectObsidianVault(){
@@ -1174,7 +1160,7 @@ async function updateObsidianAutoSync(value){
   ensureObsidianAutoSyncLoop();
   renderSettings();
   if(isLocalBackend()&&state.obsidian.connected&&state.obsidian.vaultPath){
-    const data=await api("/api/obsidian/connect",{method:"POST",body:JSON.stringify({path:state.obsidian.vaultPath,autoSync:value})});
+    const data=await api("/api/obsidian/connect",{method:"POST",body:JSON.stringify({vaultPath:state.obsidian.vaultPath,autoSync:value})});
     applyObsidianStatus({available:true,...(data.obsidian||{})})
   }
 }
@@ -1760,7 +1746,7 @@ async function saveNotes(){
   const payload={title:`Notas - ${i.title}`,type:"quick",content:$("notesText").value,trackId:i.track||null,sourceType:sourceTypeForResource(i,notesRef.scope),sourceId:i.id,tags:["nota"],source:sourcePayloadForResource(i,notesRef.scope)};
   try{
     const data=notesRef.noteId?await api(`/api/notes/${encodeURIComponent(notesRef.noteId)}`,{method:"PUT",body:JSON.stringify(payload)}):await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
-    i.vaultNoteId=data.note.id;i.notes=(data.note.excerpt||"").slice(0,180);save(false);await loadVaultNotes();$("notesDialog").close();queueObsidianAutoSync("after_note_save")
+    i.vaultNoteId=data.note.id;i.notes=(data.note.excerpt||"").slice(0,180);state.obsidian.syncStatus="saved";save(false);await loadVaultNotes();$("notesDialog").close()
   }catch(e){alert(e.message)}
 }
 
@@ -1895,7 +1881,7 @@ function activePayload(){
 }
 async function saveActiveVaultNote(){
   if(!activeVaultNote)return;
-  try{const data=await api(`/api/notes/${encodeURIComponent(activeVaultNote.id)}`,{method:"PUT",body:JSON.stringify(activePayload())});activeVaultNote=data.note;if(data.duplicateCandidates?.length){$("vaultWarnings").innerHTML=`<div class="hint">Possível duplicata: ${data.duplicateCandidates.map(d=>esc(d.title)).join(", ")}</div>`}await loadVaultNotes();queueObsidianAutoSync("after_note_save")}catch(e){alert(e.message)}
+  try{const data=await api(`/api/notes/${encodeURIComponent(activeVaultNote.id)}`,{method:"PUT",body:JSON.stringify(activePayload())});activeVaultNote=data.note;state.obsidian.syncStatus="saved";if(data.duplicateCandidates?.length){$("vaultWarnings").innerHTML=`<div class="hint">Possível duplicata: ${data.duplicateCandidates.map(d=>esc(d.title)).join(", ")}</div>`}await loadVaultNotes()}catch(e){alert(e.message)}
 }
 function previewActiveVaultNote(){const p=$("vaultPreview");p.classList.toggle("hidden");p.innerHTML=mdToHtml($("vaultContent").value)}
 async function newVaultNote(type="permanent"){
@@ -2012,14 +1998,12 @@ function renderSettings(){
   }
   $("backupStatus").innerHTML=`<p class="hint">${state.lastAutoBackup?`Último snapshot automático: ${new Date(state.lastAutoBackup).toLocaleString("pt-BR")}`:"Nenhum snapshot automático ainda."}</p>`;
   if($("obsidianEnvironmentStatus")){$("obsidianEnvironmentStatus").textContent=`Ambiente: ${obsidianEnvironmentLabel()}`;}
-  if($("obsidianVaultStatus")){$("obsidianVaultStatus").innerHTML=`<p class="hint">${connected?`Vault: ${esc(state.obsidian.vaultName||"sem nome")} · ${esc(state.obsidian.vaultPath||"")}`:"Nenhum vault conectado."}</p><p class="hint">${connected&&state.obsidian.lastSyncAt?`Última sincronização: ${new Date(state.obsidian.lastSyncAt).toLocaleString("pt-BR")}`:local?"Conecte um vault para sincronização bidirecional.":"Use exportação/importação para mover notas entre Arcana Online e Obsidian."}</p>${state.obsidian.error?`<p class="hint">Erro: ${esc(state.obsidian.error)}</p>`:""}`;}
+  if($("obsidianVaultStatus")){$("obsidianVaultStatus").innerHTML=`<p class="hint">${connected?`Vault: ${esc(state.obsidian.vaultName||"sem nome")} · ${esc(state.obsidian.vaultPath||"")}`:"Nenhum vault conectado."}</p><p class="hint">${connected&&state.obsidian.lastSyncAt?`Último envio: ${new Date(state.obsidian.lastSyncAt).toLocaleString("pt-BR")}`:local?"Conecte um vault para enviar Markdown direto ao Obsidian.":"Use Exportar Vault para Obsidian para baixar um ZIP compatível."}</p>${state.obsidian.syncStatus?`<p class="hint">Status: ${esc(state.obsidian.syncStatus)}</p>`:""}${state.obsidian.error?`<p class="hint">Erro: ${esc(state.obsidian.error)}</p>`:""}`;}
   if($("obsidianStats")){$("obsidianStats").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Notas</span><strong>${state.obsidian.noteCount||0}</strong></div><div class="profile-stat"><span>Fichamentos</span><strong>${state.obsidian.fichamentoCount||0}</strong></div><div class="profile-stat"><span>Anexos</span><strong>${state.obsidian.attachmentCount||0}</strong></div><div class="profile-stat"><span>Conflitos</span><strong>${state.obsidian.conflicts||0}</strong></div></div>`;}
-  if($("obsidianAutoSync")){$("obsidianAutoSync").value=state.obsidian.autoSync||"after_session";$("obsidianAutoSync").disabled=!local;}
-  if($("obsidianAutoSyncNote")){$("obsidianAutoSyncNote").textContent=`Autosync atual: ${obsidianModeLabel(state.obsidian.autoSync)}.`;}
+  if($("obsidianAutoSync")){$("obsidianAutoSync").checked=state.obsidian.autoSync==="after_session";$("obsidianAutoSync").disabled=!local;}
+  if($("obsidianAutoSyncNote")){$("obsidianAutoSyncNote").textContent=`Autosync atual: ${obsidianModeLabel(state.obsidian.autoSync)}. A sincronização reversa Obsidian -> Arcana não faz parte da Phase 1.`;}
   if($("obsidianConnectBtn")){$("obsidianConnectBtn").disabled=!local;}
   if($("obsidianSyncBtn")){$("obsidianSyncBtn").disabled=!local||!connected;}
-  if($("obsidianPullBtn")){$("obsidianPullBtn").disabled=!local||!connected;}
-  if($("obsidianPushBtn")){$("obsidianPushBtn").disabled=!local||!connected;}
   if($("obsidianDisconnectBtn")){$("obsidianDisconnectBtn").disabled=!local||!connected;}
   if($("obsidianOpenBtn")){$("obsidianOpenBtn").disabled=!local||!state.obsidian.openUrl;}
   renderSnapshots()
@@ -2117,12 +2101,12 @@ $("refreshCatalogBtn").onclick=async()=>{try{await refreshPublishedCatalog(true)
 $("backupNowBtn").onclick=()=>autoBackup("manual");
 $("exportFullBackupBtn").onclick=()=>ArcanaStorage.downloadFullBackup(state);
 $("fullBackupImportInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await importFullBackupFile(f)}catch(err){alert(err.message)}e.target.value=""};
-$("exportVaultBtn").onclick=()=>ArcanaStorage.downloadVault();
+$("exportVaultBtn").onclick=()=>ArcanaStorage.downloadObsidianVault(state);
 $("vaultImportInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const summary=await ArcanaStorage.importVault(f);await loadVaultNotes();renderAll();if(summary){alert(`Importação concluída: ${summary.importedNotes||0} notas (${summary.arcanaManagedNotes||0} gerenciadas pelo Arcana, ${summary.externalNotes||0} externas) e ${summary.importedFlashcards||0} flashcards.`)}}catch(err){alert(err.message)}e.target.value=""};
 $("reindexVaultBtn").onclick=async()=>{try{await api("/api/reindex",{method:"POST"});await loadVaultNotes();alert("Vault reindexado.")}catch(e){alert(e.message)}};
 $("restoreSnapshotBtn").onclick=async()=>{const id=$("snapshotList").value;if(!id)return;try{state=normalize(await ArcanaStorage.restoreSnapshot(id));await loadVaultNotes();renderAll()}catch(e){alert(e.message)}};
 $("obsidianConnectBtn").onclick=()=>connectObsidianVault().catch(e=>alert(e.message||String(e)));
-$("obsidianSyncBtn").onclick=()=>runObsidianSync("sync").catch(()=>{});
+$("obsidianSyncBtn").onclick=()=>runObsidianSync("push").catch(()=>{});
 if(document.addEventListener){
   document.addEventListener("visibilitychange",()=>{
     if(document.hidden){
@@ -2132,11 +2116,9 @@ if(document.addEventListener){
     }
   });
 }
-$("obsidianPullBtn").onclick=()=>runObsidianSync("pull").catch(()=>{});
-$("obsidianPushBtn").onclick=()=>runObsidianSync("push").catch(()=>{});
 $("obsidianDisconnectBtn").onclick=()=>disconnectObsidianVault().catch(e=>alert(e.message||String(e)));
 $("obsidianOpenBtn").onclick=openObsidianVault;
-$("obsidianAutoSync").onchange=e=>updateObsidianAutoSync(e.currentTarget.value).catch(err=>alert(err.message||String(err)));
+$("obsidianAutoSync").onchange=e=>updateObsidianAutoSync(e.currentTarget.checked?"after_session":"manual").catch(err=>alert(err.message||String(err)));
 $("playlistImportInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await importPlaylistFile(f)}catch(err){alert(err.message)}e.target.value=""};
 $("newNoteBtn").onclick=()=>newVaultNote("permanent");$("newFichamentoBtn").onclick=()=>newFichamento();
 ["vaultSearchInput","vaultTypeFilter","vaultTrackFilter","vaultTagFilter","vaultFavoriteFilter","vaultReviewFilter","vaultSortFilter"].forEach(id=>{if($(id))$(id).oninput=renderNotes;if($(id))$(id).onchange=renderNotes});

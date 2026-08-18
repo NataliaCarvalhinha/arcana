@@ -8,7 +8,14 @@ cookies.txt
 backups/
 arcana-backup-*.json
 arcana-vault-*.zip
+Arcana-Obsidian-Vault-*.zip
 Arcana-Vault/
+test-vault/
+tmp-vault/
+obsidian-export/
+local-obsidian-export/
+private-attachments/
+.arcana-sync-*.tmp
 
 data/notes/
 data/sources/

@@ -40,7 +40,8 @@ assert.match(app, /const DEFAULT_OBSIDIAN_STATE=/, "obsidian state defaults are 
 assert.match(app, /async function refreshObsidianStatus/, "obsidian status refresh exists");
 assert.match(app, /function queueObsidianAutoSync/, "obsidian autosync hook exists");
 assert.match(app, /queueObsidianAutoSync\("after_session"\)/, "focus completion triggers obsidian autosync");
-assert.match(app, /queueObsidianAutoSync\("after_note_save"\)/, "note saves can trigger obsidian autosync");
+assert.doesNotMatch(app, /queueObsidianAutoSync\("after_note_save"\)/, "note saves do not trigger direct obsidian sync in phase one");
+assert.match(app, /ArcanaStorage\.downloadObsidianVault\(state\)/, "online vault export uses the obsidian zip exporter");
 assert.match(app, /function exportPlaylistFile/, "playlist JSON export is available");
 assert.match(index, /<form id="trackForm" class="modal" novalidate>/, "track form uses app validation");
 assert.match(index, /name="sigil" maxlength="12"/, "track sigil accepts the requested label length");
@@ -73,6 +74,7 @@ assert.match(app, /state=applyStarterContent\(await ArcanaStorage\.init/, "start
 assert.match(index, /id="obsidianConnectBtn"/, "settings exposes the obsidian connect action");
 assert.match(index, /id="obsidianSyncBtn"/, "settings exposes the obsidian sync action");
 assert.match(index, /id="obsidianAutoSync"/, "settings exposes autosync selection");
+assert.doesNotMatch(index, /id="obsidianPullBtn"|id="obsidianPushBtn"/, "phase one does not expose direct reverse sync controls");
 assert.match(index, /id="requestCatalogBtn"/, "YouTube view exposes the catalog request action");
 assert.match(index, /id="requestCatalogBtn" class="mini-btn" href="#" target="_blank" rel="noopener noreferrer"/, "catalog request action opens a safe new tab");
 assert.match(index, /id="catalogOptionsBtn"/, "YouTube view exposes manual catalog fallback options");
@@ -90,7 +92,11 @@ assert.doesNotMatch(app, /\$\("trackForm"\)\.id\.value|const f=e\.currentTarget,
 assert.match(db, /async function list\(name\)/, "storage exposes a store inspection helper");
 assert.match(db, /tracks","courses","modules"/, "IndexedDB schema still contains domain stores");
 assert.match(db, /arcana_managed: true/, "obsidian vault export marks managed notes");
-assert.match(db, /Arcana Obsidian Vault/, "obsidian vault export uses the dedicated vault root");
+assert.match(db, /Arcana-Obsidian-Vault/, "obsidian vault export uses the requested filename");
+assert.match(db, /README - Arcana\.md/, "obsidian vault export includes the Arcana readme");
+assert.match(db, /Courses\//, "obsidian vault export includes course notes");
+assert.match(db, /Tracks\//, "obsidian vault export includes track notes");
+assert.doesNotMatch(db, /Arcana Obsidian Vault/, "obsidian vault export does not nest files inside a legacy root folder");
 assert.equal(youtubePlaylists.playlists[0].id, "PLNur2Ccbfc5k");
 assert.equal(youtubePlaylists.playlists[0].enabled, true);
 assert.equal(youtubeCatalog.version, 1);
@@ -121,7 +127,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v8/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v9/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -163,7 +169,7 @@ function makeElement(id) {
 }
 
 const elements = new Map();
-const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "calendarView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "dailyPlan", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianPullBtn", "obsidianPushBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "calendarView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "dailyPlan", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }

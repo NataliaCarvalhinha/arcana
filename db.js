@@ -306,26 +306,26 @@ const ArcanaStorage=(()=>{
   function slug(text){
     return String(text||"untitled").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,80)||"untitled"
   }
-  const OBSIDIAN_ROOT="Arcana Obsidian Vault";
   const OBSIDIAN_FOLDERS=[
-    "00 Inbox/.keep",
-    "10 Fichamentos/Cursos/.keep",
-    "10 Fichamentos/Livros/.keep",
-    "10 Fichamentos/Papers/.keep",
-    "10 Fichamentos/Artigos/.keep",
-    "10 Fichamentos/Videos/.keep",
-    "10 Fichamentos/Podcasts/.keep",
-    "10 Fichamentos/Outros/.keep",
-    "20 Notas Permanentes/.keep",
-    "30 Conceitos/.keep",
-    "40 Perguntas/.keep",
-    "50 Sessões/.keep",
-    "60 Fontes/.keep",
-    "70 Revisões/.keep",
-    "80 Flashcards/.keep",
-    "90 Arquivo/.keep",
-    "Attachments/.keep",
-    "Templates/.keep"
+    "00 Inbox/",
+    "10 Fichamentos/Cursos/",
+    "10 Fichamentos/Livros/",
+    "10 Fichamentos/Papers/",
+    "10 Fichamentos/Artigos/",
+    "10 Fichamentos/Videos/",
+    "10 Fichamentos/Podcasts/",
+    "10 Fichamentos/Outros/",
+    "20 Notas Permanentes/",
+    "30 Conceitos/",
+    "40 Perguntas/",
+    "50 Sessões/",
+    "60 Fontes/",
+    "70 Revisões/",
+    "80 Flashcards/",
+    "90 Arquivo/",
+    "Attachments/",
+    "Tracks/",
+    "Courses/"
   ];
   function yamlScalar(value){
     if(value===null||value===undefined){
@@ -398,43 +398,121 @@ const ArcanaStorage=(()=>{
     }
     return "20 Notas Permanentes"
   }
-  function obsidianPathFor(note){
-    return `${OBSIDIAN_ROOT}/${obsidianFolder(note)}/${slug(note.title)}-${note.id}.md`
+  function obsidianSafeFilename(title,fallback="Arcana"){
+    const text=String(title||fallback).normalize("NFC").replace(/[\u0000-\u001f\u007f/\\]+/g," ").replace(/[<>:"|?*]+/g," ").replace(/\s+/g," ").trim().replace(/[. ]+$/,"");
+    return (text||fallback).slice(0,120)
   }
-  function obsidianFrontmatter(note){
-    const tags=mergeTags(note.tags,inlineTags(note.content));
-    const source=note.source&&Object.keys(note.source).length?JSON.stringify(note.source):"{}";
-    const lines=[
-      "---",
-      `arcana_id: ${yamlScalar(note.id)}`,
-      "arcana_managed: true",
-      `title: ${yamlScalar(note.title)}`,
-      `type: ${yamlScalar(note.type)}`,
-      `track: ${yamlScalar(note.trackId||"")}`,
-      "tags:"
-    ];
+  function obsidianLink(title){
+    return `[[${String(title||"Sem titulo").replace(/[\[\]]/g,"")}]]`
+  }
+  function obsidianPathFor(note){
+    return `${obsidianFolder(note)}/${obsidianSafeFilename(note.title||"Nota")}.md`
+  }
+  function arcanaFrontmatter(meta){
+    const lines=["---","arcana_managed: true",`arcana_id: ${yamlScalar(meta.arcana_id)}`];
+    for(const key of ["type","title","track","track_id","course","course_id","module","module_id","lesson","lesson_id","source","source_type","source_id","created","updated","review_at","status","favorite"]){
+      if(Object.prototype.hasOwnProperty.call(meta,key)){
+        lines.push(`${key}: ${yamlScalar(meta[key])}`)
+      }
+    }
+    const tags=Array.isArray(meta.tags)?meta.tags:[];
+    lines.push("tags:");
     if(tags.length){
-      for(const tag of tags){
+      for(const tag of [...new Set(tags.map(item=>String(item||"").trim().replace(/^#/,"")).filter(Boolean))].sort()){
         lines.push(`  - ${yamlScalar(tag)}`)
       }
     }else{
       lines.push("  []")
     }
-    lines.push(`source: ${source}`);
-    lines.push(`source_type: ${yamlScalar(note.sourceType||"")}`);
-    lines.push(`source_id: ${yamlScalar(note.sourceId||"")}`);
-    lines.push(`session_id: ${yamlScalar(note.sessionId||"")}`);
-    lines.push(`created: ${yamlScalar(note.createdAt||now())}`);
-    lines.push(`updated: ${yamlScalar(note.updatedAt||now())}`);
-    lines.push(`review_at: ${yamlScalar(note.reviewAt||"")}`);
-    lines.push(`status: ${yamlScalar(note.status||"active")}`);
-    lines.push(`favorite: ${note.favorite?"true":"false"}`);
     lines.push("---");
     return lines.join("\n")
   }
+  function obsidianFile(name,text,arcanaId,type,updated=""){
+    if(unsafePath(name)){
+      throw new Error(`Caminho Obsidian inseguro: ${name}`)
+    }
+    return {name,text:`${String(text).trimEnd()}\n`,arcanaId,type,updated}
+  }
+  function buildObsidianLookups(payload){
+    const state=payload?.state||{};
+    const tracks=new Map((Array.isArray(state.tracks)?state.tracks:[]).filter(item=>item?.id).map(item=>[String(item.id),item]));
+    const courses=new Map();
+    const modules=new Map();
+    const lessons=new Map();
+    const courseByLesson=new Map();
+    const moduleByLesson=new Map();
+    for(const item of Array.isArray(state.items)?state.items:[]){
+      if(!item||!(item.kind==="course"||Array.isArray(item.modules))){
+        continue
+      }
+      if(item.id){
+        courses.set(String(item.id),item)
+      }
+      for(const module of item.modules||[]){
+        if(module?.id){
+          modules.set(String(module.id),module)
+        }
+        for(const lesson of module?.lessons||[]){
+          if(lesson?.id){
+            lessons.set(String(lesson.id),lesson);
+            courseByLesson.set(String(lesson.id),String(item.id));
+            if(module?.id){
+              moduleByLesson.set(String(lesson.id),String(module.id))
+            }
+          }
+        }
+      }
+    }
+    return {tracks,courses,modules,lessons,courseByLesson,moduleByLesson}
+  }
+  function enrichObsidianNote(note,lookups){
+    const source=note.source&&typeof note.source==="object"?note.source:{};
+    const sourceId=note.sourceId||source.lessonId||source.moduleId||source.courseId;
+    const course=lookups.courses.get(String(source.courseId||note.courseId||lookups.courseByLesson.get(String(sourceId))||""))||null;
+    const module=lookups.modules.get(String(source.moduleId||note.moduleId||lookups.moduleByLesson.get(String(sourceId))||""))||null;
+    const lesson=lookups.lessons.get(String(source.lessonId||note.lessonId||sourceId||""))||null;
+    const track=lookups.tracks.get(String(note.trackId||(course?.trackId)||""))||null;
+    return {...note,sourceId,_course:course,_module:module,_lesson:lesson,_track:track}
+  }
+  function obsidianFrontmatterForNote(note){
+    const tags=mergeTags(note.tags,inlineTags(note.content));
+    return arcanaFrontmatter({
+      arcana_id:note.id,
+      type:note.type||"permanent",
+      title:note.title||"Nota",
+      track:note._track?.name||"",
+      track_id:note.trackId||note._track?.id||"",
+      course:note._course?.title||"",
+      course_id:note._course?.id||"",
+      module:note._module?.title||"",
+      module_id:note._module?.id||"",
+      lesson:note._lesson?.title||"",
+      lesson_id:note._lesson?.id||"",
+      source_type:note.sourceType||"",
+      source_id:note.sourceId||"",
+      created:note.createdAt||"",
+      updated:note.updatedAt||"",
+      review_at:note.reviewAt||"",
+      status:note.status||"active",
+      favorite:!!note.favorite,
+      tags
+    })
+  }
   function markdownFor(note){
-    const content=(note.content||`# ${note.title}\n`).trimStart();
-    return `${obsidianFrontmatter(note)}\n\n${content}`
+    const body=[`# ${note.title||"Nota"}`];
+    if(note._course||note._module||note._lesson){
+      body.push("","## Contexto");
+      if(note._course){body.push(`- Curso: ${obsidianLink(note._course.title)}`)}
+      if(note._module){body.push(`- Modulo: ${note._module.title||""}`)}
+      if(note._lesson){body.push(`- Licao: ${note._lesson.title||""}`)}
+    }
+    if(note.sourceType||note.sourceId){
+      body.push("","## Fonte",`- Tipo: ${note.sourceType||"fonte"}`,`- ID: ${note.sourceId||""}`)
+    }
+    if(String(note.content||"").trim()){
+      body.push("","## Nota","",String(note.content||"").trim())
+    }
+    return `${obsidianFrontmatterForNote(note)}\n\n${body.join("\n").trimEnd()}\n`
   }
   function parseMarkdown(text){
     const match=String(text).match(/^---\n([\s\S]*?)\n---\n?/);
@@ -529,7 +607,7 @@ const ArcanaStorage=(()=>{
     if(entry.name.includes("/Templates/")){
       return true
     }
-    if(/\/(?:README|Arcana Index)\.md$/i.test(entry.name)){
+    if(/\/?(?:README|README - Arcana|Arcana Index)\.md$/i.test(entry.name)){
       return true
     }
     if(meta.arcana_kind&&["index","template","track_index"].includes(String(meta.arcana_kind))){
@@ -540,7 +618,7 @@ const ArcanaStorage=(()=>{
     }
     return false
   }
-  function obsidianIndexMarkdown(notes){
+  function obsidianIndexMarkdown(notes,courses=[],tracks=[]){
     const grouped=new Map();
     for(const note of notes){
       const key=obsidianFolder(note);
@@ -549,9 +627,17 @@ const ArcanaStorage=(()=>{
       }
       grouped.get(key).push(note)
     }
-    const sections=["---","arcana_kind: index","title: Arcana Index","---","","# Arcana Index","","## Estrutura"];
-    for(const folder of [...grouped.keys()].sort()){
-      sections.push(`- [[${folder}]]`);
+    const sections=[arcanaFrontmatter({arcana_id:"arcana-index",type:"index",title:"Arcana Index",status:"active",tags:["arcana/index"]}),"","# Arcana Index","","## Estrutura"];
+    for(const folder of OBSIDIAN_FOLDERS){
+      sections.push(`- \`${folder}\``);
+    }
+    sections.push("","## Trilhas");
+    for(const track of tracks){
+      sections.push(`- ${obsidianLink(track.name||track.title||"Trilha")}`);
+    }
+    sections.push("","## Cursos");
+    for(const course of courses){
+      sections.push(`- ${obsidianLink(course.title||course.name||"Curso")}`);
     }
     sections.push("","## Notas");
     for(const folder of [...grouped.keys()].sort()){
@@ -564,39 +650,65 @@ const ArcanaStorage=(()=>{
   }
   function obsidianReadmeMarkdown(){
     return [
+      arcanaFrontmatter({arcana_id:"arcana-readme",type:"readme",title:"README - Arcana",status:"active",tags:["arcana/readme"]}),
+      "",
       "# Arcana + Obsidian",
       "",
-      "Este vault usa Markdown comum e pode ser aberto diretamente no Obsidian.",
+      "Este vault contem arquivos gerados pelo Arcana Bridge Phase 1.",
       "",
-      "- `Arcana Index.md` resume as notas gerenciadas.",
-      "- `Attachments/` guarda anexos relativos.",
-      "- `Templates/` inclui modelos básicos para notas e fichamentos."
+      "## Regra de seguranca",
+      "",
+      "O Arcana so atualiza arquivos com `arcana_managed: true` e `arcana_id` correspondente. Arquivos seus, `Welcome.md` e `.obsidian/` permanecem fora do controle do Arcana.",
+      "",
+      "## Direcao",
+      "",
+      "Phase 1 e somente Arcana -> Markdown -> Obsidian. Importacao direta do Obsidian para o Arcana ainda nao faz parte desta fase."
     ].join("\n")
   }
-  function trackIndexFiles(notes){
-    const groups=new Map();
+  function obsidianCourseMarkdown(course,lookups){
+    const track=lookups.tracks.get(String(course.trackId||""));
+    const title=course.title||course.name||"Curso";
+    const meta={arcana_id:course.id,type:"course",title,track:track?.name||"",track_id:course.trackId||"",course:title,course_id:course.id||"",created:course.createdAt||"",updated:course.updatedAt||"",status:course.status||"active",tags:["arcana/course"]};
+    const lines=[`# ${title}`,"","## Modulos"];
+    for(const module of course.modules||[]){
+      lines.push("",`### ${module.title||"Modulo"}`);
+      for(const lesson of module.lessons||[]){
+        const done=lesson?.done?"x":" ";
+        const url=lesson?.url?` - ${lesson.url}`:"";
+        lines.push(`- [${done}] ${lesson?.title||"Licao"}${url}`)
+      }
+    }
+    return `${arcanaFrontmatter(meta)}\n\n${lines.join("\n").trimEnd()}\n`
+  }
+  function obsidianTrackMarkdown(track,courses,notes){
+    const title=track.name||track.title||"Trilha";
+    const meta={arcana_id:track.id,type:"track",title,track:title,track_id:track.id||"",created:track.createdAt||"",updated:track.updatedAt||"",status:"active",tags:["arcana/track"]};
+    const lines=[`# ${title}`,"","## Cursos",...courses.map(course=>`- ${obsidianLink(course.title||course.name)}`),"","## Notas",...notes.map(note=>`- ${obsidianLink(note.title)}`)];
+    return `${arcanaFrontmatter(meta)}\n\n${lines.join("\n").trimEnd()}\n`
+  }
+  function obsidianSourceFiles(notes){
+    const out=new Map();
     for(const note of notes){
-      if(!note.trackId){
+      const source=note.source&&typeof note.source==="object"?note.source:{};
+      const sourceId=note.sourceId||source.id||source.lessonId||source.moduleId||source.courseId;
+      const url=source.url||source.canonicalUrl||"";
+      if(!sourceId&&!url){
         continue
       }
-      if(!groups.has(note.trackId)){
-        groups.set(note.trackId,[])
+      const id=`source-${sourceId||slug(url,"fonte")}`;
+      if(out.has(id)){
+        continue
       }
-      groups.get(note.trackId).push(note)
+      const title=source.title||note.sourceTitle||sourceId||url||"Fonte Arcana";
+      const meta={arcana_id:id,type:"source",title,source:title,source_type:note.sourceType||source.type||"source",source_id:sourceId||"",created:note.createdAt||"",updated:note.updatedAt||"",status:"active",tags:["arcana/source"]};
+      const lines=[`# ${title}`,"","## Metadados"];
+      if(url){lines.push(`- URL: ${url}`)}
+      if(source.channel){lines.push(`- Canal: ${source.channel}`)}
+      if(source.timestamp){lines.push(`- Timestamp: ${source.timestamp}`)}
+      lines.push("","## Notas relacionadas",`- ${obsidianLink(note.title)}`);
+      out.set(id,obsidianFile(`60 Fontes/${obsidianSafeFilename(title)}.md`,`${arcanaFrontmatter(meta)}\n\n${lines.join("\n")}`,id,"source",meta.updated))
     }
-    return [...groups.entries()].map(([trackId,items])=>({
-      name:`${OBSIDIAN_ROOT}/60 Fontes/track-${slug(trackId)}.md`,
-      text:[
-        "---",
-        "arcana_kind: track_index",
-        `track: ${yamlScalar(trackId)}`,
-        "---",
-        "",
-        `# Track ${trackId}`,
-        "",
-        ...items.sort((a,b)=>String(a.title).localeCompare(String(b.title),"pt-BR")).map(note=>`- [[${note.title}]]`)
-      ].join("\n")
-    }))
+    return [...out.values()]
   }
   async function fullBackup(state){
     return {version:1,createdAt:now(),state:structuredClone(state),notes:await req(tx("notes").getAll()),flashcards:await listFlashcards()}
@@ -628,26 +740,79 @@ const ArcanaStorage=(()=>{
     }
     return payload.state
   }
-  async function downloadVault(){
+  async function obsidianPayload(state={}){
     const notes=await req(tx("notes").getAll());
-    const cards=await listFlashcards();
-    const files=[];
-    const index={version:1,exportedAt:now(),notes:notes.map(summarize),flashcards:cards};
-    for(const note of notes){
-      files.push({name:obsidianPathFor(note),text:markdownFor(note)})
+    const flashcards=await listFlashcards();
+    return {state:structuredClone(state),notes,fichamentos:notes.filter(note=>note.type==="literature"),flashcards}
+  }
+  function renderObsidianVault(payload={}){
+    const lookups=buildObsidianLookups(payload);
+    const notes=[];
+    for(const raw of payload.notes||[]){
+      if(raw?.id){
+        notes.push(enrichObsidianNote(noteDefaults(raw),lookups))
+      }
     }
-    for(const file of OBSIDIAN_FOLDERS){
-      files.push({name:`${OBSIDIAN_ROOT}/${file}`,text:""})
+    for(const raw of payload.fichamentos||[]){
+      if(raw?.id&&!notes.some(note=>note.id===raw.id)){
+        notes.push(enrichObsidianNote(noteDefaults({...raw,type:raw.type||"literature"}),lookups))
+      }
     }
-    files.push({name:`${OBSIDIAN_ROOT}/Arcana Index.md`,text:obsidianIndexMarkdown(notes)});
-    files.push({name:`${OBSIDIAN_ROOT}/README.md`,text:obsidianReadmeMarkdown()});
-    files.push({name:`${OBSIDIAN_ROOT}/Templates/Permanent Note.md`,text:`---\narcana_kind: template\ntype: permanent\n---\n\n# Nova nota permanente\n\n## Ideia atômica\n\n\n## Conexões\n\n- [[Outra nota]]\n`});
-    files.push({name:`${OBSIDIAN_ROOT}/Templates/Fichamento.md`,text:`---\narcana_kind: template\ntype: literature\n---\n\n# Novo fichamento\n\n## Dados da fonte\n\n- Tipo:\n- Autor/canal:\n- URL/ISBN/DOI:\n\n## Resumo\n\n\n## Citações\n\n- \n\n## Ideias e conexões\n\n- [[Conceito relacionado]]\n`});
-    files.push({name:`${OBSIDIAN_ROOT}/Templates/Session Note.md`,text:`---\narcana_kind: template\ntype: session\n---\n\n# Sessão\n\n## Registro\n\n\n## Conceitos\n\n\n## Próximas ações\n\n- [ ] \n`});
-    files.push(...trackIndexFiles(notes));
-    files.push({name:`${OBSIDIAN_ROOT}/index.json`,text:JSON.stringify(index,null,2)});
-    files.push({name:`${OBSIDIAN_ROOT}/80 Flashcards/flashcards.json`,text:JSON.stringify(cards,null,2)});
-    download(makeZip(files),`arcana-vault-${day()}.zip`)
+    const state=payload.state||{};
+    const courses=(Array.isArray(state.items)?state.items:[]).filter(item=>item?.id&&(item.kind==="course"||Array.isArray(item.modules)));
+    const tracks=Array.isArray(state.tracks)?state.tracks.filter(track=>track?.id):[];
+    const files=OBSIDIAN_FOLDERS.map(name=>({name,text:""}));
+    for(const note of notes.sort((a,b)=>`${obsidianFolder(a)} ${a.title||""}`.localeCompare(`${obsidianFolder(b)} ${b.title||""}`,"pt-BR"))){
+      files.push(obsidianFile(obsidianPathFor(note),markdownFor(note),note.id,note.type||"note",note.updatedAt||""))
+    }
+    for(const course of courses){
+      files.push(obsidianFile(`Courses/${obsidianSafeFilename(course.title||course.name||"Curso")}.md`,obsidianCourseMarkdown(course,lookups),course.id,"course",course.updatedAt||""))
+    }
+    for(const track of tracks){
+      const trackCourses=courses.filter(course=>course.trackId===track.id);
+      const trackNotes=notes.filter(note=>note.trackId===track.id);
+      files.push(obsidianFile(`Tracks/${obsidianSafeFilename(track.name||track.title||"Trilha")}.md`,obsidianTrackMarkdown(track,trackCourses,trackNotes),track.id,"track",track.updatedAt||""))
+    }
+    for(const card of payload.flashcards||[]){
+      if(!card?.id){
+        continue
+      }
+      const title=card.front||"Flashcard";
+      const meta={arcana_id:card.id,type:"flashcard",title,source_id:card.sourceNoteId||"",created:card.createdAt||"",updated:card.updatedAt||"",review_at:card.reviewAt||"",status:"active",tags:Array.isArray(card.tags)?card.tags:[]};
+      files.push(obsidianFile(`80 Flashcards/${obsidianSafeFilename(title,"Flashcard")}.md`,`${arcanaFrontmatter(meta)}\n\n# ${title}\n\n## Verso\n\n${card.back||""}`,card.id,"flashcard",card.updatedAt||""))
+    }
+    files.push(...obsidianSourceFiles(notes));
+    files.push(obsidianFile("Arcana Index.md",obsidianIndexMarkdown(notes,courses,tracks),"arcana-index","index",""));
+    files.push(obsidianFile("README - Arcana.md",obsidianReadmeMarkdown(),"arcana-readme","readme",""));
+    const used=new Map();
+    return files.map(file=>{
+      if(!used.has(file.name)){
+        used.set(file.name,file.arcanaId||"");
+        return file
+      }
+      if(used.get(file.name)===file.arcanaId){
+        return null
+      }
+      const parts=file.name.split("/");
+      const leaf=parts.pop();
+      const dot=leaf.lastIndexOf(".");
+      const stem=dot>=0?leaf.slice(0,dot):leaf;
+      const ext=dot>=0?leaf.slice(dot):".md";
+      let n=2;
+      let candidate="";
+      do{
+        candidate=[...parts,`${stem} - ${n}${ext}`].join("/");
+        n+=1
+      }while(used.has(candidate));
+      used.set(candidate,file.arcanaId||"");
+      return {...file,name:candidate}
+    }).filter(Boolean)
+  }
+  async function downloadObsidianVault(state={}){
+    download(makeZip(renderObsidianVault(await obsidianPayload(state))),`Arcana-Obsidian-Vault-${day()}.zip`)
+  }
+  async function downloadVault(state={}){
+    await downloadObsidianVault(state)
   }
   async function importVault(file){
     const entries=parseZip(await file.arrayBuffer());
@@ -723,7 +888,7 @@ const ArcanaStorage=(()=>{
     throw new Error("Rota estática não implementada")
   }
 
-  return {init,loadState,saveState,list,snapshot,listSnapshots,restoreSnapshot,downloadFullBackup,importFullBackup,downloadVault,importVault,canHandle,route,get ready(){return ready},log}
+  return {init,loadState,saveState,list,snapshot,listSnapshots,restoreSnapshot,downloadFullBackup,importFullBackup,obsidianPayload,renderObsidianVault,downloadObsidianVault,downloadVault,importVault,canHandle,route,get ready(){return ready},log}
 })();
 if(typeof window!=="undefined"){
   window.ArcanaStorage=ArcanaStorage
