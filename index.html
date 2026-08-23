@@ -16,16 +16,15 @@
       <div><div class="brand-title">ARCANA</div><div class="brand-sub">personal grimoire</div></div>
     </div>
     <nav>
-      <button class="nav-btn active" data-view="home">✦ <span>Santuário</span></button>
+      <button class="nav-btn active" data-view="home">☾ <span>Santuário</span></button>
       <button class="nav-btn" data-view="tracks">☿ <span>Trilhas</span></button>
-	      <button class="nav-btn" data-view="youtube">▶ <span>YouTube</span></button>
-	      <button class="nav-btn" data-view="library">⌑ <span>Biblioteca</span></button>
-	      <button class="nav-btn" data-view="fichamentos">📜 <span>Fichamentos</span></button>
-	      <button class="nav-btn" data-view="notes">🜁 <span>Notas</span></button>
-	      <button class="nav-btn" data-view="review">✦ <span>Revisão</span></button>
-	      <button class="nav-btn" data-view="calendar">◐ <span>Calendário</span></button>
-      <button class="nav-btn" data-view="inbox">☽ <span>Inbox</span></button>
-      <button class="nav-btn" data-view="settings">⚙ <span>Configurações</span></button>
+      <button class="nav-btn" data-view="youtube">▶ <span>YouTube</span></button>
+      <button class="nav-btn" data-view="knowledge">🜁 <span>Conhecimento</span></button>
+      <button class="nav-btn" data-view="calendar">◐ <span>Calendário</span></button>
+      <div class="nav-support">
+        <button class="nav-btn" data-view="inbox">☽ <span>Inbox</span></button>
+        <button class="nav-btn" data-view="settings">⚙ <span>Configurações</span></button>
+      </div>
     </nav>
     <div class="sidebar-footer">
       <div class="moon-phase" id="moonGlyph">◐</div>
@@ -37,9 +36,10 @@
     <header class="topbar">
       <div><div class="kicker">GRIMÓRIO PESSOAL</div><h1 id="pageTitle">Santuário</h1></div>
       <div class="top-actions">
+        <button id="globalSearchBtn" class="ghost-btn">⌕ Buscar</button>
         <button id="exportBtn" class="ghost-btn">Exportar</button>
         <label class="ghost-btn file-label">Importar<input id="importInput" type="file" accept="application/json"></label>
-        <button id="addBtn" class="gold-btn">＋ Adicionar</button>
+        <button id="addBtn" class="gold-btn">＋ Capturar</button>
       </div>
     </header>
 
@@ -56,56 +56,61 @@
         </div>
       </section>
 
-      <section id="gameStats" class="stat-grid"></section>
-
-      <div class="layout-grid">
-        <article class="card">
+      <section class="sanctuary-grid">
+        <article id="nextRitual" class="next-ritual-card"></article>
+        <article class="card today-card">
           <div class="card-head">
-            <div><div class="kicker">PLANO AUTOMÁTICO</div><h2>Hoje</h2></div>
+            <div><div class="kicker">HOJE</div><h2>Ritual compacto</h2></div>
             <button id="regenPlanBtn" class="mini-btn">↻ Recalcular</button>
           </div>
-          <div class="plan-config">
-            <label>Tempo disponível hoje
-              <select id="todayMinutes">
-                <option value="30">30 min</option>
-                <option value="45">45 min</option>
-                <option value="60" selected>1h</option>
-                <option value="90">1h30</option>
-                <option value="120">2h</option>
-                <option value="180">3h</option>
-              </select>
-            </label>
-          </div>
-          <div id="dailyPlan"></div>
+          <div id="todayProgress" class="today-progress"></div>
+          <div id="todayRows" class="today-rows"></div>
+          <details id="dailyPlanDetails" class="plan-details">
+            <summary>Ver plano completo</summary>
+            <div class="plan-config">
+              <label>Tempo disponível hoje
+                <select id="todayMinutes">
+                  <option value="30">30 min</option>
+                  <option value="45">45 min</option>
+                  <option value="60" selected>1h</option>
+                  <option value="90">1h30</option>
+                  <option value="120">2h</option>
+                  <option value="180">3h</option>
+                </select>
+              </label>
+            </div>
+            <div id="dailyPlan"></div>
+          </details>
         </article>
+      </section>
 
+      <section id="gameStats" class="stat-grid compact-stats"></section>
+
+      <div class="layout-grid">
         <article class="card">
           <div class="card-head"><div><div class="kicker">PRÓXIMO VÍDEO</div><h2>YouTube de hoje</h2></div><button class="mini-btn" onclick="navigateTo('youtube')">Ver fila</button></div>
           <div id="homeYoutube"></div>
         </article>
-      </div>
-
-	      <div class="layout-grid">
 	        <article class="card">
-	          <div class="card-head"><div><div class="kicker">TRILHAS</div><h2>Progresso dos caminhos</h2></div><button class="mini-btn" onclick="navigateTo('tracks')">Abrir</button></div>
+	          <div class="card-head"><div><div class="kicker">TRILHAS</div><h2>Continuar caminhos</h2></div><button class="mini-btn" onclick="navigateTo('tracks')">Abrir</button></div>
 	          <div id="homeTracks"></div>
-	        </article>
-	        <article class="card">
-	          <div class="card-head"><div><div class="kicker">HOJE</div><h2>Importância × urgência</h2></div></div>
-	          <div id="homePriority"></div>
 	        </article>
 	      </div>
 	
 	      <div class="layout-grid">
 	        <article class="card">
+	          <div class="card-head"><div><div class="kicker">PRIORIDADES</div><h2>Fila curta</h2></div></div>
+	          <div id="homePriority"></div>
+	        </article>
+	        <article class="card">
 	          <div class="card-head"><div><div class="kicker">VAULT</div><h2>Revisões e conexões</h2></div><button class="mini-btn" onclick="navigateTo('review')">Revisar</button></div>
 	          <div id="homeReviews"></div>
 	        </article>
-	        <article class="card">
-	          <div class="card-head"><div><div class="kicker">MEMÓRIA</div><h2>Notas recentes</h2></div><button class="mini-btn" onclick="navigateTo('notes')">Abrir</button></div>
-	          <div id="homeKnowledge"></div>
-	        </article>
 	      </div>
+	      <article class="card">
+	        <div class="card-head"><div><div class="kicker">MEMÓRIA</div><h2>Notas recentes</h2></div><button class="mini-btn" onclick="navigateTo('knowledge')">Abrir conhecimento</button></div>
+	        <div id="homeKnowledge"></div>
+	      </article>
 	    </section>
 
     <section id="tracksView" class="view">
@@ -218,6 +223,26 @@
 	        <article class="card vault-editor-card"><div id="reviewActive" class="vault-editor"></div></article>
 	      </div>
 	    </section>
+
+    <section id="knowledgeView" class="view">
+      <div class="section-toolbar">
+        <div><div class="kicker">CONHECIMENTO</div><h2>Mapa do vault</h2></div>
+        <button class="gold-btn" onclick="openCaptureDialog()">＋ Capturar</button>
+      </div>
+      <div id="knowledgeTabs" class="knowledge-tabs" role="tablist">
+        <button class="knowledge-tab active" data-knowledge-tab="all">Tudo</button>
+        <button class="knowledge-tab" data-knowledge-tab="fichamentos">Fichamentos</button>
+        <button class="knowledge-tab" data-knowledge-tab="notes">Notas</button>
+        <button class="knowledge-tab" data-knowledge-tab="concepts">Conceitos</button>
+        <button class="knowledge-tab" data-knowledge-tab="questions">Perguntas</button>
+        <button class="knowledge-tab" data-knowledge-tab="reviews">Revisões</button>
+        <button class="knowledge-tab" data-knowledge-tab="sessions">Sessões</button>
+      </div>
+      <div class="filters">
+        <input id="knowledgeSearch" placeholder="Buscar notas, fontes, conceitos ou perguntas...">
+      </div>
+      <div id="knowledgeList" class="knowledge-list"></div>
+    </section>
 
     <section id="calendarView" class="view">
       <div class="section-toolbar">
@@ -359,14 +384,50 @@
 	      <div class="timer-wrap"><div id="timerDisplay">00:00:00</div><div class="timer-controls"><button id="timerStartBtn" class="gold-btn">Iniciar</button><button id="timerPauseBtn" class="ghost-btn">Pausar</button><button id="timerResetBtn" class="ghost-btn">Zerar</button></div></div>
 	    </div>
 	    <aside class="focus-notes">
-	      <div class="quick-actions"><button class="mini-btn" data-focus-block="concept">Conceito</button><button class="mini-btn" data-focus-block="quote">Citação</button><button class="mini-btn" data-focus-block="question">Pergunta</button><button class="mini-btn" data-focus-block="action">Ação</button></div>
+	      <div id="focusContext" class="focus-context"></div>
+	      <div class="quick-actions"><button class="mini-btn" data-focus-block="concept">Conceito</button><button class="mini-btn" data-focus-block="question">Pergunta</button><button class="mini-btn" data-focus-block="insight">Insight</button><button class="mini-btn" data-focus-block="quote">Citação</button><button class="mini-btn" data-focus-block="example">Exemplo</button><button class="mini-btn" data-focus-block="formula">Fórmula / comando</button><button class="mini-btn" data-focus-block="next_action">Próximo passo</button><button class="mini-btn" data-focus-block="free">Nota livre</button></div>
 	      <input id="focusTimestamp" placeholder="Timestamp ou página">
-	      <textarea id="focusNotesText" rows="14" placeholder="Notas da sessão..."></textarea>
+	      <div id="focusBlockList" class="focus-block-list"></div>
+	      <textarea id="focusNotesText" rows="8" placeholder="Resumo livre da sessão..."></textarea>
 	      <div id="focusSaveState" class="hint">Rascunho local no vault.</div>
 	    </aside>
 	  </div>
 	  <div class="modal-actions focus-footer"><span id="focusSessionStatus" class="hint">Sessão ainda não iniciada.</span><div><a id="focusOpenLink" class="ghost-btn" target="_blank" rel="noopener noreferrer">Abrir recurso</a><button id="focusDoneBtn" class="gold-btn">Concluir sessão</button></div></div>
 	</div></dialog>
+
+<dialog id="globalSearchDialog"><div class="modal search-modal">
+  <div class="modal-head"><div><div class="kicker">BUSCA GLOBAL</div><h2>Ir para qualquer ponto</h2></div><button type="button" class="x" data-close="globalSearchDialog">×</button></div>
+  <input id="globalSearchInput" placeholder="Buscar trilhas, cursos, aulas, vídeos, notas...">
+  <div id="globalSearchResults" class="global-search-results"></div>
+</div></dialog>
+
+<dialog id="captureDialog"><div class="modal capture-modal">
+  <div class="modal-head"><div><div class="kicker">CAPTURA UNIVERSAL</div><h2>O que chegou agora?</h2></div><button type="button" class="x" data-close="captureDialog">×</button></div>
+  <input id="captureQuickInput" placeholder="Cole um link ou escreva uma ideia rápida...">
+  <div class="capture-kind-grid">
+    <button class="mini-btn" data-capture-kind="quick">Nota rápida</button>
+    <button class="mini-btn" data-capture-kind="question">Pergunta</button>
+    <button class="mini-btn" data-capture-kind="insight">Insight</button>
+    <button class="mini-btn" data-capture-kind="concept">Conceito</button>
+    <button class="mini-btn" data-capture-kind="link">Link</button>
+    <button class="mini-btn" data-capture-kind="youtube">YouTube</button>
+    <button class="mini-btn" data-capture-kind="course">Curso</button>
+    <button class="mini-btn" data-capture-kind="book">Livro/PDF</button>
+    <button class="mini-btn" data-capture-kind="article">Artigo</button>
+    <button class="mini-btn" data-capture-kind="podcast">Podcast</button>
+  </div>
+  <div id="captureStatus" class="hint" role="status"></div>
+</div></dialog>
+
+<div id="toastHost" class="toast-host" aria-live="polite"></div>
+
+<nav class="mobile-nav" aria-label="Navegação principal móvel">
+  <button class="mobile-nav-btn" data-view="home">☾<span>Santuário</span></button>
+  <button class="mobile-nav-btn" data-view="tracks">☿<span>Trilhas</span></button>
+  <button class="mobile-nav-btn" data-view="youtube">▶<span>YouTube</span></button>
+  <button class="mobile-capture-btn" type="button" onclick="openCaptureDialog()">＋</button>
+  <button class="mobile-nav-btn" data-view="knowledge">🜁<span>Saber</span></button>
+</nav>
 
 <script src="db.js"></script>
 <script src="app.js"></script>

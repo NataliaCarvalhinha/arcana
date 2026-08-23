@@ -58,7 +58,7 @@ assert.match(app, /async function navigateTo/, "dashboard navigation is centrali
 assert.match(index, /onclick="navigateTo\('youtube'\)"/, "home YouTube button uses centralized navigation");
 assert.match(index, /onclick="navigateTo\('tracks'\)"/, "home tracks button uses centralized navigation");
 assert.match(index, /onclick="navigateTo\('review'\)"/, "home review button uses centralized navigation");
-assert.match(index, /onclick="navigateTo\('notes'\)"/, "home notes button uses centralized navigation");
+assert.match(index, /onclick="navigateTo\('knowledge'\)"/, "home knowledge button uses centralized navigation");
 assert.match(app, /onkeydown="activateRow\(event,this\)"/, "clickable rows support keyboard activation");
 assert.match(app, /event\.stopPropagation\(\);openNotes/, "nested note buttons do not trigger row navigation");
 assert.match(app, /function repairStarterTrackDuplicates/, "starter duplicate track repair is available");
@@ -67,6 +67,25 @@ assert.match(app, /const STARTER_CURRICULUM_VERSION=1/, "starter curriculum vers
 assert.match(app, /function applyStarterCurriculumV1/, "starter curriculum uses a versioned migration");
 assert.match(app, /sourceTypeForResource/, "module and lesson source metadata is normalized");
 assert.match(app, /openFocus\(\$\{jsArg\(lesson\.id\)\},'lesson'\)/, "lessons can open the focus modal");
+assert.match(index, /data-view="knowledge"/, "primary navigation exposes the Knowledge hub");
+assert.match(index, /id="knowledgeView"/, "Knowledge hub view is present");
+assert.match(index, /data-knowledge-tab="fichamentos"/, "Knowledge hub exposes fichamento tab");
+assert.match(index, /data-knowledge-tab="reviews"/, "Knowledge hub exposes review tab");
+assert.match(index, /id="globalSearchDialog"/, "global search dialog is present");
+assert.match(index, /id="captureDialog"/, "universal capture dialog is present");
+assert.match(index, /class="mobile-nav"/, "mobile bottom navigation is present");
+assert.match(index, /id="nextRitual"/, "Sanctuary exposes the next ritual surface");
+assert.match(app, /function renderKnowledge/, "Knowledge hub renderer is present");
+assert.match(app, /function openKnowledgeObject/, "Knowledge objects open through a unified action");
+assert.match(app, /function buildSearchResults/, "global search result builder is present");
+assert.match(app, /function openGlobalSearch/, "global search opener is present");
+assert.match(app, /function captureUniversal/, "universal capture handler is present");
+assert.match(app, /function renderNextRitual/, "Sanctuary next ritual renderer is present");
+assert.match(app, /function continueResource/, "universal continue action is present");
+assert.match(app, /function continueTrack/, "track continue action is present");
+assert.match(app, /data-knowledge-id/, "Knowledge cards use stable object ids");
+assert.match(app, /data-search-id/, "search results use stable object ids");
+assert.match(app, /ctrlKey\|\|e\.metaKey/, "global search has a Ctrl/Cmd+K shortcut");
 assert.match(app, /playlist-learning-main/, "starter playlist is present in the catalog");
 assert.match(app, /course-elec-01/, "starter electronics catalog is present");
 assert.match(app, /course-fin-07/, "starter finance catalog is present");
@@ -135,7 +154,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v10/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v11/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -177,7 +196,7 @@ function makeElement(id) {
 }
 
 const elements = new Map();
-const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "calendarView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "dailyPlan", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }
@@ -461,8 +480,8 @@ await vm.runInContext(`(async()=>{
   ];
   vaultNotes=structuredClone(globalThis.__notes);
   renderVaultHome();
-  if(!$("homeKnowledge").innerHTML.includes("navigateTo('notes',{noteId:'note-perm'})")){throw new Error("recent permanent notes should navigate to the notes view by stable id")}
-  if(!$("homeKnowledge").innerHTML.includes("navigateTo('fichamentos',{fichamentoId:'fic-1'})")){throw new Error("recent fichamentos should navigate to the fichamentos view by stable id")}
+  if(!$("homeKnowledge").innerHTML.includes("openKnowledgeObject('note-perm')")){throw new Error("recent permanent notes should navigate through the unified knowledge action")}
+  if(!$("homeKnowledge").innerHTML.includes("openKnowledgeObject('fic-1')")){throw new Error("recent fichamentos should navigate through the unified knowledge action")}
   if(!$("homeKnowledge").innerHTML.includes("Finanças")||!$("homeKnowledge").innerHTML.includes("2 links")){throw new Error("recent notes should render type, track, updated time, and links metadata")}
   if(!$("homeReviews").innerHTML.includes("navigateTo('review',{noteId:'review-1'})")){throw new Error("home review rows should navigate to review by stable id")}
   await navigateTo("notes",{noteId:"note-perm"});

@@ -288,7 +288,7 @@ def parse_frontmatter(text):
     return meta, body
 
 def dump_frontmatter(meta, content):
-    keys=["id","title","type","trackId","sourceType","sourceId","sessionId","tags","createdAt","updatedAt","favorite","reviewAt","status","relatedNoteIds","source","citations","readingProgress"]
+    keys=["id","title","type","trackId","courseId","moduleId","lessonId","sourceType","sourceId","sourceTitle","sessionId","durationMinutes","tags","createdAt","updatedAt","favorite","reviewAt","status","relatedNoteIds","source","blocks","questionStatus","promotedNoteIds","citations","readingProgress"]
     lines=["---"]
     for k in keys:
         v=meta.get(k)
@@ -313,9 +313,14 @@ def default_note(data=None):
         "content":data.get("content") or "",
         "tags":data.get("tags") if isinstance(data.get("tags"),list) else [],
         "trackId":data.get("trackId"),
+        "courseId":data.get("courseId"),
+        "moduleId":data.get("moduleId"),
+        "lessonId":data.get("lessonId"),
         "sourceType":data.get("sourceType"),
         "sourceId":data.get("sourceId"),
+        "sourceTitle":data.get("sourceTitle") or ((data.get("source") or {}).get("title") if isinstance(data.get("source"),dict) else ""),
         "sessionId":data.get("sessionId"),
+        "durationMinutes":int(data.get("durationMinutes") or 0),
         "createdAt":data.get("createdAt") or ts,
         "updatedAt":data.get("updatedAt") or ts,
         "favorite":bool(data.get("favorite",False)),
@@ -323,6 +328,9 @@ def default_note(data=None):
         "status":data.get("status") or "active",
         "relatedNoteIds":data.get("relatedNoteIds") if isinstance(data.get("relatedNoteIds"),list) else [],
         "source":data.get("source") if isinstance(data.get("source"),dict) else {},
+        "blocks":data.get("blocks") if isinstance(data.get("blocks"),list) else [],
+        "questionStatus":data.get("questionStatus") or data.get("question_status"),
+        "promotedNoteIds":data.get("promotedNoteIds") if isinstance(data.get("promotedNoteIds"),list) else [],
         "citations":data.get("citations") if isinstance(data.get("citations"),list) else [],
         "readingProgress":data.get("readingProgress") if isinstance(data.get("readingProgress"),dict) else {}
     }
@@ -467,7 +475,7 @@ def obsidian_link(title):
 
 def arcana_frontmatter(meta):
     lines=["---","arcana_managed: true",f"arcana_id: {yaml_scalar(meta.get('arcana_id'))}"]
-    for key in ["type","title","track","track_id","course","course_id","module","module_id","lesson","lesson_id","source","source_type","source_id","created","updated","review_at","status","favorite"]:
+    for key in ["type","title","track","track_id","course","course_id","module","module_id","lesson","lesson_id","source","source_type","source_id","session_id","date","duration_minutes","question_status","created","updated","review_at","status","favorite"]:
         if key in meta:
             lines.append(f"{key}: {yaml_scalar(meta.get(key))}")
     tags=meta.get("tags") if isinstance(meta.get("tags"),list) else []
@@ -531,13 +539,40 @@ def obsidian_enriched_note(note, lookups):
     track=lookups["tracks"].get(note.get("trackId") or (course or {}).get("trackId"))
     return {**note,"sourceId":source_id or note.get("sourceId"),"_course":course,"_module":module,"_lesson":lesson,"_track":track}
 
-def obsidian_note_markdown(note):
-    tags=sorted(set((note.get("tags") or [])+[x[1].strip() for x in INLINE_TAG_RE.findall(note.get("content") or "") if x[1].strip()]))
+def note_blocks(note, block_type):
+    return [block for block in note.get("blocks") or [] if block.get("type")==block_type and (str(block.get("title") or "")+str(block.get("content") or "")).strip()]
+
+def block_title(block):
+    content=str(block.get("content") or "")
+    first=next((line.strip() for line in content.splitlines() if line.strip()), "")
+    return (block.get("title") or first or "Nota").strip()
+
+def indented(text):
+    return "\n".join(f"  {line}" for line in str(text or "").strip().splitlines())
+
+def add_section(lines, title, body):
+    items=[item for item in (body if isinstance(body,list) else [body]) if str(item or "").strip()]
+    if items:
+        lines.extend(["",f"## {title}","",*items])
+
+def note_context_lines(note):
+    lines=[]
+    if note.get("_track"):
+        lines.append(f"- Trilha: {obsidian_link(note['_track'].get('name'))}")
+    if note.get("_course"):
+        lines.append(f"- Curso: {obsidian_link(note['_course'].get('title'))}")
+    if note.get("_module"):
+        lines.append(f"- Módulo: {note['_module'].get('title') or ''}")
+    if note.get("_lesson"):
+        lines.append(f"- Aula: {note['_lesson'].get('title') or ''}")
+    return lines
+
+def obsidian_note_frontmatter(note, tags):
     course=note.get("_course") or {}
     module=note.get("_module") or {}
     lesson=note.get("_lesson") or {}
     track=note.get("_track") or {}
-    meta={
+    return {
         "arcana_id":note.get("id"),
         "type":note.get("type") or "permanent",
         "title":note.get("title") or "Nota",
@@ -549,8 +584,13 @@ def obsidian_note_markdown(note):
         "module_id":module.get("id") or "",
         "lesson":lesson.get("title") or "",
         "lesson_id":lesson.get("id") or "",
+        "source":note.get("sourceTitle") or ((note.get("source") or {}).get("title") if isinstance(note.get("source"),dict) else ""),
         "source_type":note.get("sourceType") or "",
         "source_id":note.get("sourceId") or "",
+        "session_id":note.get("sessionId") or "",
+        "date":str(note.get("createdAt") or "")[:10],
+        "duration_minutes":int(note.get("durationMinutes") or (note.get("source") or {}).get("minutes") or 0) if isinstance(note.get("source"),dict) else int(note.get("durationMinutes") or 0),
+        "question_status":note.get("questionStatus") or "",
         "created":note.get("createdAt") or "",
         "updated":note.get("updatedAt") or "",
         "review_at":note.get("reviewAt") or "",
@@ -558,15 +598,44 @@ def obsidian_note_markdown(note):
         "favorite":bool(note.get("favorite")),
         "tags":tags,
     }
+
+def obsidian_session_markdown(note, tags):
+    meta=obsidian_note_frontmatter(note,tags)
+    lines=[f"# {note.get('title') or 'Sessão'}"]
+    add_section(lines,"Contexto",note_context_lines(note))
+    duration=int(note.get("durationMinutes") or (note.get("source") or {}).get("minutes") or 0) if isinstance(note.get("source"),dict) else int(note.get("durationMinutes") or 0)
+    add_section(lines,"Sessão",[f"- Data: {str(note.get('createdAt') or '')[:10]}" if note.get("createdAt") else "",f"- Duração: {duration} min" if duration else ""])
+    add_section(lines,"O que aprendi",(note.get("content") or "").strip())
+    add_section(lines,"Conceitos",[f"- {obsidian_link(block_title(block))}"+(f"\n{indented(block.get('content'))}" if block.get("content") else "") for block in note_blocks(note,"concept")])
+    add_section(lines,"Perguntas",[f"- {obsidian_link(block_title(block))}"+(f"\n{indented(block.get('content'))}" if block.get("content") else "") for block in note_blocks(note,"question")])
+    add_section(lines,"Insights",[f"- {obsidian_link(block_title(block))}"+(f"\n{indented(block.get('content'))}" if block.get("content") else "") for block in note_blocks(note,"insight")])
+    add_section(lines,"Citações",[(f"- {block.get('title')}\n" if block.get("title") else "")+"> "+str(block.get("content") or "").strip().replace("\n","\n> ") for block in note_blocks(note,"quote")])
+    add_section(lines,"Exemplos",[f"- {block_title(block)}"+(f"\n{indented(block.get('content'))}" if block.get("content") else "") for block in note_blocks(note,"example")])
+    add_section(lines,"Fórmulas e comandos",[f"- {block_title(block)}"+(f"\n\n```\n{str(block.get('content')).strip()}\n```" if block.get("content") else "") for block in note_blocks(note,"formula")])
+    add_section(lines,"Próximos passos",[f"- [ ] {block_title(block)}"+(f"\n{indented(block.get('content'))}" if block.get("content") else "") for block in note_blocks(note,"next_action")])
+    add_section(lines,"Notas livres",[f"- {block_title(block)}"+(f"\n{indented(block.get('content'))}" if block.get("content") else "") for block in note_blocks(note,"free")])
+    return f"{arcana_frontmatter(meta)}\n\n"+"\n".join(lines).rstrip()+"\n"
+
+def obsidian_question_markdown(note, tags):
+    meta=obsidian_note_frontmatter(note,tags)
+    lines=[f"# {note.get('title') or 'Pergunta'}"]
+    add_section(lines,"Contexto",note_context_lines(note))
+    add_section(lines,"Pergunta",(note.get("content") or "").strip())
+    add_section(lines,"Status",f"- {note.get('questionStatus') or 'open'}")
+    return f"{arcana_frontmatter(meta)}\n\n"+"\n".join(lines).rstrip()+"\n"
+
+def obsidian_note_markdown(note):
+    block_text="\n".join(" ".join([str(block.get("title") or ""),str(block.get("content") or "")]) for block in note.get("blocks") or [])
+    tags=sorted(set((note.get("tags") or [])+[x[1].strip() for x in INLINE_TAG_RE.findall((note.get("content") or "")+"\n"+block_text) if x[1].strip()]))
+    if note.get("type")=="session":
+        return obsidian_session_markdown(note,tags)
+    if note.get("type")=="question":
+        return obsidian_question_markdown(note,tags)
+    meta=obsidian_note_frontmatter(note,tags)
     body=[f"# {note.get('title') or 'Nota'}"]
-    if course or module or lesson:
-        body.extend(["","## Contexto"])
-        if course:
-            body.append(f"- Curso: {obsidian_link(course.get('title'))}")
-        if module:
-            body.append(f"- Modulo: {module.get('title')}")
-        if lesson:
-            body.append(f"- Licao: {lesson.get('title')}")
+    context=note_context_lines(note)
+    if context:
+        body.extend(["","## Contexto",*context])
     if note.get("sourceType") or note.get("sourceId"):
         body.extend(["","## Fonte",f"- Tipo: {note.get('sourceType') or 'fonte'}",f"- ID: {note.get('sourceId') or ''}"])
     content=(note.get("content") or "").strip()
@@ -615,12 +684,15 @@ def obsidian_course_markdown(course, lookups):
 def obsidian_track_markdown(track, courses, notes):
     title=track.get("name") or track.get("title") or "Trilha"
     meta={"arcana_id":track.get("id"),"type":"track","title":title,"track":title,"track_id":track.get("id") or "","created":track.get("createdAt") or "","updated":track.get("updatedAt") or "","status":"active","tags":["arcana/track"]}
-    lines=[f"# {title}","","## Cursos"]
-    for course in courses:
-        lines.append(f"- {obsidian_link(course.get('title') or course.get('name'))}")
-    lines.extend(["","## Notas"])
-    for note in notes:
-        lines.append(f"- {obsidian_link(note.get('title'))}")
+    current=next((course for course in courses if int(course.get("progress") or 0)<100), courses[0] if courses else None)
+    recent=lambda items: sorted(items,key=lambda item:str(item.get("updatedAt") or item.get("createdAt") or ""),reverse=True)[:8]
+    lines=[f"# {title}"]
+    add_section(lines,"Curso atual",[f"- {obsidian_link(current.get('title') or current.get('name'))}"] if current else [])
+    add_section(lines,"Cursos",[f"- {obsidian_link(course.get('title') or course.get('name'))}" for course in courses])
+    add_section(lines,"Fichamentos recentes",[f"- {obsidian_link(note.get('title'))}" for note in recent([note for note in notes if note.get("type")=="literature"])])
+    add_section(lines,"Notas permanentes",[f"- {obsidian_link(note.get('title'))}" for note in recent([note for note in notes if note.get("type") in {"permanent","concept"}])])
+    add_section(lines,"Perguntas abertas",[f"- {obsidian_link(note.get('title'))}" for note in recent([note for note in notes if note.get("type")=="question" and (note.get("questionStatus") or "open")=="open"])])
+    add_section(lines,"Sessões recentes",[f"- {obsidian_link(note.get('title'))}" for note in recent([note for note in notes if note.get("type")=="session"])])
     return f"{arcana_frontmatter(meta)}\n\n"+"\n".join(lines).rstrip()+"\n"
 
 def obsidian_source_files(notes):

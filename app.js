@@ -216,12 +216,13 @@ const STARTER_PLAYLISTS=[
   {id:"playlist-learning-main",youtubePlaylistId:"PLNur2Ccbfc5k",name:"Playlist de aprendizado",url:"https://www.youtube.com/playlist?list=PLNur2Ccbfc5k",enabled:true,createdAt:"2026-08-17T00:00:00.000Z",updatedAt:"2026-08-17T00:00:00.000Z",lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}
 ];
 const ARCANA_PLAYLIST_ISSUE_URL="https://github.com/NataliaCarvalhinha/arcana/issues/new";
-let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),syncing=false,expandedCourseId=null;
-let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,currentReviewNote=null;
+let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),syncing=false,expandedCourseId=null,activeKnowledgeTab="all",globalSearchQuery="";
+let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,focusBlocks=[],currentReviewNote=null;
 let youtubeCatalogMeta={version:null,generatedAt:null,lastLoadedAt:null,playlistIds:[],playlistCount:0,videoCount:0,error:null};
 let youtubeCatalogPollHandle=null;
 let obsidianAutoSyncHandle=null,obsidianSyncInFlight=false;
 const NOTE_TYPE_LABELS={literature:"Fichamento",permanent:"Permanente",concept:"Conceito",question:"Pergunta",insight:"Insight",quote:"Citação",reference:"Referência",next_action:"Ação",quick:"Rápida",session:"Sessão"};
+const FOCUS_BLOCK_TYPES={concept:{label:"Conceito",target:"permanent"},question:{label:"Pergunta",target:"question"},insight:{label:"Insight",target:"permanent"},quote:{label:"Citação"},example:{label:"Exemplo"},formula:{label:"Fórmula / comando"},next_action:{label:"Próximo passo"},free:{label:"Nota livre"}};
 const $=id=>document.getElementById(id);
 const YOUTUBE_PLAYLIST_ID_RE=/^[A-Za-z0-9_-]{8,}$/;
 
@@ -611,7 +612,7 @@ function assignCourseOrder(course){
   return course
 }
 function priorityCode(i){return i.important?(i.urgent?"IU":"I"):(i.urgent?"U":"N")}
-function priorityLabel(i){return i.important?(i.urgent?"Importante + urgente":"Importante"):(i.urgent?"Urgente":"Baixa prioridade")}
+function priorityLabel(i){return i.important?(i.urgent?"Agora":"Essencial"):(i.urgent?"Rápido":"Depois")}
 function score(i){const p=priorityCode(i);let s=p==="IU"?100:p==="I"?70:p==="U"?55:20;if(i.status==="em_andamento"){s+=15}if((i.estimatedMinutes||999)<=30){s+=6}return s-itemProgress(i)/10}
 function boundedProgress(value){return Math.max(0,Math.min(100,Number(value)||0))}
 function lessonProgress(lesson){return boundedProgress(lesson?.done?100:lesson?.progress)}
@@ -1332,6 +1333,9 @@ function decorateLessonResource(course,module,lesson){
   return lesson
 }
 function resourceByScope(id,scope){
+  if(scope==="track"){
+    return trackById(id)
+  }
   if(scope==="youtube"){
     return state.youtubeQueue.find(x=>x.id===id)
   }
@@ -1366,6 +1370,8 @@ function literatureTemplate(title="Nova fonte",sourceType="book"){
 function noteTemplate(type="quick",title="Nova nota"){
   const head=`# ${title}\n\n`;
   if(type==="permanent")return head+"## Ideia atômica\n\n\n## Por que importa\n\n\n## Conexões\n\n- [[Outra nota]]\n";
+  if(type==="concept")return head+"## Conceito\n\n\n## Definição em uma frase\n\n\n## Exemplos\n\n- \n\n## Conexões\n\n- [[Conceito relacionado]]\n";
+  if(type==="insight")return head+"## Insight\n\n\n## Por que importa\n\n\n## Próximo teste\n\n- [ ] \n";
   if(type==="question")return head+"## Pergunta\n\n\n## Evidências\n\n\n## Próxima investigação\n\n- [ ] \n";
   if(type==="session")return head+"## Registro\n\n\n## Conceitos\n\n\n## Perguntas\n\n\n## Próximas ações\n\n- [ ] \n";
   return head+"## Nota\n\n\n## Links\n\n- [[Conceito relacionado]]\n"
@@ -1375,19 +1381,31 @@ async function loadVaultNotes(){
     const data=await api("/api/notes?sort=updated");
     vaultNotes=data.notes||[];
     if($("vaultTrackFilter")){$("vaultTrackFilter").innerHTML=trackOptions($("vaultTrackFilter").value||"all")}
-    renderVaultHome();renderNotes();renderFichamentos();renderReviews();
+    renderVaultHome();renderKnowledge();renderNotes();renderFichamentos();renderReviews();renderGlobalSearchResults();
   }catch(e){
-    ["homeKnowledge","vaultList","fichamentoList","reviewQueue"].forEach(id=>{if($(id))$(id).innerHTML=`<div class="hint">Vault indisponível: ${esc(e.message)}</div>`})
+    ["homeKnowledge","knowledgeList","vaultList","fichamentoList","reviewQueue"].forEach(id=>{if($(id))$(id).innerHTML=`<div class="hint">Vault indisponível: ${esc(e.message)}</div>`})
   }
 }
 
+const KNOWLEDGE_CHILD_VIEWS=new Set(["library","fichamentos","notes","review"]);
+function primaryNavView(view){return KNOWLEDGE_CHILD_VIEWS.has(view)?"knowledge":view}
+function pageTitleForView(view){return {home:"Santuário",tracks:"Trilhas",youtube:"YouTube",knowledge:"Conhecimento",library:"Biblioteca",fichamentos:"Fichamentos",notes:"Notas",review:"Revisão",calendar:"Calendário",inbox:"Inbox",settings:"Configurações"}[view]||"Arcana"}
+function setNavigationActive(view){
+  const primary=primaryNavView(view);
+  document.querySelectorAll(".nav-btn,.mobile-nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===primary))
+}
 function showView(v){
   currentView=v;
   document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
-  $(v+"View").classList.add("active");
-  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
-  $("pageTitle").textContent={home:"Santuário",tracks:"Trilhas",youtube:"YouTube",library:"Biblioteca",fichamentos:"Fichamentos",notes:"Notas",review:"Revisão",calendar:"Calendário",inbox:"Inbox",settings:"Configurações"}[v]||"Arcana";
-  if(["home","fichamentos","notes","review"].includes(v)){
+  const viewEl=$(v+"View");
+  if(!viewEl){
+    missingTarget();
+    return
+  }
+  viewEl.classList.add("active");
+  setNavigationActive(v);
+  $("pageTitle").textContent=pageTitleForView(v);
+  if(["home","knowledge","fichamentos","notes","review"].includes(v)){
     loadVaultNotes()
   }
   if(v==="youtube"){
@@ -1396,7 +1414,25 @@ function showView(v){
     stopYoutubeCatalogPolling()
   }
 }
+function toast(message,tone="info"){
+  const host=$("toastHost");
+  if(!host){
+    return false
+  }
+  const html=`<div class="toast ${esc(tone)}">${esc(message)}</div>`;
+  if(host.insertAdjacentHTML){
+    host.insertAdjacentHTML("beforeend",html);
+    const item=host.lastElementChild;
+    setTimeout(()=>item?.remove?.(),3200)
+  }else{
+    host.innerHTML=html
+  }
+  return true
+}
 function notice(message){
+  if(toast(message)){
+    return
+  }
   let el=$("appNotice");
   if(!el&&document.body){
     el=document.createElement("div");
@@ -1447,6 +1483,9 @@ async function navigateTo(view,options={}){
     await save(false,"navigation");
     renderYoutube()
   }
+  if(view==="knowledge"&&options.knowledgeTab){
+    activeKnowledgeTab=options.knowledgeTab
+  }
   showView(view);
   try{
     if(options.fichamentoId){
@@ -1462,7 +1501,7 @@ async function navigateTo(view,options={}){
     missingTarget()
   }
 }
-document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>navigateTo(b.dataset.view));
+document.querySelectorAll(".nav-btn,.mobile-nav-btn").forEach(b=>b.onclick=()=>navigateTo(b.dataset.view));
 
 function renderHome(){
   const h=new Date().getHours(),sal=h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";
@@ -1488,6 +1527,72 @@ function nextCurriculumFocus(course){
     return {type:"lesson",id:lesson.id,title:lesson.title,detail:module.title,estimatedMinutes:lesson.estimatedMinutes||module.estimatedMinutes||course.estimatedMinutes||30}
   }
   return {type:"module",id:module.id,title:module.title,detail:course.title,estimatedMinutes:module.estimatedMinutes||course.estimatedMinutes||30}
+}
+function dailyPlanAction(p){
+  return p?.type==="review"?"navigateTo('review')":`startPlanItemById(${jsArg(p?.id||"")},${jsArg(p?.type||"item")})`
+}
+function findDailyPlanItem(id,type){
+  return (state.dailyPlan.items||[]).find(item=>item.id===id&&item.type===type)||null
+}
+function startPlanItemById(id,type){
+  startPlanItem(findDailyPlanItem(id,type)||{id,type})
+}
+function startPlanItem(p){
+  if(!p){
+    missingTarget();
+    return
+  }
+  if(p.type==="review"){
+    navigateTo("review");
+    return
+  }
+  openFocus(p.id,p.type)
+}
+function nextRitualTarget(){
+  const planItems=state.dailyPlan.date===dayKey()?state.dailyPlan.items||[]:[];
+  const planned=planItems.find(item=>item.type!=="review")||planItems[0];
+  if(planned){
+    return planned
+  }
+  const target=state.tracks.map(track=>getActiveLearningTarget(track)).filter(Boolean).sort((a,b)=>score(b.prioritySource)-score(a.prioritySource))[0];
+  if(target){
+    return {...target,minutes:Math.min(45,Math.max(15,Number(target.estimatedMinutes||30)))}
+  }
+  const video=todaysYoutube()[0];
+  if(video){
+    return {type:"youtube",id:video.id,title:video.title,minutes:video.estimatedMinutes||15,trackName:"YouTube"}
+  }
+  return null
+}
+function renderNextRitual(){
+  if(!$("nextRitual")){
+    return
+  }
+  const target=nextRitualTarget();
+  if(!target){
+    $("nextRitual").innerHTML=`<div class="kicker">PRÓXIMO RITUAL</div><h2>Sem ritual pendente</h2><p>Seu plano está limpo. Capture uma nova fonte ou crie uma trilha para continuar.</p><button class="gold-btn" onclick="openCaptureDialog()">Capturar</button>`;
+    return
+  }
+  const action=dailyPlanAction(target),label=target.type==="review"?"Revisão":target.trackName||target.detail||target.type||"Foco";
+  const hierarchy=[target.courseTitle,target.moduleTitle,target.lessonTitle].filter(Boolean).map(esc).join(" · ");
+  $("nextRitual").innerHTML=`<div class="kicker">PRÓXIMO RITUAL</div><h2>${esc(target.title)}</h2><p>${esc(label)}${hierarchy?` · ${hierarchy}`:""}${target.minutes?` · ${target.minutes} min`:""}</p><div class="next-ritual-actions"><button class="gold-btn" onclick="${action}">Continuar</button><button class="ghost-btn" onclick="generatePlan()">Replanejar</button></div>`
+}
+function renderTodayProgress(){
+  if(!$("todayProgress")){
+    return
+  }
+  const planned=(state.dailyPlan.items||[]).reduce((sum,item)=>sum+Number(item.minutes||0),0),studied=state.sessions.filter(s=>s.date===dayKey()).reduce((sum,item)=>sum+Number(item.minutes||0),0),pct=planned?Math.min(100,Math.round(studied/planned*100)):0;
+  $("todayProgress").innerHTML=`<div class="today-progress-head"><span>Hoje</span><strong>${studied}/${planned||0} min</strong></div><div class="progress"><div style="width:${pct}%"></div></div>`
+}
+function renderTodayRows(){
+  if(!$("todayRows")){
+    return
+  }
+  const items=state.dailyPlan.items||[];
+  $("todayRows").innerHTML=items.length?items.slice(0,4).map((p,n)=>{
+    const action=dailyPlanAction(p),label=p.type==="review"?"Revisão":p.type==="youtube"?"YouTube":p.trackName||"Foco";
+    return `<div class="today-row clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><span class="num">${n+1}</span><div class="grow"><strong>${esc(p.title)}</strong><span>${esc(label)} · ${p.minutes} min</span></div><button class="mini-btn" onclick="event.stopPropagation();${action}">Continuar</button></div>`
+  }).join(""):`<div class="hint">Sem plano para hoje.</div>`
 }
 function generatePlan(){
   const mins=Number($("todayMinutes")?.value||state.dailyPlan.minutes||60);
@@ -1525,12 +1630,13 @@ function renderDailyPlan(){
   }
   $("todayMinutes").value=String(state.dailyPlan.minutes||60);
   $("dailyPlan").innerHTML=state.dailyPlan.items.length?state.dailyPlan.items.map((p,n)=>{
-    const action=p.type==="review"?"navigateTo('review')":`openFocus(${jsArg(p.id)},${jsArg(p.type)})`;
+    const action=dailyPlanAction(p);
     const trackLabel=p.trackName?`${p.trackSigil?`${esc(p.trackSigil)} `:""}${esc(p.trackName)}`:p.type==="review"?"Revisão":p.type==="youtube"?"YouTube":"";
     const hierarchy=[p.courseTitle,p.moduleTitle,p.lessonTitle].filter(Boolean);
     const context=hierarchy.length?hierarchy.map(esc).join(" · "):p.detail?esc(p.detail):trackLabel;
-    return `<div class="plan-item clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="num">${n+1}</div><div class="grow">${trackLabel?`<span class="kicker">${trackLabel}</span>`:""}<strong>${esc(p.title)}</strong><span>${context?`${context} · `:""}${p.minutes} min</span></div><button class="mini-btn" onclick="event.stopPropagation();${action}">${p.type==="review"?"Revisar":"Focar"}</button></div>`
-  }).join(""):`<div class="hint">Nada pendente para hoje.</div>`
+    return `<div class="plan-item clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="num">${n+1}</div><div class="grow">${trackLabel?`<span class="kicker">${trackLabel}</span>`:""}<strong>${esc(p.title)}</strong><span>${context?`${context} · `:""}${p.minutes} min</span></div><button class="mini-btn" onclick="event.stopPropagation();${action}">${p.type==="review"?"Revisar":"Continuar"}</button></div>`
+  }).join(""):`<div class="hint">Nada pendente para hoje.</div>`;
+  renderNextRitual();renderTodayProgress();renderTodayRows()
 }
 function renderHomeYoutube(){
   const v=todaysYoutube()[0];$("homeYoutube").innerHTML=v?videoRow(v,0,true):`<div class="hint">Sem vídeo liberado agora.</div>`
@@ -1541,11 +1647,11 @@ function renderHomeTracks(){
     $("homeTracks").innerHTML=`<div class="hint">Crie sua primeira trilha para organizar cursos e estudos.</div>`;
     return
   }
-  $("homeTracks").innerHTML=state.tracks.map(t=>{const courses=orderedCoursesForTrack(t.id),arr=courses.length?courses:state.items.filter(i=>i.track===t.id),avg=arr.length?Math.round(arr.reduce((a,b)=>a+itemProgress(b),0)/arr.length):0;return `<div class="track-row clickable-row" role="button" tabindex="0" onclick="navigateTo('tracks',{trackId:${jsArg(t.id)}})" onkeydown="activateRow(event,this)"><div class="num">${esc(t.sigil||"☽")}</div><div class="grow"><strong>${esc(t.name)}</strong><span>${avg}% concluído</span><div class="progress"><div style="width:${avg}%"></div></div></div></div>`}).join("")
+  $("homeTracks").innerHTML=state.tracks.map(t=>{const courses=orderedCoursesForTrack(t.id),arr=courses.length?courses:state.items.filter(i=>i.track===t.id),avg=arr.length?Math.round(arr.reduce((a,b)=>a+itemProgress(b),0)/arr.length):0,target=getActiveLearningTarget(t);return `<div class="track-row clickable-row" role="button" tabindex="0" onclick="navigateTo('tracks',{trackId:${jsArg(t.id)}})" onkeydown="activateRow(event,this)"><div class="num">${esc(t.sigil||"☽")}</div><div class="grow"><strong>${esc(t.name)}</strong><span>${target?`Agora: ${esc(target.title)}`:`${avg}% concluído`}</span><div class="progress"><div style="width:${avg}%"></div></div></div><button class="mini-btn" onclick="event.stopPropagation();continueTrack(${jsArg(t.id)})">Continuar</button></div>`}).join("")
 }
 function renderHomePriority(){
   const arr=state.items.filter(i=>itemProgress(i)<100).sort((a,b)=>score(b)-score(a)).slice(0,5);
-  $("homePriority").innerHTML=arr.length?arr.map(i=>`<div class="plan-item clickable-row" role="button" tabindex="0" onclick="openFocus(${jsArg(i.id)},'item')" onkeydown="activateRow(event,this)"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><div class="grow"><strong>${esc(i.title)}</strong><span>${esc(trackById(i.track)?.name||"Sem trilha")}</span></div></div>`).join(""):`<div class="hint">Nada priorizado agora.</div>`
+  $("homePriority").innerHTML=arr.length?arr.map(i=>`<div class="plan-item clickable-row" role="button" tabindex="0" onclick="continueResource(${jsArg(i.id)},'item')" onkeydown="activateRow(event,this)"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><div class="grow"><strong>${esc(i.title)}</strong><span>${esc(trackById(i.track)?.name||"Sem trilha")}</span></div><button class="mini-btn" onclick="event.stopPropagation();continueResource(${jsArg(i.id)},'item')">Continuar</button></div>`).join(""):`<div class="hint">Nada priorizado agora.</div>`
 }
 
 function renderTracks(){
@@ -1559,6 +1665,9 @@ function renderTracks(){
   }
   $("trackHero").innerHTML=`<h2>${esc(t.sigil||"☽")} ${esc(t.name)}</h2><div class="kicker">${esc(t.subtitle||"")}</div><p>${esc(t.description||"")}</p><p class="hint">Progressão: sequencial. Arcana libera um curso, um módulo e uma aula ativa por vez; conteúdo futuro continua visível para consulta.</p>`;
   const courses=orderedCoursesForTrack(t.id);
+  if(courses.length&&!courses.some(course=>course.id===expandedCourseId)){
+    expandedCourseId=activeCourseForTrack(t.id)?.id||courses[0].id
+  }
   $("trackCourses").innerHTML=courses.length?courses.map(i=>courseRow(i)).join(""):`<div class="hint">Nenhum curso ainda.</div>`;
   const avg=courses.length?Math.round(courses.reduce((a,b)=>a+itemProgress(b),0)/courses.length):0,done=courses.filter(i=>itemProgress(i)>=100).length;
   $("trackProfile").innerHTML=`<div class="profile-grid"><div class="profile-stat"><span>Cursos</span><strong>${courses.length}</strong></div><div class="profile-stat"><span>Concluídos</span><strong>${done}</strong></div><div class="profile-stat"><span>Progresso</span><strong>${avg}%</strong></div><div class="profile-stat"><span>Meta semanal</span><strong>${t.weeklyGoal||0}m</strong></div></div>`
@@ -1575,14 +1684,51 @@ function toggleCourseCurriculum(event,id){
   expandedCourseId=expandedCourseId===id?null:id;
   renderTracks()
 }
+function journeyMarker(sequence){return sequence==="completed"?"✓":sequence==="locked"?"◇":"●"}
+function continuationTarget(id,scope="item"){
+  const resource=resourceByScope(id,scope);
+  if(!resource){
+    return null
+  }
+  if(scope==="track"){
+    const target=getActiveLearningTarget(resource);
+    return target?{id:target.id,scope:target.type}:null
+  }
+  if(scope==="item"&&resource.kind==="course"){
+    const module=activeModuleForCourse(resource);
+    if(module){
+      const lesson=activeLessonForModule(module);
+      return lesson?{id:lesson.id,scope:"lesson"}:{id:module.id,scope:"module"}
+    }
+  }
+  if(scope==="module"){
+    const lesson=activeLessonForModule(resource);
+    if(lesson){
+      return {id:lesson.id,scope:"lesson"}
+    }
+  }
+  return {id:resource.id,scope}
+}
+function continueResource(id,scope="item"){
+  const target=continuationTarget(id,scope);
+  if(!target){
+    missingTarget();
+    return
+  }
+  openFocus(target.id,target.scope)
+}
+function continueTrack(id){continueResource(id,"track")}
+function rowMenu(id,scope){
+  return `<details class="row-menu" onclick="event.stopPropagation()"><summary aria-label="Mais ações">⋯</summary><div><button class="mini-btn" onclick="openFichamentoForSource(${jsArg(id)},${jsArg(scope)})">Fichamento</button><button class="mini-btn" onclick="openNotes(${jsArg(id)},${jsArg(scope)})">Notas</button>${scope==="item"?`<button class="mini-btn" onclick="editItem(${jsArg(id)})">Editar</button>`:""}</div></details>`
+}
 function lessonRow(course,module,lesson){
   const progress=lessonProgress(lesson),sequence=lessonSequenceState(course,module,lesson),done=sequence==="completed",locked=sequence==="locked";
-  return `<div class="lesson-row ${done?"done":""} ${locked?"locked":""}"><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(lesson.id)},'lesson')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${done?"Concluída":locked?"Estudar mesmo assim":"Focar"}</button><div class="grow"><strong>${esc(lesson.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${lesson.estimatedMinutes?` · ${fmtMin(lesson.estimatedMinutes)}`:""}</span></div><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(lesson.id)},'lesson')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(lesson.id)},'lesson')">Notas</button></div>`
+  return `<div class="lesson-row journey-row ${done?"done":""} ${locked?"locked":""}"><span class="journey-dot journey-${sequence}">${journeyMarker(sequence)}</span><div class="grow"><strong>${esc(lesson.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${lesson.estimatedMinutes?` · ${fmtMin(lesson.estimatedMinutes)}`:""}</span></div><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(lesson.id)},'lesson')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${done?"Rever":locked?"Estudar mesmo assim":"Continuar"}</button>${rowMenu(lesson.id,"lesson")}</div>`
 }
 function moduleRow(course,module){
   const progress=moduleProgress(module),sequence=moduleSequenceState(course,module),done=sequence==="completed",locked=sequence==="locked",lessons=orderedLessons(module);
   const lessonLabel=lessons.length?` · ${lessons.length} aula${lessons.length>1?"s":""}`:"";
-  return `<div class="module ${done?"done":""} ${locked?"locked":""}" id="${esc(module.id||"")}"><div class="module-main"><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(module.id)},'module')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${done?"Concluído":locked?"Estudar mesmo assim":"Focar"}</button><div class="grow"><strong>${esc(module.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${module.estimatedMinutes?` · ${fmtMin(module.estimatedMinutes)}`:""}${lessonLabel}</span><div class="progress"><div style="width:${progress}%"></div></div></div><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(module.id)},'module')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(module.id)},'module')">Notas</button></div>${lessons.length?`<div class="lesson-list">${lessons.map(lesson=>lessonRow(course,module,lesson)).join("")}</div>`:""}</div>`
+  return `<details class="module journey-module ${done?"done":""} ${locked?"locked":""}" id="${esc(module.id||"")}" ${sequence==="active"?"open":""}><summary class="module-main"><span class="journey-dot journey-${sequence}">${journeyMarker(sequence)}</span><div class="grow"><strong>${esc(module.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${module.estimatedMinutes?` · ${fmtMin(module.estimatedMinutes)}`:""}${lessonLabel}</span><div class="progress"><div style="width:${progress}%"></div></div></div><button class="mini-btn" onclick="event.stopPropagation();continueResource(${jsArg(module.id)},'module')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${done?"Rever":locked?"Estudar mesmo assim":"Continuar"}</button>${rowMenu(module.id,"module")}</summary>${lessons.length?`<div class="lesson-list">${lessons.map(lesson=>lessonRow(course,module,lesson)).join("")}</div>`:""}</details>`
 }
 function childCourseRow(child){
   const progress=childCourseProgress(child);
@@ -1593,7 +1739,7 @@ function courseRow(i){
   const lessonMeta=counts.lessons?` · ${counts.lessons} aula${counts.lessons>1?"s":""}`:"";
   const curriculumMeta=counts.modules?`${counts.modules} módulo${counts.modules>1?"s":""}${lessonMeta}`:"currículo oficial";
   const children=Array.isArray(i.childCourses)?i.childCourses:[];
-  return `<div class="course-row clickable-row ${expanded?"expanded":""} ${locked?"locked":""}" role="button" tabindex="0" onclick="toggleCourseCurriculum(event,${jsArg(i.id)})" onkeydown="activateRow(event,this)"><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${sequenceStatusLabel(sequence)} · ${priorityLabel(i)} · ${nc} notas · ${curriculumMeta}</span><div class="progress"><div style="width:${p}%"></div></div>${expanded?`<div class="module-list">${children.length?children.map(childCourseRow).join(""):""}${i.modules?.length?orderedModules(i).map(module=>moduleRow(i,module)).join(""):`<div class="hint">Currículo oficial sem aulas detalhadas.</div>`}</div>`:""}</div><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(i.id)},'item')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${p>=100?"Rever":locked?"Estudar mesmo assim":"Focar"}</button><button class="mini-btn" onclick="event.stopPropagation();editItem(${jsArg(i.id)})">Editar</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(i.id)},'item')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(i.id)},'item')">Notas</button></div>`
+  return `<div class="course-row clickable-row journey-row ${expanded?"expanded":""} ${locked?"locked":""}" role="button" tabindex="0" onclick="toggleCourseCurriculum(event,${jsArg(i.id)})" onkeydown="activateRow(event,this)"><span class="journey-dot journey-${sequence}">${journeyMarker(sequence)}</span><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${sequenceStatusLabel(sequence)} · ${priorityLabel(i)} · ${nc} notas · ${curriculumMeta}</span><div class="progress"><div style="width:${p}%"></div></div>${expanded?`<div class="module-list">${children.length?children.map(childCourseRow).join(""):""}${i.modules?.length?orderedModules(i).map(module=>moduleRow(i,module)).join(""):`<div class="hint">Currículo oficial sem aulas detalhadas.</div>`}</div>`:""}</div><button class="mini-btn" onclick="event.stopPropagation();continueResource(${jsArg(i.id)},'item')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${p>=100?"Rever":locked?"Estudar mesmo assim":"Continuar"}</button>${rowMenu(i.id,"item")}</div>`
 }
 function setTrack(id){if(!trackById(id)){missingTarget();return}state.activeTrack=id;save();renderTracks()}
 function setTrackFormError(message=""){const el=$("trackFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
@@ -1874,10 +2020,10 @@ function detectInbox(text){
   if(/youtube\.com|youtu\.be/.test(low))type="youtube";else if(/coursera\.org|udemy\.com|edx\.org/.test(low))type="course";else if(/github\.com/.test(low))type="repo";else if(/substack\.com|newsletter/.test(low))type="newsletter";else if(/spotify\.com.*episode|podcast/.test(low))type="podcast";else if(/\.pdf($|\?)/.test(low))type="reading";else if(/^https?:\/\//.test(low))type="article";
   return {id:crypto.randomUUID(),raw:t,url:/^https?:\/\//.test(t)?t:"",title:/^https?:\/\//.test(t)?t.replace(/^https?:\/\//,"").slice(0,80):t,type,createdAt:new Date().toISOString()}
 }
-function renderInbox(){$("inboxList").innerHTML=state.inbox.length?state.inbox.map(x=>`<div class="inbox-row"><span class="inbox-type">${x.type}</span><div class="grow"><strong>${esc(x.title)}</strong><span>${esc(x.url||"")}</span></div><button class="mini-btn" onclick="promoteInbox('${x.id}')">Organizar</button><button class="mini-btn danger" onclick="removeInbox('${x.id}')">×</button></div>`).join(""):`<div class="hint">Inbox vazia.</div>`}
-function captureInbox(){const v=$("inboxInput").value.trim();if(!v)return;state.inbox.unshift(detectInbox(v));$("inboxInput").value="";save()}
+function renderInbox(){$("inboxList").innerHTML=state.inbox.length?state.inbox.map(x=>`<div class="inbox-row"><span class="inbox-type">${esc(x.type)}</span><div class="grow"><strong>${esc(x.title)}</strong><span>${esc(x.url||"")}</span></div><button class="mini-btn" onclick="promoteInbox(${jsArg(x.id)})">Organizar</button><button class="mini-btn danger" onclick="removeInbox(${jsArg(x.id)})">×</button></div>`).join(""):`<div class="hint">Inbox vazia.</div>`}
+function captureInbox(){const v=$("inboxInput").value.trim();if(!v){return}state.inbox.unshift(detectInbox(v));$("inboxInput").value="";save();notice("Captura guardada na inbox.")}
 function removeInbox(id){state.inbox=state.inbox.filter(x=>x.id!==id);save()}
-function promoteInbox(id){const x=state.inbox.find(a=>a.id===id);if(!x){return}if(x.type==="youtube"){addYoutubeUrlToQueue(x.url,x.title);showView("youtube")}else{openItemDialog(x.type);const fields=$("itemForm").elements;fields.title.value=x.title;fields.url.value=x.url}state.inbox=state.inbox.filter(a=>a.id!==id);save(false)}
+function promoteInbox(id){const x=state.inbox.find(a=>a.id===id);if(!x){return}if(x.type==="youtube"){addYoutubeUrlToQueue(x.url,x.title);navigateTo("youtube")}else{openItemDialog(x.type);const fields=$("itemForm").elements;fields.title.value=x.title;fields.url.value=x.url}state.inbox=state.inbox.filter(a=>a.id!==id);save(false);notice("Captura organizada.")}
 
 async function openNotes(id,scope){
   notesRef={id,scope};const i=resourceByScope(id,scope);if(!i){missingTarget();return}
@@ -1895,8 +2041,50 @@ function sourceTypeForResource(resource,scope){
   }
   return resource?.sourceType||resource?.kind||scope||"resource"
 }
+function findCourseForModule(moduleId){
+  if(!moduleId){
+    return null
+  }
+  return state.items.find(item=>Array.isArray(item.modules)&&item.modules.some(module=>module.id===moduleId))||null
+}
+function findCourseAndModuleForLesson(lessonId){
+  if(!lessonId){
+    return {course:null,module:null}
+  }
+  for(const course of state.items){
+    for(const module of course.modules||[]){
+      if((module.lessons||[]).some(lesson=>lesson.id===lessonId)){
+        return {course,module}
+      }
+    }
+  }
+  return {course:null,module:null}
+}
+function studyContextForResource(resource,scope){
+  const found=scope==="lesson"?findCourseAndModuleForLesson(resource?.id):{course:null,module:null};
+  let course=found.course||null,module=found.module||null,lesson=null;
+  if(scope==="lesson"){
+    lesson=resource||null
+  }
+  if(scope==="module"){
+    module=resource||null;
+    course=state.items.find(item=>item.id===resource?.courseId)||findCourseForModule(resource?.id)
+  }
+  if(scope==="item"&&resource?.kind==="course"){
+    course=resource
+  }
+  if(!course&&resource?.courseId){
+    course=state.items.find(item=>item.id===resource.courseId)||null
+  }
+  if(!module&&resource?.moduleId){
+    module=(course?.modules||[]).find(item=>item.id===resource.moduleId)||state.items.flatMap(item=>item.modules||[]).find(item=>item.id===resource.moduleId)||null
+  }
+  const trackId=resource?.track||resource?.trackId||course?.track||course?.trackId||null;
+  return {track:trackById(trackId)||null,course,module,lesson,trackId,courseId:course?.id||resource?.courseId||(scope==="item"&&resource?.kind==="course"?resource.id:null)||null,moduleId:module?.id||resource?.moduleId||null,lessonId:lesson?.id||resource?.lessonId||null}
+}
 function sourcePayloadForResource(resource,scope,extra={}){
-  return {title:resource.title,url:resource.url||"",kind:resource.kind||scope,trackId:resource.track||resource.trackId||null,courseId:resource.courseId||(scope==="item"&&resource.kind==="course"?resource.id:null),moduleId:resource.moduleId||null,lessonId:scope==="lesson"?resource.id:resource.lessonId||null,timestamp:extra.timestamp||"",minutes:extra.minutes||0}
+  const context=studyContextForResource(resource,scope);
+  return {id:resource?.id||"",title:resource?.title||"",sourceTitle:resource?.title||"",url:resource?.url||"",kind:resource?.kind||scope,trackId:context.trackId,courseId:context.courseId,moduleId:context.moduleId,lessonId:context.lessonId,timestamp:extra.timestamp||"",minutes:extra.minutes||0}
 }
 async function saveNotes(){
   if(!notesRef)return;const i=resourceByScope(notesRef.id,notesRef.scope);if(!i)return;
@@ -1909,25 +2097,131 @@ async function saveNotes(){
 }
 
 function findFocus(id,scope){return resourceByScope(id,scope)}
+function renderFocusContext(context){
+  if(!$("focusContext")){
+    return
+  }
+  const items=[
+    context.track?{label:"Trilha",title:context.track.name,action:`navigateTo('tracks',{trackId:${jsArg(context.track.id)}})`}:null,
+    context.course?{label:"Curso",title:context.course.title}:null,
+    context.module?{label:"Módulo",title:context.module.title}:null,
+    context.lesson?{label:"Aula",title:context.lesson.title}:null
+  ].filter(Boolean);
+  $("focusContext").innerHTML=items.length?`<nav class="breadcrumb" aria-label="Contexto">${items.map((item,index)=>`<button type="button" ${item.action?`onclick="${item.action}"`:"disabled"}><small>${esc(item.label)}</small><span>${esc(item.title)}</span></button>${index<items.length-1?`<span class="crumb-sep">›</span>`:""}`).join("")}</nav>`:`<nav class="breadcrumb"><span>Contexto de estudo avulso</span></nav>`
+}
+function firstMeaningfulLine(text=""){
+  return String(text||"").split(/\r?\n/).map(line=>line.trim()).find(Boolean)||""
+}
+function focusBlockTitle(block){
+  return String(block?.title||firstMeaningfulLine(block?.content)||FOCUS_BLOCK_TYPES[block?.type]?.label||"Bloco").trim()
+}
+function normalizeFocusBlocks(blocks){
+  if(!Array.isArray(blocks)){
+    return []
+  }
+  return blocks.map(block=>({id:block.id||crypto.randomUUID(),type:FOCUS_BLOCK_TYPES[block.type]?block.type:"free",title:block.title||"",content:block.content||"",timestamp:block.timestamp||"",noteId:block.noteId||null,promotedAs:block.promotedAs||null,createdAt:block.createdAt||new Date().toISOString(),updatedAt:block.updatedAt||block.createdAt||new Date().toISOString()}))
+}
+function updateFocusBlock(id,patch){
+  focusBlocks=focusBlocks.map(block=>block.id===id?{...block,...patch,updatedAt:new Date().toISOString()}:block);
+  queueFocusSave()
+}
+function focusBlockPromoteButtons(block){
+  if(block.type==="concept"){
+    return `<button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'permanent')">Transformar em nota permanente</button>`
+  }
+  if(block.type==="insight"){
+    return `<button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'permanent')">Nota permanente</button><button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'concept')">Conceito</button>`
+  }
+  if(block.type==="question"){
+    return `<button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'question')">Transformar em pergunta</button>`
+  }
+  return ""
+}
+function renderFocusBlocks(){
+  if(!$("focusBlockList")){
+    return
+  }
+  $("focusBlockList").innerHTML=focusBlocks.length?focusBlocks.map(block=>{
+    const meta=FOCUS_BLOCK_TYPES[block.type]||FOCUS_BLOCK_TYPES.free;
+    return `<article class="focus-block"><div class="focus-block-head"><span class="tag">${esc(meta.label)}</span>${block.noteId?`<span class="hint">Promovido: ${esc(block.promotedAs||"nota")}</span>`:""}</div><input data-focus-block-title="${esc(block.id)}" value="${esc(block.title)}" placeholder="Título opcional"><textarea data-focus-block-content="${esc(block.id)}" rows="3" placeholder="Conteúdo do bloco...">${esc(block.content)}</textarea><div class="focus-block-actions">${focusBlockPromoteButtons(block)}<button class="mini-btn danger" onclick="removeFocusBlock(${jsArg(block.id)})">Remover</button></div></article>`
+  }).join(""):`<div class="hint">Use os atalhos para registrar conceitos, perguntas, insights, citações, exemplos, comandos, ações ou notas livres.</div>`;
+  document.querySelectorAll("[data-focus-block-title]").forEach(input=>input.oninput=e=>updateFocusBlock(e.currentTarget.dataset.focusBlockTitle,{title:e.currentTarget.value}));
+  document.querySelectorAll("[data-focus-block-content]").forEach(input=>input.oninput=e=>updateFocusBlock(e.currentTarget.dataset.focusBlockContent,{content:e.currentTarget.value}))
+}
+function removeFocusBlock(id){
+  focusBlocks=focusBlocks.filter(block=>block.id!==id);
+  renderFocusBlocks();
+  queueFocusSave()
+}
+function promotedBlockContent(block,targetType,title,sourceTitle){
+  const sourceLine=sourceTitle?`- [[${sourceTitle.replace(/[\[\]]/g,"")}]]`:"";
+  if(targetType==="question"){
+    return `# ${title}\n\n## Contexto\n\n${block.content||""}\n\n## Resposta\n\n\n## Fontes\n\n${sourceLine}`.trim()
+  }
+  if(targetType==="concept"){
+    return `# ${title}\n\n## Conceito\n\n${block.content||""}\n\n## Exemplo\n\n\n## Relações\n\n\n## Fontes\n\n${sourceLine}`.trim()
+  }
+  return `# ${title}\n\n## Ideia\n\n${block.content||""}\n\n## Em minhas palavras\n\n\n## Por que isso importa\n\n\n## Exemplo\n\n\n## Relações\n\n\n## Fontes\n\n${sourceLine}`.trim()
+}
+async function promoteFocusBlock(id,targetType="permanent"){
+  const block=focusBlocks.find(item=>item.id===id),i=focusRef?findFocus(focusRef.id,focusRef.scope):null;
+  if(!block||!i){
+    return
+  }
+  const title=focusBlockTitle(block).slice(0,90),source=sourcePayloadForResource(i,focusRef.scope,{timestamp:block.timestamp||$("focusTimestamp").value||"",minutes:Math.round(timer/60)||0});
+  const duplicate=vaultNotes.find(note=>note.type===targetType&&String(note.title||"").trim().toLowerCase()===title.toLowerCase());
+  if(duplicate&&!confirm(`Já existe uma nota chamada ${title}.\n\nOK: criar nova mesmo assim.\nCancelar: abrir existente.`)){
+    showView("notes");
+    await loadFullNote(duplicate.id);
+    renderVaultEditor("vaultEditorPane");
+    return
+  }
+  const payload={title,type:targetType,content:promotedBlockContent(block,targetType,title,source.sourceTitle),trackId:source.trackId,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,sourceTitle:source.sourceTitle,sessionId:focusNoteId||null,relatedNoteIds:focusNoteId?[focusNoteId]:[],tags:["focus",block.type],source,questionStatus:targetType==="question"?"open":null};
+  const data=await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
+  block.noteId=data.note.id;block.promotedAs=targetType;block.updatedAt=new Date().toISOString();
+  await loadVaultNotes();
+  renderFocusBlocks();
+  await saveFocusDraft(false)
+}
 async function openFocus(id,scope){
-  const i=findFocus(id,scope);if(!i){missingTarget();return}const lockState=focusLockState(id,scope);if(lockState==="locked"&&!confirm(lockedFocusMessage(id,scope))){return}focusRef={id,scope};focusNoteId=i.focusDraftNoteId||null;timer=0;updateTimer();$("focusTitle").textContent=i.title;$("focusOpenLink").href=i.url||"#";let vid=null;try{const u=new URL(i.url);vid=u.hostname.includes("youtu.be")?u.pathname.slice(1):u.searchParams.get("v")}catch{};$("playerWrap").innerHTML=scope==="youtube"&&vid?`<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0" allowfullscreen></iframe>`:`<div class="player-placeholder">Abra o recurso e use o cronômetro para registrar a sessão.</div>`;
+  const i=findFocus(id,scope);if(!i){missingTarget();return}const lockState=focusLockState(id,scope);if(lockState==="locked"&&!confirm(lockedFocusMessage(id,scope))){return}const context=studyContextForResource(i,scope);focusRef={id,scope,context};focusNoteId=i.focusDraftNoteId||null;focusBlocks=[];timer=0;updateTimer();$("focusTitle").textContent=i.title;renderFocusContext(context);$("focusOpenLink").href=i.url||"#";let vid=null;try{const u=new URL(i.url);vid=u.hostname.includes("youtu.be")?u.pathname.slice(1):u.searchParams.get("v")}catch{};$("playerWrap").innerHTML=scope==="youtube"&&vid?`<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0" allowfullscreen></iframe>`:`<div class="player-placeholder">Abra o recurso e use o cronômetro para registrar a sessão.</div>`;
   $("focusTimestamp").value="";$("focusSaveState").textContent="Rascunho ainda não salvo.";
-  if(focusNoteId){try{const data=await api(`/api/notes/${encodeURIComponent(focusNoteId)}`);$("focusNotesText").value=data.note.content||"";$("focusSaveState").textContent="Rascunho recuperado do vault."}catch{$("focusNotesText").value=noteTemplate("session",`Sessão - ${i.title}`)}}
-  else{$("focusNotesText").value=noteTemplate("session",`Sessão - ${i.title}`)}
+  if(focusNoteId){try{const data=await api(`/api/notes/${encodeURIComponent(focusNoteId)}`);$("focusNotesText").value=data.note.content||"";focusBlocks=normalizeFocusBlocks(data.note.blocks);$("focusSaveState").textContent="Rascunho recuperado do vault."}catch{$("focusNotesText").value="";focusBlocks=[]}}
+  else{$("focusNotesText").value="";focusBlocks=[]}
+  renderFocusBlocks();
   $("focusDialog").showModal()
 }
 function startTimer(){if(timerHandle){return}timerHandle=setInterval(()=>{timer++;updateTimer()},1000);updateTimer()}
 function pauseTimer(){if(timerHandle){clearInterval(timerHandle);timerHandle=null;updateTimer()}}
 function resetTimer(){pauseTimer();timer=0;updateTimer()}
-function updateTimer(){const h=String(Math.floor(timer/3600)).padStart(2,"0"),m=String(Math.floor(timer%3600/60)).padStart(2,"0"),s=String(timer%60).padStart(2,"0"),label=`${h}:${m}:${s}`;$("timerDisplay").textContent=label;if($("timerPauseBtn")){$("timerPauseBtn").disabled=!timerHandle}if($("focusSessionStatus")){$("focusSessionStatus").textContent=timer?`Duração da sessão: ${label}`:"Sessão ainda não iniciada."}}
+function updateTimer(){
+  const h=String(Math.floor(timer/3600)).padStart(2,"0"),m=String(Math.floor(timer%3600/60)).padStart(2,"0"),s=String(timer%60).padStart(2,"0"),label=`${h}:${m}:${s}`;
+  $("timerDisplay").textContent=label;
+  if($("timerPauseBtn")){
+    $("timerPauseBtn").disabled=!timerHandle;
+    $("timerPauseBtn").textContent=timerHandle?"Pausar":"Pausado"
+  }
+  if($("timerStartBtn")){
+    $("timerStartBtn").textContent=timerHandle?"Rodando":"Iniciar"
+  }
+  if($("focusSessionStatus")){
+    $("focusSessionStatus").textContent=timerHandle?`Sessão em andamento · ${label}`:timer?`Sessão pausada · ${label}`:"Sessão pronta para iniciar."
+  }
+}
 async function closeFocus(saveDraft=true){clearTimeout(focusSaveTimer);if(saveDraft){await saveFocusDraft(false)}pauseTimer();$("focusDialog").close()}
 async function completeFocus(){
   if(!focusRef)return;const i=findFocus(focusRef.id,focusRef.scope);if(!i)return;const mins=Math.max(1,Math.round(timer/60));
   const source=sourcePayloadForResource(i,focusRef.scope,{minutes:mins});
-  const session={id:crypto.randomUUID(),date:dayKey(),timestamp:new Date().toISOString(),minutes:mins,title:i.title,type:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,trackId:i.track||null,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,track:i.track||null};
+  const session={id:crypto.randomUUID(),date:dayKey(),timestamp:new Date().toISOString(),minutes:mins,title:i.title,type:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,trackId:source.trackId,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,track:source.trackId};
   state.sessions.push(session);
   clearTimeout(focusSaveTimer);
-  await saveFocusDraft(true,session.id,mins);
+  try{
+    await saveFocusDraft(true,session.id,mins,{throwOnError:true,skipStateSave:true})
+  }catch(e){
+    state.sessions=state.sessions.filter(item=>item.id!==session.id);
+    alert(`Não consegui salvar a sessão no vault: ${e.message||String(e)}`);
+    return
+  }
   i.focusDraftNoteId=null;focusNoteId=null;
   state.xp+=Math.max(10,mins*2);updateStreak();
   if(focusRef.scope==="youtube"){
@@ -1961,19 +2255,21 @@ async function completeFocus(){
 }
 function updateStreak(){const today=dayKey(),y=new Date();y.setDate(y.getDate()-1);const yd=dayKey(y);if(state.lastStudyDate===today)return;if(state.lastStudyDate===yd)state.streak++;else state.streak=1;state.lastStudyDate=today}
 
-async function saveFocusDraft(done=false,sessionId=null,minutes=0){
+async function saveFocusDraft(done=false,sessionId=null,minutes=0,options={}){
   if(!focusRef||!$("focusNotesText"))return;const i=findFocus(focusRef.id,focusRef.scope);if(!i)return;
   const source=sourcePayloadForResource(i,focusRef.scope,{timestamp:$("focusTimestamp").value||"",minutes});
-  const payload={title:`Sessão - ${i.title}`,type:"session",content:$("focusNotesText").value,trackId:i.track||null,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,sessionId:sessionId||null,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,tags:done?["sessao","concluida"]:["sessao","rascunho"],source};
+  const payload={title:`Sessão - ${i.title}`,type:"session",content:$("focusNotesText").value,blocks:focusBlocks,trackId:source.trackId,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,sourceTitle:source.sourceTitle,sessionId:sessionId||null,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,durationMinutes:minutes||Math.round(timer/60)||0,tags:done?["sessao","concluida"]:["sessao","rascunho"],source};
   try{
     const data=focusNoteId?await api(`/api/notes/${encodeURIComponent(focusNoteId)}`,{method:"PUT",body:JSON.stringify(payload)}):await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
-    focusNoteId=data.note.id;i.focusDraftNoteId=focusNoteId;$("focusSaveState").textContent=done?"Sessão salva no vault.":"Rascunho salvo no vault.";save(false);loadVaultNotes()
-  }catch(e){$("focusSaveState").textContent=`Falha ao salvar: ${e.message}`}
+    focusNoteId=data.note.id;i.focusDraftNoteId=focusNoteId;$("focusSaveState").textContent=done?"Sessão salva no vault.":"Salvo ✓";if(!options.skipStateSave){save(false)}loadVaultNotes()
+  }catch(e){$("focusSaveState").textContent=`Erro ao salvar: ${e.message}`;if(options.throwOnError){throw e}}
 }
-function queueFocusSave(){clearTimeout(focusSaveTimer);focusSaveTimer=setTimeout(()=>saveFocusDraft(false),900)}
+function queueFocusSave(){clearTimeout(focusSaveTimer);if($("focusSaveState")){$("focusSaveState").textContent="Salvando..."}focusSaveTimer=setTimeout(()=>saveFocusDraft(false),900)}
 function insertFocusBlock(kind){
-  const map={concept:"## Conceito\n\n",quote:`## Citação ${$("focusTimestamp").value?`(${$("focusTimestamp").value})`:""}\n\n> \n\n`,question:"## Pergunta\n\n- \n\n",action:"## Próximas ações\n\n- [ ] \n\n"};
-  const ta=$("focusNotesText"),txt=map[kind]||"";ta.setRangeText("\n\n"+txt,ta.selectionStart,ta.selectionEnd,"end");ta.focus();queueFocusSave()
+  const type=FOCUS_BLOCK_TYPES[kind]?kind:"free";
+  focusBlocks.push({id:crypto.randomUUID(),type,title:"",content:"",timestamp:$("focusTimestamp").value||"",noteId:null,promotedAs:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+  renderFocusBlocks();
+  queueFocusSave()
 }
 
 function renderVaultHome(){
@@ -2000,12 +2296,185 @@ function noteMeta(n){
 }
 function noteRowAction(n,mode="notes"){
   if(mode==="homeReview"){return `navigateTo('review',{noteId:${jsArg(n.id)}})`}
-  if(mode==="home"){return noteIsFichamento(n)?`navigateTo('fichamentos',{fichamentoId:${jsArg(n.id)}})`:`navigateTo('notes',{noteId:${jsArg(n.id)}})`}
+  if(mode==="home"){return `openKnowledgeObject(${jsArg(n.id)})`}
   if(mode==="fichamentos"){return `selectFichamento(${jsArg(n.id)})`}
   if(mode==="review"){return `openReviewNote(${jsArg(n.id)})`}
   return `selectVaultNote(${jsArg(n.id)})`
 }
 function noteRow(n,mode="notes"){const action=noteRowAction(n,mode);return `<div class="vault-row clickable-row ${activeVaultNote?.id===n.id?"active":""}" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="grow"><strong>${esc(n.title)}</strong><span>${esc(noteMeta(n))}</span></div>${n.favorite?"<span class='tag'>★</span>":""}</div>`}
+function knowledgeType(n){
+  if(noteIsFichamento(n)){
+    return "fichamentos"
+  }
+  if(n.type==="question"){
+    return "questions"
+  }
+  if(n.type==="concept"||n.type==="permanent"){
+    return "concepts"
+  }
+  if(n.type==="session"){
+    return "sessions"
+  }
+  return "notes"
+}
+function knowledgeMatchesTab(n,tab){
+  if(n.status==="archived"){
+    return false
+  }
+  if(tab==="all"){
+    return true
+  }
+  if(tab==="reviews"){
+    return !!(n.reviewAt&&n.reviewAt<=dayKey())
+  }
+  return knowledgeType(n)===tab
+}
+function knowledgeTabLabel(tab){
+  return {all:"Tudo",fichamentos:"Fichamento",notes:"Nota",concepts:"Conceito",questions:"Pergunta",reviews:"Revisão",sessions:"Sessão"}[tab]||"Nota"
+}
+function knowledgeTabName(tab){
+  return {all:"Tudo",fichamentos:"Fichamentos",notes:"Notas",concepts:"Conceitos",questions:"Perguntas",reviews:"Revisões",sessions:"Sessões"}[tab]||knowledgeTabLabel(tab)
+}
+async function openKnowledgeObject(id){
+  const note=vaultNotes.find(n=>n.id===id);
+  if(!note){
+    missingTarget();
+    return
+  }
+  if(note.reviewAt&&note.reviewAt<=dayKey()){
+    await navigateTo("review",{noteId:id});
+    return
+  }
+  if(noteIsFichamento(note)){
+    await navigateTo("fichamentos",{fichamentoId:id});
+    return
+  }
+  await navigateTo("notes",{noteId:id})
+}
+function renderKnowledgeTabs(){
+  document.querySelectorAll("[data-knowledge-tab]").forEach(button=>{
+    const tab=button.dataset.knowledgeTab;
+    const count=vaultNotes.filter(note=>knowledgeMatchesTab(note,tab)).length;
+    button.classList.toggle("active",tab===activeKnowledgeTab);
+    button.innerHTML=`${esc(knowledgeTabName(tab))}<span>${count}</span>`
+  })
+}
+function knowledgeCard(n){
+  const type=knowledgeType(n),source=[n.sourceTitle,n.source?.sourceTitle,n.source?.title].find(Boolean)||"",tags=(n.tags||[]).slice(0,3).map(tag=>`<span class="tag">#${esc(tag)}</span>`).join("");
+  return `<article class="knowledge-card clickable-row" data-knowledge-id="${esc(n.id)}" role="button" tabindex="0" onclick="openKnowledgeObject(${jsArg(n.id)})" onkeydown="activateRow(event,this)"><div><span class="tag knowledge-type-${type}">${knowledgeTabLabel(type)}</span>${n.favorite?"<span class='tag'>★</span>":""}</div><h3>${esc(n.title)}</h3><p>${esc(n.excerpt||firstMeaningfulLine(n.content)||"Sem resumo ainda.").slice(0,180)}</p><div class="knowledge-meta"><span>${esc(noteMeta(n))}</span>${source?`<span>${esc(source)}</span>`:""}</div>${tags?`<div class="knowledge-tags">${tags}</div>`:""}</article>`
+}
+function renderKnowledge(){
+  if(!$("knowledgeList")){
+    return
+  }
+  renderKnowledgeTabs();
+  const query=($("knowledgeSearch")?.value||"").toLowerCase().trim();
+  const list=vaultNotes.filter(n=>knowledgeMatchesTab(n,activeKnowledgeTab)).filter(n=>!query||[n.title,n.excerpt,n.content,(n.tags||[]).join(" "),n.sourceTitle,n.source?.sourceTitle,n.source?.title].join(" ").toLowerCase().includes(query)).sort((a,b)=>(b.updatedAt||b.createdAt||"").localeCompare(a.updatedAt||a.createdAt||""));
+  $("knowledgeList").innerHTML=list.length?list.map(knowledgeCard).join(""):`<div class="hint">Nada encontrado neste recorte.</div>`
+}
+function searchTextMatches(query,...parts){
+  return !query||parts.join(" ").toLowerCase().includes(query)
+}
+function buildSearchResults(query=""){
+  const q=String(query||"").toLowerCase().trim(),results=[];
+  state.tracks.forEach(track=>{if(searchTextMatches(q,track.name,track.subtitle,track.description)){results.push({kind:"track",id:track.id,title:track.name,meta:"Trilha",icon:track.sigil||"☽"})}});
+  state.items.forEach(item=>{
+    if(searchTextMatches(q,item.title,item.source,item.notes,trackById(item.track)?.name)){results.push({kind:"item",scope:"item",id:item.id,title:item.title,meta:`Curso/Fonte · ${trackById(item.track)?.name||"Sem trilha"}`,icon:"☿"})}
+    ;(item.modules||[]).forEach(module=>{
+      if(searchTextMatches(q,module.title,item.title)){results.push({kind:"focus",scope:"module",id:module.id,title:module.title,meta:`Módulo · ${item.title}`,icon:"◐"})}
+      ;(module.lessons||[]).forEach(lesson=>{
+        if(searchTextMatches(q,lesson.title,module.title,item.title)){results.push({kind:"focus",scope:"lesson",id:lesson.id,title:lesson.title,meta:`Aula · ${module.title}`,icon:"•"})}
+      })
+    })
+  });
+  state.youtubeQueue.forEach(video=>{if(searchTextMatches(q,video.title,video.channel,video.url)){results.push({kind:"focus",scope:"youtube",id:video.id,title:video.title,meta:`YouTube · ${video.channel||activePlaylist()?.name||""}`,icon:"▶"})}});
+  vaultNotes.filter(note=>note.status!=="archived").forEach(note=>{if(searchTextMatches(q,note.title,note.excerpt,note.content,(note.tags||[]).join(" "))){results.push({kind:"note",id:note.id,title:note.title,meta:noteMeta(note),icon:"🜁"})}});
+  return results.slice(0,24)
+}
+async function openSearchResult(kind,id,scope=""){
+  if($("globalSearchDialog")){
+    $("globalSearchDialog").close()
+  }
+  if(kind==="track"){
+    await navigateTo("tracks",{trackId:id});
+    return
+  }
+  if(kind==="note"){
+    await openKnowledgeObject(id);
+    return
+  }
+  if(kind==="item"){
+    continueResource(id,"item");
+    return
+  }
+  if(kind==="focus"){
+    openFocus(id,scope);
+    return
+  }
+  missingTarget()
+}
+function renderGlobalSearchResults(){
+  if(!$("globalSearchResults")){
+    return
+  }
+  const results=buildSearchResults(globalSearchQuery);
+  $("globalSearchResults").innerHTML=results.length?results.map(result=>`<button type="button" class="search-result" data-search-id="${esc(result.id)}" data-search-kind="${esc(result.kind)}" onclick="openSearchResult(${jsArg(result.kind)},${jsArg(result.id)},${jsArg(result.scope||"")})"><span>${esc(result.icon||"⌕")}</span><div class="grow"><strong>${esc(result.title)}</strong><small>${esc(result.meta||"")}</small></div></button>`).join(""):`<div class="hint">Digite para procurar trilhas, aulas, vídeos e notas.</div>`
+}
+function openGlobalSearch(){
+  globalSearchQuery="";
+  if($("globalSearchInput")){
+    $("globalSearchInput").value="";
+  }
+  renderGlobalSearchResults();
+  $("globalSearchDialog").showModal();
+  setTimeout(()=>$("globalSearchInput")?.focus?.(),40)
+}
+function openCaptureDialog(){
+  if($("captureQuickInput")){
+    $("captureQuickInput").value="";
+  }
+  if($("captureStatus")){
+    $("captureStatus").textContent=""
+  }
+  $("captureDialog").showModal();
+  setTimeout(()=>$("captureQuickInput")?.focus?.(),40)
+}
+function captureNotePayload(kind,text){
+  const type=kind==="concept"?"concept":kind==="question"?"question":kind==="insight"?"insight":"quick",title=firstMeaningfulLine(text).slice(0,90)||"Captura rápida";
+  return {title,type,content:noteTemplate(type,title)+(text?`\n\n${text}\n`:""),tags:["captura"],trackId:state.activeTrack}
+}
+async function captureUniversal(kind="quick"){
+  const raw=($("captureQuickInput")?.value||"").trim();
+  if(["quick","question","insight","concept"].includes(kind)){
+    const payload=captureNotePayload(kind,raw);
+    const data=await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
+    if($("captureDialog")){$("captureDialog").close()}
+    activeKnowledgeTab=knowledgeType(data.note);
+    await loadVaultNotes();
+    await openKnowledgeObject(data.note.id);
+    notice("Captura salva no conhecimento.");
+    return
+  }
+  if(kind==="youtube"&&raw){
+    addYoutubeUrlToQueue(raw,raw);
+    if($("captureDialog")){$("captureDialog").close()}
+    navigateTo("youtube");
+    notice("Vídeo enviado para a fila.");
+    return
+  }
+  if(kind==="course"&&!raw){
+    if($("captureDialog")){$("captureDialog").close()}
+    openItemDialog("course");
+    return
+  }
+  const item=detectInbox(raw||kind);
+  item.type=kind==="link"?item.type:kind;
+  state.inbox.unshift(item);
+  await save(false,"capture");
+  if($("captureDialog")){$("captureDialog").close()}
+  renderInbox();
+  notice("Captura guardada na inbox.")
+}
 function renderNotes(){
   if(!$("vaultList"))return;
   let list=[...vaultNotes],q=($("vaultSearchInput")?.value||"").toLowerCase().trim(),type=$("vaultTypeFilter")?.value||"all",track=$("vaultTrackFilter")?.value||"all",tag=($("vaultTagFilter")?.value||"").replace(/^#/,""),fav=$("vaultFavoriteFilter")?.value||"all",review=$("vaultReviewFilter")?.value||"all",sort=$("vaultSortFilter")?.value||"updated";
@@ -2181,7 +2650,7 @@ if(typeof window!=="undefined"){
   }
 }
 
-function renderAll(){renderHome();renderTracks();renderYoutube();renderLibrary();renderInbox();renderCalendar();renderSettings();$("sideDate").textContent=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});$("streakSide").textContent=`${state.streak} dias de sequência`}
+function renderAll(){renderHome();renderTracks();renderYoutube();renderLibrary();renderKnowledge();renderInbox();renderCalendar();renderSettings();renderGlobalSearchResults();$("sideDate").textContent=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});$("streakSide").textContent=`${state.streak} dias de sequência`}
 
 async function migrateLocalVaultFromBackend(){
   if(!window.ArcanaStorage?.ready||!isLocalBackend()||localStorage.getItem("arcana-local-vault-migrated-v1")){return}
@@ -2256,6 +2725,13 @@ $("catalogOptionsBtn").onclick=openCatalogRequestDialog;
 $("copyCatalogRequestBtn").onclick=()=>copyCatalogRequestJson().catch(()=>{});
 $("searchInput").oninput=renderLibrary;$("libraryTypeFilter").onchange=renderLibrary;$("priorityFilter").onchange=renderLibrary;
 $("captureBtn").onclick=captureInbox;$("inboxInput").onkeydown=e=>{if(e.key==="Enter")captureInbox()};
+document.querySelectorAll("[data-knowledge-tab]").forEach(button=>button.onclick=()=>{activeKnowledgeTab=button.dataset.knowledgeTab;renderKnowledge()});
+if($("knowledgeSearch")){$("knowledgeSearch").oninput=renderKnowledge}
+$("globalSearchBtn").onclick=openGlobalSearch;
+$("globalSearchInput").oninput=e=>{globalSearchQuery=e.currentTarget.value;renderGlobalSearchResults()};
+$("globalSearchInput").onkeydown=e=>{if(e.key==="Enter"){const first=buildSearchResults(globalSearchQuery)[0];if(first){openSearchResult(first.kind,first.id,first.scope||"")}}};
+document.querySelectorAll("[data-capture-kind]").forEach(button=>button.onclick=()=>captureUniversal(button.dataset.captureKind).catch(err=>{if($("captureStatus")){$("captureStatus").textContent=err.message||String(err)}}));
+document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openGlobalSearch()}});
 $("youtubeSettingsForm").onsubmit=e=>{e.preventDefault();const f=e.currentTarget;state.youtubeSettings={mode:f.mode.value,minutes:Number(f.minutes.value)||0,count:Number(f.count.value)||0,hideAfterLimit:f.hideAfterLimit.checked};save()};
 $("refreshCatalogBtn").onclick=async()=>{try{await refreshPublishedCatalog(true);renderAll()}catch(err){youtubeCatalogMeta={...youtubeCatalogMeta,error:err.message||String(err)};renderAll();alert(err.message||String(err))}};
 $("backupNowBtn").onclick=()=>autoBackup("manual");
@@ -2284,7 +2760,7 @@ $("newNoteBtn").onclick=()=>newVaultNote("permanent");$("newFichamentoBtn").oncl
 ["vaultSearchInput","vaultTypeFilter","vaultTrackFilter","vaultTagFilter","vaultFavoriteFilter","vaultReviewFilter","vaultSortFilter"].forEach(id=>{if($(id))$(id).oninput=renderNotes;if($(id))$(id).onchange=renderNotes});
 ["fichamentoSearch","fichamentoSourceType"].forEach(id=>{if($(id))$(id).oninput=renderFichamentos;if($(id))$(id).onchange=renderFichamentos});
 $("prevMonthBtn").onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};$("nextMonthBtn").onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);renderCalendar()};
-$("addBtn").onclick=()=>openItemDialog("manual");$("itemForm").onsubmit=saveItem;$("itemForm").kind.onchange=()=>renderModuleEditor();$("addModuleBtn").onclick=()=>$("moduleRows").insertAdjacentHTML("beforeend",moduleInput());
+$("addBtn").onclick=openCaptureDialog;$("itemForm").onsubmit=saveItem;$("itemForm").kind.onchange=()=>renderModuleEditor();$("addModuleBtn").onclick=()=>$("moduleRows").insertAdjacentHTML("beforeend",moduleInput());
 $("saveNotesBtn").onclick=saveNotes;$("promoteDialogNoteBtn").onclick=promoteDialogNote;$("focusNotesText").oninput=queueFocusSave;document.querySelectorAll("[data-focus-block]").forEach(b=>b.onclick=()=>insertFocusBlock(b.dataset.focusBlock));$("timerStartBtn").onclick=startTimer;$("timerPauseBtn").onclick=pauseTimer;$("timerResetBtn").onclick=resetTimer;$("closeFocusBtn").onclick=closeFocus;$("focusDoneBtn").onclick=completeFocus;
 $("exportBtn").onclick=()=>ArcanaStorage.downloadFullBackup(state);
 $("importInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await importFullBackupFile(f)}catch(err){alert(err.message||"Backup inválido")}e.target.value=""};

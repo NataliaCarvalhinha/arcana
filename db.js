@@ -121,9 +121,14 @@ const ArcanaStorage=(()=>{
       title:data.title||"Untitled Note",
       type:data.type||"quick",
       trackId:data.trackId||null,
+      courseId:data.courseId||null,
+      moduleId:data.moduleId||null,
+      lessonId:data.lessonId||null,
       sourceType:data.sourceType||null,
       sourceId:data.sourceId||null,
+      sourceTitle:data.sourceTitle||data.source?.title||"",
       sessionId:data.sessionId||null,
+      durationMinutes:Number(data.durationMinutes||0)||0,
       tags:Array.isArray(data.tags)?data.tags:[],
       createdAt:data.createdAt||ts,
       updatedAt:data.updatedAt||ts,
@@ -132,13 +137,17 @@ const ArcanaStorage=(()=>{
       status:data.status||"active",
       relatedNoteIds:Array.isArray(data.relatedNoteIds)?data.relatedNoteIds:[],
       source:data.source||{},
+      blocks:Array.isArray(data.blocks)?data.blocks:[],
+      questionStatus:data.questionStatus||data.question_status||null,
+      promotedNoteIds:Array.isArray(data.promotedNoteIds)?data.promotedNoteIds:[],
       citations:Array.isArray(data.citations)?data.citations:[],
       readingProgress:data.readingProgress||null,
       content:data.content||""
     }
   }
   function summarize(note){
-    return {...note,content:undefined,links:links(note.content),excerpt:excerpt(note.content)}
+    const blockText=Array.isArray(note.blocks)?note.blocks.map(block=>[block.title,block.content].join(" ")).join("\n"):"";
+    return {...note,content:undefined,links:links([note.content,blockText].join("\n")),excerpt:excerpt([note.content,blockText].join("\n"))}
   }
   async function listNotes(params={}){
     const rows=await req(tx("notes").getAll());
@@ -410,7 +419,7 @@ const ArcanaStorage=(()=>{
   }
   function arcanaFrontmatter(meta){
     const lines=["---","arcana_managed: true",`arcana_id: ${yamlScalar(meta.arcana_id)}`];
-    for(const key of ["type","title","track","track_id","course","course_id","module","module_id","lesson","lesson_id","source","source_type","source_id","created","updated","review_at","status","favorite"]){
+    for(const key of ["type","title","track","track_id","course","course_id","module","module_id","lesson","lesson_id","source","source_type","source_id","session_id","date","duration_minutes","question_status","created","updated","review_at","status","favorite"]){
       if(Object.prototype.hasOwnProperty.call(meta,key)){
         lines.push(`${key}: ${yamlScalar(meta[key])}`)
       }
@@ -475,7 +484,8 @@ const ArcanaStorage=(()=>{
     return {...note,sourceId,_course:course,_module:module,_lesson:lesson,_track:track}
   }
   function obsidianFrontmatterForNote(note){
-    const tags=mergeTags(note.tags,inlineTags(note.content));
+    const blockContent=Array.isArray(note.blocks)?note.blocks.map(block=>[block.title,block.content].join(" ")).join("\n"):"";
+    const tags=mergeTags(note.tags,inlineTags([note.content,blockContent].join("\n")));
     return arcanaFrontmatter({
       arcana_id:note.id,
       type:note.type||"permanent",
@@ -488,8 +498,13 @@ const ArcanaStorage=(()=>{
       module_id:note._module?.id||"",
       lesson:note._lesson?.title||"",
       lesson_id:note._lesson?.id||"",
+      source:note.sourceTitle||note.source?.title||"",
       source_type:note.sourceType||"",
       source_id:note.sourceId||"",
+      session_id:note.sessionId||"",
+      date:note.createdAt?String(note.createdAt).slice(0,10):"",
+      duration_minutes:Number(note.durationMinutes||note.source?.minutes||0)||0,
+      question_status:note.questionStatus||"",
       created:note.createdAt||"",
       updated:note.updatedAt||"",
       review_at:note.reviewAt||"",
@@ -498,13 +513,67 @@ const ArcanaStorage=(()=>{
       tags
     })
   }
+  function noteBlocks(note,type){
+    return (Array.isArray(note.blocks)?note.blocks:[]).filter(block=>block?.type===type&&String([block.title,block.content].join("")).trim())
+  }
+  function blockTitle(block){
+    return String(block.title||String(block.content||"").split(/\r?\n/).map(line=>line.trim()).find(Boolean)||"Nota").trim()
+  }
+  function indented(text){
+    return String(text||"").trim().split(/\r?\n/).map(line=>`  ${line}`).join("\n")
+  }
+  function section(lines,title,body){
+    const items=Array.isArray(body)?body.filter(item=>String(item||"").trim()):[body].filter(item=>String(item||"").trim());
+    if(items.length){
+      lines.push("",`## ${title}`,"",...items)
+    }
+  }
+  function contextLines(note){
+    const lines=[];
+    if(note._track){lines.push(`- Trilha: ${obsidianLink(note._track.name)}`)}
+    if(note._course){lines.push(`- Curso: ${obsidianLink(note._course.title)}`)}
+    if(note._module){lines.push(`- Módulo: ${note._module.title||""}`)}
+    if(note._lesson){lines.push(`- Aula: ${note._lesson.title||""}`)}
+    return lines
+  }
+  function markdownForSession(note){
+    const lines=[`# ${note.title||"Sessão"}`];
+    section(lines,"Contexto",contextLines(note));
+    const duration=Number(note.durationMinutes||note.source?.minutes||0)||0;
+    section(lines,"Sessão",[note.createdAt?`- Data: ${String(note.createdAt).slice(0,10)}`:"",duration?`- Duração: ${duration} min`:""]);
+    section(lines,"O que aprendi",String(note.content||"").trim());
+    section(lines,"Conceitos",noteBlocks(note,"concept").map(block=>`- ${obsidianLink(blockTitle(block))}${block.content?`\n${indented(block.content)}`:""}`));
+    section(lines,"Perguntas",noteBlocks(note,"question").map(block=>`- ${obsidianLink(blockTitle(block))}${block.content?`\n${indented(block.content)}`:""}`));
+    section(lines,"Insights",noteBlocks(note,"insight").map(block=>`- ${obsidianLink(blockTitle(block))}${block.content?`\n${indented(block.content)}`:""}`));
+    section(lines,"Citações",noteBlocks(note,"quote").map(block=>`${block.title?`- ${block.title}\n`:""}> ${String(block.content||"").trim().replace(/\n/g,"\n> ")}`));
+    section(lines,"Exemplos",noteBlocks(note,"example").map(block=>`- ${blockTitle(block)}${block.content?`\n${indented(block.content)}`:""}`));
+    section(lines,"Fórmulas e comandos",noteBlocks(note,"formula").map(block=>`- ${blockTitle(block)}${block.content?`\n\n\`\`\`\n${String(block.content).trim()}\n\`\`\``:""}`));
+    section(lines,"Próximos passos",noteBlocks(note,"next_action").map(block=>`- [ ] ${blockTitle(block)}${block.content?`\n${indented(block.content)}`:""}`));
+    section(lines,"Notas livres",noteBlocks(note,"free").map(block=>`- ${blockTitle(block)}${block.content?`\n${indented(block.content)}`:""}`));
+    return `${obsidianFrontmatterForNote(note)}\n\n${lines.join("\n").trimEnd()}\n`
+  }
+  function markdownForQuestion(note){
+    const lines=[`# ${note.title||"Pergunta"}`];
+    section(lines,"Contexto",contextLines(note));
+    if(String(note.content||"").trim()){
+      section(lines,"Pergunta",String(note.content||"").trim())
+    }
+    section(lines,"Status",`- ${note.questionStatus||"open"}`);
+    return `${obsidianFrontmatterForNote(note)}\n\n${lines.join("\n").trimEnd()}\n`
+  }
   function markdownFor(note){
+    if(note.type==="session"){
+      return markdownForSession(note)
+    }
+    if(note.type==="question"){
+      return markdownForQuestion(note)
+    }
     const body=[`# ${note.title||"Nota"}`];
     if(note._course||note._module||note._lesson){
       body.push("","## Contexto");
       if(note._course){body.push(`- Curso: ${obsidianLink(note._course.title)}`)}
-      if(note._module){body.push(`- Modulo: ${note._module.title||""}`)}
-      if(note._lesson){body.push(`- Licao: ${note._lesson.title||""}`)}
+      if(note._module){body.push(`- Módulo: ${note._module.title||""}`)}
+      if(note._lesson){body.push(`- Aula: ${note._lesson.title||""}`)}
     }
     if(note.sourceType||note.sourceId){
       body.push("","## Fonte",`- Tipo: ${note.sourceType||"fonte"}`,`- ID: ${note.sourceId||""}`)
@@ -683,7 +752,15 @@ const ArcanaStorage=(()=>{
   function obsidianTrackMarkdown(track,courses,notes){
     const title=track.name||track.title||"Trilha";
     const meta={arcana_id:track.id,type:"track",title,track:title,track_id:track.id||"",created:track.createdAt||"",updated:track.updatedAt||"",status:"active",tags:["arcana/track"]};
-    const lines=[`# ${title}`,"","## Cursos",...courses.map(course=>`- ${obsidianLink(course.title||course.name)}`),"","## Notas",...notes.map(note=>`- ${obsidianLink(note.title)}`)];
+    const current=courses.find(course=>Number(course.progress||0)<100)||courses[0]||null;
+    const recent=items=>items.slice().sort((a,b)=>String(b.updatedAt||b.createdAt||"").localeCompare(String(a.updatedAt||a.createdAt||""))).slice(0,8);
+    const lines=[`# ${title}`];
+    section(lines,"Curso atual",current?[`- ${obsidianLink(current.title||current.name)}`]:[]);
+    section(lines,"Cursos",courses.map(course=>`- ${obsidianLink(course.title||course.name)}`));
+    section(lines,"Fichamentos recentes",recent(notes.filter(note=>note.type==="literature")).map(note=>`- ${obsidianLink(note.title)}`));
+    section(lines,"Notas permanentes",recent(notes.filter(note=>note.type==="permanent"||note.type==="concept")).map(note=>`- ${obsidianLink(note.title)}`));
+    section(lines,"Perguntas abertas",recent(notes.filter(note=>note.type==="question"&&(note.questionStatus||"open")==="open")).map(note=>`- ${obsidianLink(note.title)}`));
+    section(lines,"Sessões recentes",recent(notes.filter(note=>note.type==="session")).map(note=>`- ${obsidianLink(note.title)}`));
     return `${arcanaFrontmatter(meta)}\n\n${lines.join("\n").trimEnd()}\n`
   }
   function obsidianSourceFiles(notes){
