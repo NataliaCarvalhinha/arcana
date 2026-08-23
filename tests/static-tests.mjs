@@ -76,12 +76,21 @@ assert.match(index, /id="globalSearchDialog"/, "global search dialog is present"
 assert.match(index, /id="captureDialog"/, "universal capture dialog is present");
 assert.match(index, /class="mobile-nav"/, "mobile bottom navigation is present");
 assert.match(index, /id="nextRitual"/, "Sanctuary exposes the next ritual surface");
+assert.match(index, /class="sanctuary-page"/, "Sanctuary home uses the ritual page composition");
+assert.match(index, /id="sanctuaryDate"/, "Sanctuary intro exposes the current date");
+assert.doesNotMatch(index, /id="exportBtn"/, "Sanctuary header omits the old backup export control");
+assert.doesNotMatch(index, /id="importInput"/, "Sanctuary header omits the old backup import control");
+assert.match(index, /id="exportFullBackupBtn"/, "backup export remains available in Settings");
+assert.match(index, /id="fullBackupImportInput"/, "backup import remains available in Settings");
 assert.match(app, /function renderKnowledge/, "Knowledge hub renderer is present");
 assert.match(app, /function openKnowledgeObject/, "Knowledge objects open through a unified action");
 assert.match(app, /function buildSearchResults/, "global search result builder is present");
 assert.match(app, /function openGlobalSearch/, "global search opener is present");
 assert.match(app, /function captureUniversal/, "universal capture handler is present");
 assert.match(app, /function renderNextRitual/, "Sanctuary next ritual renderer is present");
+assert.match(app, /trocar ritual/, "Sanctuary replan action is a subtle tertiary ritual switch");
+assert.match(app, /EM FOCO/, "Today plan marks the current ritual without adding duplicate buttons");
+assert.doesNotMatch(app, /today-row clickable-row[\s\S]{0,260}<button class="mini-btn" onclick="event\.stopPropagation\(\);\$\{action\}">Continuar<\/button>/, "Today plan rows do not duplicate the primary Continue action");
 assert.match(app, /function continueResource/, "universal continue action is present");
 assert.match(app, /function continueTrack/, "track continue action is present");
 assert.match(app, /function currentModuleLabel/, "course rows expose the current module summary");
@@ -161,7 +170,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v13/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v14/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -178,6 +187,8 @@ assert.match(styles, /\.row-menu summary\{[^}]*min-width:var\(--control-hit-area
 assert.match(styles, /button:focus-visible,a:focus-visible,summary:focus-visible/, "keyboard focus is visible on controls and menus");
 assert.match(styles, /\.course-title,.module-title,.lesson-title[\s\S]*-webkit-line-clamp:2/, "course and curriculum titles are line-clamped with wrapping");
 assert.match(index, /<label class="snapshot-label" for="snapshotList">Snapshots<\/label><select id="snapshotList">/, "snapshot selector has a visible associated label");
+assert.match(styles, /\.next-ritual-card\{[^}]*text-align:center/, "next ritual is centered as the home focal point");
+assert.match(styles, /\.sanctuary-page\{[^}]*width:min\(1120px,100%\)/, "Sanctuary flow has a constrained reading width");
 
 function makeElement(id) {
   return {
@@ -214,7 +225,7 @@ function makeElement(id) {
 }
 
 const elements = new Map();
-const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }

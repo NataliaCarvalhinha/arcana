@@ -37,31 +37,37 @@
       <div><div class="kicker">GRIMÓRIO PESSOAL</div><h1 id="pageTitle">Santuário</h1></div>
       <div class="top-actions">
         <button id="globalSearchBtn" class="ghost-btn">⌕ Buscar</button>
-        <button id="exportBtn" class="ghost-btn">Exportar</button>
-        <label class="ghost-btn file-label">Importar<input id="importInput" type="file" accept="application/json"></label>
         <button id="addBtn" class="gold-btn">＋ Capturar</button>
       </div>
     </header>
 
     <section id="homeView" class="view active">
-      <section class="welcome-card">
-        <div>
-          <div class="kicker">SEU RITUAL DE HOJE</div>
-          <h2 id="greeting"></h2>
-          <p id="todaySummary"></p>
-        </div>
-        <div class="level-orb">
-          <span id="levelNumber">1</span>
-          <small>NÍVEL</small>
-        </div>
-      </section>
+      <div class="sanctuary-page">
+        <section class="sanctuary-intro">
+          <div>
+            <div class="sanctuary-intro-line">
+              <div class="kicker">SANTUÁRIO</div>
+              <div id="sanctuaryDate" class="sanctuary-date"></div>
+            </div>
+            <h2 id="greeting"></h2>
+            <p id="todaySummary"></p>
+          </div>
+          <div class="level-seal" aria-label="Nível atual">
+            <span id="levelNumber">1</span>
+            <small>NÍVEL</small>
+          </div>
+        </section>
 
-      <section class="sanctuary-grid">
-        <article id="nextRitual" class="next-ritual-card"></article>
-        <article class="card today-card">
-          <div class="card-head">
-            <div><div class="kicker">HOJE</div><h2>Ritual compacto</h2></div>
-            <button id="regenPlanBtn" class="mini-btn">↻ Recalcular</button>
+        <section class="sanctuary-ritual">
+          <article id="nextRitual" class="next-ritual-card"></article>
+        </section>
+
+        <section class="today-ritual-section">
+          <div class="sanctuary-section-head">
+            <div class="section-rule"></div>
+            <h2>Ritual de hoje</h2>
+            <div class="section-rule"></div>
+            <button id="regenPlanBtn" class="mini-btn icon-link" title="Recalcular plano" aria-label="Recalcular plano">↻</button>
           </div>
           <div id="todayProgress" class="today-progress"></div>
           <div id="todayRows" class="today-rows"></div>
@@ -81,37 +87,34 @@
             </div>
             <div id="dailyPlan"></div>
           </details>
-        </article>
-      </section>
+        </section>
 
-      <section id="gameStats" class="stat-grid compact-stats"></section>
+        <section id="gameStats" class="stat-grid compact-stats sanctuary-stats"></section>
 
-      <div class="layout-grid">
-        <article class="card">
-          <div class="card-head"><div><div class="kicker">PRÓXIMO VÍDEO</div><h2>YouTube de hoje</h2></div><button class="mini-btn" onclick="navigateTo('youtube')">Ver fila</button></div>
-          <div id="homeYoutube"></div>
-        </article>
-	        <article class="card">
-	          <div class="card-head"><div><div class="kicker">TRILHAS</div><h2>Continuar caminhos</h2></div><button class="mini-btn" onclick="navigateTo('tracks')">Abrir</button></div>
-	          <div id="homeTracks"></div>
-	        </article>
-	      </div>
-	
-	      <div class="layout-grid">
-	        <article class="card">
-	          <div class="card-head"><div><div class="kicker">PRIORIDADES</div><h2>Fila curta</h2></div></div>
-	          <div id="homePriority"></div>
-	        </article>
-	        <article class="card">
-	          <div class="card-head"><div><div class="kicker">VAULT</div><h2>Revisões e conexões</h2></div><button class="mini-btn" onclick="navigateTo('review')">Revisar</button></div>
-	          <div id="homeReviews"></div>
-	        </article>
-	      </div>
-	      <article class="card">
-	        <div class="card-head"><div><div class="kicker">MEMÓRIA</div><h2>Notas recentes</h2></div><button class="mini-btn" onclick="navigateTo('knowledge')">Abrir conhecimento</button></div>
-	        <div id="homeKnowledge"></div>
-	      </article>
-	    </section>
+        <section class="sanctuary-lower">
+          <article class="sanctuary-panel">
+            <div class="card-head"><div><div class="kicker">PRÓXIMO VÍDEO</div><h2>YouTube de hoje</h2></div><button class="mini-btn" onclick="navigateTo('youtube')">Ver fila</button></div>
+            <div id="homeYoutube"></div>
+          </article>
+          <article class="sanctuary-panel">
+            <div class="card-head"><div><div class="kicker">TRILHAS</div><h2>Continuar caminhos</h2></div><button class="mini-btn" onclick="navigateTo('tracks')">Abrir</button></div>
+            <div id="homeTracks"></div>
+          </article>
+          <article class="sanctuary-panel">
+            <div class="card-head"><div><div class="kicker">PRIORIDADES</div><h2>Fila curta</h2></div></div>
+            <div id="homePriority"></div>
+          </article>
+          <article class="sanctuary-panel">
+            <div class="card-head"><div><div class="kicker">VAULT</div><h2>Revisões e conexões</h2></div><button class="mini-btn" onclick="navigateTo('review')">Revisar</button></div>
+            <div id="homeReviews"></div>
+          </article>
+          <article class="sanctuary-panel sanctuary-panel-wide">
+            <div class="card-head"><div><div class="kicker">MEMÓRIA</div><h2>Notas recentes</h2></div><button class="mini-btn" onclick="navigateTo('knowledge')">Abrir conhecimento</button></div>
+            <div id="homeKnowledge"></div>
+          </article>
+        </section>
+      </div>
+    </section>
 
     <section id="tracksView" class="view">
       <div class="section-toolbar">

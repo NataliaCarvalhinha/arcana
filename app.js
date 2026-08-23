@@ -1504,13 +1504,18 @@ async function navigateTo(view,options={}){
 document.querySelectorAll(".nav-btn,.mobile-nav-btn").forEach(b=>b.onclick=()=>navigateTo(b.dataset.view));
 
 function renderHome(){
-  const h=new Date().getHours(),sal=h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";
+  const now=new Date(),h=now.getHours(),sal=h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";
   $("greeting").textContent=`${sal}. O que vamos invocar hoje?`;
-  const level=Math.floor(state.xp/500)+1,$xp=state.xp%500;$("levelNumber").textContent=level;
-  const studied=state.sessions.filter(s=>s.date===dayKey()).reduce((a,b)=>a+b.minutes,0);
-  $("todaySummary").textContent=`${studied} minutos estudados hoje · ${state.streak} dias de sequência`;
+  if($("sanctuaryDate")){
+    const dateText=now.toLocaleDateString("pt-BR",{day:"2-digit",month:"long"}).toUpperCase();
+    const weekday=now.toLocaleDateString("pt-BR",{weekday:"long"}).toUpperCase();
+    $("sanctuaryDate").innerHTML=`<span>${dateText}</span><small>${weekday}</small>`
+  }
+  const level=Math.floor(state.xp/500)+1;$("levelNumber").textContent=level;
+  const studied=state.sessions.filter(s=>s.date===dayKey()).reduce((a,b)=>a+b.minutes,0),targetMinutes=state.dailyPlan.minutes||60;
+  $("todaySummary").textContent=`${studied} / ${targetMinutes} min hoje · ${state.streak} dias de sequência`;
   $("gameStats").innerHTML=[
-    ["XP",state.xp],["Sequência",`${state.streak} dias`],["Sessões",state.sessions.length],["Próximo nível",`${500-$xp} XP`]
+    ["✦ XP",state.xp],["☽ Sequência",`${state.streak} dias`],["◇ Sessões",state.sessions.length],["Nível",level]
   ].map(([a,b])=>`<div class="stat"><span>${a}</span><strong>${b}</strong></div>`).join("");
   renderDailyPlan();renderHomeYoutube();renderHomeTracks();renderHomePriority();renderVaultHome()
 }
@@ -1570,19 +1575,19 @@ function renderNextRitual(){
   }
   const target=nextRitualTarget();
   if(!target){
-    $("nextRitual").innerHTML=`<div class="kicker">PRÓXIMO RITUAL</div><h2>Sem ritual pendente</h2><p>Seu plano está limpo. Capture uma nova fonte ou crie uma trilha para continuar.</p><button class="gold-btn" onclick="openCaptureDialog()">Capturar</button>`;
+    $("nextRitual").innerHTML=`<div class="ritual-ornament">✦ PRÓXIMO RITUAL ✦</div><h2>Sem ritual pendente</h2><p>Seu plano está limpo. Capture uma nova fonte ou crie uma trilha para continuar.</p><div class="next-ritual-actions"><button class="gold-btn" onclick="openCaptureDialog()">Capturar</button></div>`;
     return
   }
   const action=dailyPlanAction(target),label=target.type==="review"?"Revisão":target.trackName||target.detail||target.type||"Foco";
   const hierarchy=[target.courseTitle,target.moduleTitle,target.lessonTitle].filter(Boolean).map(esc).join(" · ");
-  $("nextRitual").innerHTML=`<div class="kicker">PRÓXIMO RITUAL</div><h2>${esc(target.title)}</h2><p>${esc(label)}${hierarchy?` · ${hierarchy}`:""}${target.minutes?` · ${target.minutes} min`:""}</p><div class="next-ritual-actions"><button class="gold-btn" onclick="${action}">Continuar</button><button class="ghost-btn" onclick="generatePlan()">Replanejar</button></div>`
+  $("nextRitual").innerHTML=`<div class="ritual-ornament">✦ PRÓXIMO RITUAL ✦</div><h2 class="next-ritual-title">${esc(target.title)}</h2><p>${esc(label)}${hierarchy?` · ${hierarchy}`:""}${target.minutes?` · ${target.minutes} min`:""}</p><div class="next-ritual-actions"><button class="gold-btn" onclick="${action}">Continuar</button><button class="text-link" onclick="generatePlan()">trocar ritual</button></div>`
 }
 function renderTodayProgress(){
   if(!$("todayProgress")){
     return
   }
   const planned=(state.dailyPlan.items||[]).reduce((sum,item)=>sum+Number(item.minutes||0),0),studied=state.sessions.filter(s=>s.date===dayKey()).reduce((sum,item)=>sum+Number(item.minutes||0),0),pct=planned?Math.min(100,Math.round(studied/planned*100)):0;
-  $("todayProgress").innerHTML=`<div class="today-progress-head"><span>Hoje</span><strong>${studied}/${planned||0} min</strong></div><div class="progress"><div style="width:${pct}%"></div></div>`
+  $("todayProgress").innerHTML=`<div class="today-progress-line"><span>Hoje</span><strong>${studied} / ${planned||0} min</strong><span>${pct}%</span></div><div class="progress"><div style="width:${pct}%"></div></div>`
 }
 function renderTodayRows(){
   if(!$("todayRows")){
@@ -1591,8 +1596,9 @@ function renderTodayRows(){
   const items=state.dailyPlan.items||[];
   $("todayRows").innerHTML=items.length?items.slice(0,4).map((p,n)=>{
     const action=dailyPlanAction(p),label=p.type==="review"?"Revisão":p.type==="youtube"?"YouTube":p.trackName||"Foco";
-    return `<div class="today-row clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><span class="num">${n+1}</span><div class="grow"><strong>${esc(p.title)}</strong><span>${esc(label)} · ${p.minutes} min</span></div><button class="mini-btn" onclick="event.stopPropagation();${action}">Continuar</button></div>`
-  }).join(""):`<div class="hint">Sem plano para hoje.</div>`
+    const hierarchy=[p.courseTitle,p.moduleTitle,p.lessonTitle].filter(Boolean).map(esc).join(" · ");
+    return `<div class="today-row clickable-row ${n===0?"today-row-focus":""}" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><span class="num">${String(n+1).padStart(2,"0")}</span><div class="grow"><strong>${esc(p.title)}</strong><span>${esc(label)}${hierarchy?` · ${hierarchy}`:""}</span></div><div class="today-row-side"><span>${p.minutes} min</span>${n===0?`<span class="tag">EM FOCO</span>`:""}</div></div>`
+  }).join(""):`<div class="hint">Nenhum ritual planejado ainda.</div>`
 }
 function generatePlan(){
   const mins=Number($("todayMinutes")?.value||state.dailyPlan.minutes||60);
@@ -2771,8 +2777,8 @@ $("newNoteBtn").onclick=()=>newVaultNote("permanent");$("newFichamentoBtn").oncl
 $("prevMonthBtn").onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};$("nextMonthBtn").onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);renderCalendar()};
 $("addBtn").onclick=openCaptureDialog;$("itemForm").onsubmit=saveItem;$("itemForm").kind.onchange=()=>renderModuleEditor();$("addModuleBtn").onclick=()=>$("moduleRows").insertAdjacentHTML("beforeend",moduleInput());
 $("saveNotesBtn").onclick=saveNotes;$("promoteDialogNoteBtn").onclick=promoteDialogNote;$("focusNotesText").oninput=queueFocusSave;document.querySelectorAll("[data-focus-block]").forEach(b=>b.onclick=()=>insertFocusBlock(b.dataset.focusBlock));$("timerStartBtn").onclick=startTimer;$("timerPauseBtn").onclick=pauseTimer;$("timerResetBtn").onclick=resetTimer;$("closeFocusBtn").onclick=closeFocus;$("focusDoneBtn").onclick=completeFocus;
-$("exportBtn").onclick=()=>ArcanaStorage.downloadFullBackup(state);
-$("importInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await importFullBackupFile(f)}catch(err){alert(err.message||"Backup inválido")}e.target.value=""};
+if($("exportBtn")){$("exportBtn").onclick=()=>ArcanaStorage.downloadFullBackup(state)}
+if($("importInput")){$("importInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await importFullBackupFile(f)}catch(err){alert(err.message||"Backup inválido")}e.target.value=""}}
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).close());
 
 initApp();
