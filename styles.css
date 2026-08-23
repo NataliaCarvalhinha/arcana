@@ -34,21 +34,26 @@ dialog{border:0;padding:0;border-radius:18px;background:#15101c;color:var(--ink)
 @media(max-width:1050px){.sanctuary-grid{grid-template-columns:1fr}.compact-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:720px){body{padding-bottom:78px}.mobile-nav{display:grid}.top-actions{display:grid;grid-template-columns:1fr 1fr}.top-actions .gold-btn{grid-column:1/-1}.sanctuary-grid{gap:10px}.today-row{grid-template-columns:auto minmax(0,1fr)}.today-row .mini-btn{grid-column:2}.knowledge-list{grid-template-columns:1fr}.capture-kind-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.toast-host{bottom:82px;left:12px;right:12px}.toast{width:100%}.row-menu div{position:fixed;right:18px;left:18px;top:auto;bottom:80px}.focus-grid{gap:12px}}
 
-:root{--control-height-sm:36px;--control-height-md:42px;--control-hit-area:42px;--gold-button-bg:#efd184;--gold-button-fg:#120c08}
+:root{--control-height-sm:40px;--control-height-md:42px;--control-hit-area:42px;--gold-button-bg:#efd184;--gold-button-fg:#120c08;--gold-button-fallback:#aa8950}
 body{font-size:15px;line-height:1.45}
 button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
 .ghost-btn,.gold-btn{min-height:var(--control-height-md);display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:.88rem;line-height:1.2}
+.gold-btn{background-color:var(--gold-button-fallback)}
 .mini-btn{min-height:var(--control-height-sm);display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:.8125rem;line-height:1.2}
 .primary-action{min-height:var(--control-height-md);padding-inline:14px;font-size:.86rem}
-#addBtn,#newTrackBtn,.mobile-capture-btn{background:linear-gradient(180deg,#f5dfa0,var(--gold-button-bg));color:var(--gold-button-fg);border-color:#f6dfa0;text-shadow:none}
+#addBtn,#newTrackBtn,.mobile-capture-btn{background-color:var(--gold-button-bg);background-image:linear-gradient(180deg,#f5dfa0,var(--gold-button-bg));color:var(--gold-button-fg);border-color:#f6dfa0;text-shadow:none}
 #addBtn:hover,#newTrackBtn:hover,.mobile-capture-btn:hover{filter:brightness(1.04)}
 #addCourseBtn{white-space:nowrap}
-.brand-sub,.sidebar-footer span,.kicker,.stat span,.profile-stat span,.cal-head,.inbox-type,.status-chip,.focus-context span,.breadcrumb button,.knowledge-tab span,.knowledge-meta,.knowledge-tags{font-size:.75rem;line-height:1.35}
+.brand-sub,.sidebar-footer span,.kicker,.stat span,.profile-stat span,.cal-head,.inbox-type,.status-chip,.focus-context span,.breadcrumb button,.knowledge-tab span,.knowledge-meta,.knowledge-tags,.journey-dot,.num{font-size:.75rem;line-height:1.35}
 .hint,.muted,.grow span,.track-tab span,.playlist-tab span,.module,.sync-status,.meta,.cal-min,.diag-text,.next-ritual-meta,.today-row-meta,.today-progress-line,.knowledge-card p{font-size:.8125rem;line-height:1.45}
 .tag{font-size:.75rem;line-height:1.25}
 .level-orb small{font-size:.75rem;letter-spacing:.08em}
 .mobile-nav-btn span{font-size:.75rem}
 .plan-config label,.settings-form label,.modal label{font-size:.8125rem}
+.snapshot-tools{align-items:center}
+.snapshot-label{color:var(--muted);font-size:.8125rem;font-weight:700}
+.x{min-width:var(--control-height-sm);min-height:var(--control-height-sm);display:inline-flex;align-items:center;justify-content:center}
+.module-input-row{grid-template-columns:1fr 100px var(--control-height-sm)}
 .course-row,.module-main,.lesson-row,.track-row,.plan-item,.video-row,.today-row,.search-result{min-width:0}
 .course-row>.grow,.module-main>.grow,.lesson-row>.grow,.track-row>.grow,.plan-item>.grow,.video-row>.grow,.today-row>.grow,.search-result>.grow{min-width:0}
 .grow strong,.today-row strong{white-space:normal;overflow-wrap:anywhere}
@@ -61,4 +66,4 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 .row-menu button{min-height:var(--control-height-sm);display:flex;align-items:center;width:100%;font-size:.8125rem;line-height:1.2;padding:8px 10px}
 .module-main{min-height:var(--control-height-md)}
 .journey-module:not([open]) .module-main{align-items:center}
-@media(max-width:720px){.course-row,.lesson-row,.module-main{gap:8px}.course-row>.primary-action,.lesson-row>.primary-action,.module-main>.primary-action{flex:0 0 auto}.row-menu summary{min-width:44px;min-height:44px}}
+@media(max-width:720px){.course-row,.lesson-row,.module-main{gap:8px}.course-row>.primary-action,.lesson-row>.primary-action,.module-main>.primary-action{flex:0 0 auto}.row-menu summary{min-width:44px;min-height:44px}.module-input-row{grid-template-columns:1fr 80px var(--control-height-sm)}}

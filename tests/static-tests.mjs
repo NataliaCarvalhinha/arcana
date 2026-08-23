@@ -161,21 +161,23 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v12/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v13/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
 assert.match(worker, /caches\.match\(catalogCacheRequest\(url\)\)/, "service worker falls back to the normalized cached catalog offline");
 assert.ok(!/youtube\.com|youtu\.be/.test(worker), "service worker does not cache YouTube");
 
-assert.match(styles, /--control-height-sm:36px/, "small control height token is defined");
+assert.match(styles, /--control-height-sm:40px/, "small control height token is defined");
 assert.match(styles, /--control-height-md:42px/, "medium control height token is defined");
 assert.match(styles, /--control-hit-area:42px/, "touch hit-area token is defined");
-assert.match(styles, /#addBtn,#newTrackBtn,.mobile-capture-btn\{background:linear-gradient\(180deg,#f5dfa0,var\(--gold-button-bg\)\);color:var\(--gold-button-fg\)/, "capture and track buttons have explicit high-contrast colors");
+assert.match(styles, /\.gold-btn\{background-color:var\(--gold-button-fallback\)\}/, "gold buttons expose a solid high-contrast fallback behind the gradient");
+assert.match(styles, /#addBtn,#newTrackBtn,.mobile-capture-btn\{background-color:var\(--gold-button-bg\);background-image:linear-gradient\(180deg,#f5dfa0,var\(--gold-button-bg\)\);color:var\(--gold-button-fg\)/, "capture and track buttons have explicit high-contrast colors");
 assert.match(styles, /\.primary-action\{min-height:var\(--control-height-md\)/, "primary action buttons use the medium control height");
 assert.match(styles, /\.row-menu summary\{[^}]*min-width:var\(--control-hit-area\);min-height:var\(--control-hit-area\)/, "row menu summary has a full touch target");
 assert.match(styles, /button:focus-visible,a:focus-visible,summary:focus-visible/, "keyboard focus is visible on controls and menus");
 assert.match(styles, /\.course-title,.module-title,.lesson-title[\s\S]*-webkit-line-clamp:2/, "course and curriculum titles are line-clamped with wrapping");
+assert.match(index, /<label class="snapshot-label" for="snapshotList">Snapshots<\/label><select id="snapshotList">/, "snapshot selector has a visible associated label");
 
 function makeElement(id) {
   return {
