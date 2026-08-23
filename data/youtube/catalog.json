@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-22T04:49:08Z",
+  "generatedAt": "2026-08-23T04:52:33Z",
   "playlists": [
     {
       "id": "PLNur2Ccbfc5k",
@@ -855,7 +855,7 @@
         },
         {
           "id": "cFUM2LTYzIg",
-          "title": "20 PARADOXOS QUE PROVAM QUE O TEMPO NÃO DEVERIA EXISTIR",
+          "title": "20 PARADOXES THAT PROVE TIME SHOULDN'T EXIST",
           "url": "https://www.youtube.com/watch?v=cFUM2LTYzIg",
           "channel": "Bricellet, o Sagaz",
           "duration": 572,
@@ -4127,7 +4127,7 @@
           "channel": "PELEJA",
           "duration": 1109,
           "position": 458,
-          "thumbnail": "https://i.ytimg.com/vi_lc/LUyS_owuyck/hqdefault_en.jpg?sqp=CMzSpNQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBqLzl_8DMhIwaHR0cHM6Ly9pLnl0aW1nLmNvbS92aS9MVXlTX293dXljay9ocWRlZmF1bHQuanBn&rs=AOn4CLC-FN3SUTAkwDUm9vY0TQo09b7T-w"
+          "thumbnail": "https://i.ytimg.com/vi_lc/LUyS_owuyck/hqdefault_en.jpg?sqp=CPj3qdQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBqLzl_8DMhIwaHR0cHM6Ly9pLnl0aW1nLmNvbS92aS9MVXlTX293dXljay9ocWRlZmF1bHQuanBn&rs=AOn4CLA0YyDUxTYSsaPZZCv0tAetGH9TAw"
         },
         {
           "id": "oyuboXYhEAw",
@@ -4419,7 +4419,7 @@
         },
         {
           "id": "tFBsqzxiHg0",
-          "title": "Função gama (PARTE 1 DE 3)",
+          "title": "Gamma function (PART 1 OF 3)",
           "url": "https://www.youtube.com/watch?v=tFBsqzxiHg0",
           "channel": "Toda a Matemática",
           "duration": 707,
@@ -11399,7 +11399,7 @@
           "channel": "NOVA ACRÓPOLE BRASIL - ESCOLA DE FILOSOFIA",
           "duration": 2205,
           "position": 1266,
-          "thumbnail": "https://i.ytimg.com/vi/3_JnFrI5gwY/hqdefault_custom_2.jpg?sqp=CMzSpNQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBhU1-a73lfcoXdG9pnJ5FWGMGDTg"
+          "thumbnail": "https://i.ytimg.com/vi/3_JnFrI5gwY/hqdefault_custom_2.jpg?sqp=CPj3qdQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLATf9eiX3tsl8yhvimYIEGDzwKk9w"
         },
         {
           "id": "ozwtS7fizds",
@@ -13308,6 +13308,15 @@
           "duration": 1418,
           "position": 1478,
           "thumbnail": "https://i.ytimg.com/vi/vkAZJmwO5pc/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCTyXcAE-AAktpe5ANgsr9NNoRoNQ"
+        },
+        {
+          "id": "0uAieHTTNpI",
+          "title": "Start NOW: science-backed habits to look beautiful",
+          "url": "https://www.youtube.com/watch?v=0uAieHTTNpI",
+          "channel": "Dra. Hadra Banks",
+          "duration": 1321,
+          "position": 1479,
+          "thumbnail": "https://i.ytimg.com/vi/0uAieHTTNpI/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAGuBNaSfM_GX6EFM4wLhjZmrXmNw"
         }
       ]
     },
