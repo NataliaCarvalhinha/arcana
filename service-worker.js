@@ -1,5 +1,5 @@
-const CACHE_NAME="arcana-shell-v18";
-const APP_SHELL=["./","./index.html","./styles.css","./db.js","./app.js","./manifest.webmanifest","./assets/icons/arcana.svg"];
+const CACHE_NAME="arcana-shell-v19";
+const APP_SHELL=["./","./index.html","./styles.css","./data-safety.js","./db.js","./app.js","./manifest.webmanifest","./assets/icons/arcana.svg"];
 const YOUTUBE_CATALOG_RE=/\/data\/youtube\/catalog\.json$/;
 
 function catalogCacheRequest(url){

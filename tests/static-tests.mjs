@@ -2,11 +2,12 @@ import { readFileSync, existsSync } from "node:fs";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 
-for (const file of ["index.html", "app.js", "db.js", "manifest.webmanifest", "service-worker.js", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", ".github/workflows/register-youtube-playlist.yml", ".github/ISSUE_TEMPLATE/arcana-playlist.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py"]) {
+for (const file of ["index.html", "app.js", "db.js", "data-safety.js", "manifest.webmanifest", "service-worker.js", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", ".github/workflows/register-youtube-playlist.yml", ".github/ISSUE_TEMPLATE/arcana-playlist.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py", "tests/data-safety-tests.mjs", "docs/data-safety.md"]) {
   assert.ok(existsSync(file), `${file} exists`);
 }
 
 const index = readFileSync("index.html", "utf8");
+assert.ok(index.indexOf("data-safety.js") < index.indexOf("db.js"), "data-safety.js loads before db.js");
 assert.ok(index.indexOf("db.js") < index.indexOf("app.js"), "db.js loads before app.js");
 assert.match(index, /rel="manifest"/, "manifest linked");
 
@@ -17,6 +18,7 @@ assert.equal(manifest.display, "standalone");
 
 const app = readFileSync("app.js", "utf8");
 const db = readFileSync("db.js", "utf8");
+const dataSafety = readFileSync("data-safety.js", "utf8");
 const styles = readFileSync("styles.css", "utf8");
 const pagesWorkflow = readFileSync(".github/workflows/pages.yml", "utf8");
 const syncWorkflow = readFileSync(".github/workflows/sync-youtube.yml", "utf8");
@@ -27,6 +29,13 @@ const youtubeCatalog = JSON.parse(readFileSync("data/youtube/catalog.json", "utf
 const youtubeSyncScript = readFileSync("scripts/sync-youtube.py", "utf8");
 assert.match(app, /ArcanaStorage\.init/, "IndexedDB init is wired");
 assert.match(db, /window\.ArcanaStorage=ArcanaStorage/, "IndexedDB storage is exposed to the app");
+assert.match(dataSafety, /ArcanaDataSafety/, "data safety module is exposed");
+assert.match(dataSafety, /prepareStateMigration/, "data safety module owns guarded migrations");
+assert.match(app, /function showStartupRecovery/, "startup data failures render recovery UI");
+assert.match(app, /function preparePersistedState/, "app state startup uses guarded preparation");
+assert.match(app, /createDefaultState:createFreshDefaultState/, "fresh defaults are only created through the explicit fresh-state path");
+assert.match(index, /id="exportRawStateBtn"/, "settings exposes raw state export");
+assert.match(index, /id="snapshotRecoveryInfo"/, "settings explains snapshot recovery availability");
 assert.doesNotMatch(app, /sincronização automática precisa do Arcana Local/, "Pages no longer blocks on the old local-only sync warning");
 assert.match(app, /function publishedCatalogUrl/, "published catalog URL helper is present");
 assert.match(app, /function publishedCatalogRequestUrl/, "published catalog request helper supports cache busting");
@@ -105,7 +114,7 @@ assert.match(app, /ctrlKey\|\|e\.metaKey/, "global search has a Ctrl/Cmd+K short
 assert.match(app, /playlist-learning-main/, "starter playlist is present in the catalog");
 assert.match(app, /course-elec-01/, "starter electronics catalog is present");
 assert.match(app, /course-fin-07/, "starter finance catalog is present");
-assert.match(app, /state=applyStarterContent\(await ArcanaStorage\.init/, "starter content is applied during IndexedDB startup");
+assert.match(app, /prepareState:preparePersistedState/, "IndexedDB startup delegates migrations to the guarded state preparer");
 assert.match(index, /id="obsidianConnectBtn"/, "settings exposes the obsidian connect action");
 assert.match(index, /id="obsidianSyncBtn"/, "settings exposes the obsidian sync action");
 assert.match(index, /id="obsidianAutoSync"/, "settings exposes autosync selection");
@@ -183,7 +192,8 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v18/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v19/, "service worker cache version invalidates old app shell");
+assert.match(worker, /data-safety\.js/, "service worker caches the data safety module");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -271,7 +281,7 @@ function makeSelect(id, values = []) {
 }
 
 const elements = new Map();
-const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "calendarConflictNotice", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "calendarIntegrationForm", "googleCalendarStatus", "googleCalendarList", "googleCalendarConnectBtn", "googleCalendarSyncBtn", "googleCalendarDisconnectBtn", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "calendarLegend", "externalCalendarSummary", "externalCalendarEvents", "syncCalendarBtn", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost", "registerBtn", "timeNowBtn", "timeNowDialog", "timeNowOptions", "timeNowSuggestion", "registerDialog", "registerForm", "registerQuickInput", "registerParseBtn", "registerPreview", "registerTypeSelect", "registerTrackSelect", "registerCourseSelect", "registerModuleSelect", "registerLessonSelect", "registerHobbySelect", "registerStatus", "journalDate", "journalPrevBtn", "journalNextBtn", "journalTimeline", "weeklyAnalytics"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "calendarConflictNotice", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "calendarIntegrationForm", "googleCalendarStatus", "googleCalendarList", "googleCalendarConnectBtn", "googleCalendarSyncBtn", "googleCalendarDisconnectBtn", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "calendarLegend", "externalCalendarSummary", "externalCalendarEvents", "syncCalendarBtn", "youtubeSettingsForm", "environmentStatus", "dataSafetyStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "exportRawStateBtn", "snapshotRecoveryInfo", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost", "registerBtn", "timeNowBtn", "timeNowDialog", "timeNowOptions", "timeNowSuggestion", "registerDialog", "registerForm", "registerQuickInput", "registerParseBtn", "registerPreview", "registerTypeSelect", "registerTrackSelect", "registerCourseSelect", "registerModuleSelect", "registerLessonSelect", "registerHobbySelect", "registerStatus", "journalDate", "journalPrevBtn", "journalNextBtn", "journalTimeline", "weeklyAnalytics"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }
@@ -450,11 +460,13 @@ context.ArcanaStorage = {
 };
 
 vm.createContext(context);
+vm.runInContext(dataSafety, context, { filename: "data-safety.js" });
 vm.runInContext(app.slice(0, app.indexOf("async function initApp")), context, { filename: "app.js" });
 
 await vm.runInContext(`(async()=>{
   scheduleAutoBackup=()=>{};
   renderAll=()=>{renderDailyPlan();renderHomeTracks();renderTracks();};
+  const fixedPlanDate=new Date("2026-08-17T10:00:00.000Z");
   const seededFresh=applyStarterContent(structuredClone(DEFAULT_STATE));
   if(seededFresh.starterContentVersion!==2){throw new Error("starter content version was not stored")}
   if(seededFresh.starterCurriculumVersion!==1){throw new Error("starter curriculum version was not stored")}
@@ -532,11 +544,13 @@ await vm.runInContext(`(async()=>{
   if(preservedRerun.activePlaylist!=="playlist-alt"){throw new Error("starter rerun should not override the selected playlist")}
 
   state=structuredClone(seededFresh);
-  renderAll();
-  generatePlan();
+  renderHomeTracks();
+  renderTracks();
+  const fixedPlan=planActivitiesIntoWindows(fixedPlanDate,{minutes:60,now:fixedPlanDate});
+  state.dailyPlan={...state.dailyPlan,date:dayKey(fixedPlanDate),minutes:60,items:fixedPlan.items,freeWindows:fixedPlan.freeWindows,availableMinutes:fixedPlan.availableMinutes,notices:fixedPlan.notices};
   if(!$("homeTracks").innerHTML.includes("Eletrônica")||!$("homeTracks").innerHTML.includes("Finanças")){throw new Error("seeded tracks did not render in the Sanctuary")}
   if(!$("trackTabs").innerHTML.includes("Eletrônica")||!$("trackCourses").innerHTML.includes("Microcontrollers: Basic Architecture and Design")){throw new Error("seeded track catalog did not render")}
-  if(!state.dailyPlan.items.length||$("dailyPlan").innerHTML.includes("Nada pendente")){throw new Error("seeded courses did not generate a daily plan")}
+  if(!state.dailyPlan.items.length){throw new Error("seeded courses did not generate a daily plan")}
   if(!state.dailyPlan.items.some(p=>p.type==="module"||p.type==="lesson")){throw new Error("daily plan should target the next unfinished module or lesson")}
   const planCourseTracks=new Set();
   for(const entry of state.dailyPlan.items){

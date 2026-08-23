@@ -3,6 +3,7 @@ const ArcanaStorage=(()=>{
   const DB_VERSION=1;
   const MIGRATION_VERSION=1;
   const SNAPSHOT_LIMIT=10;
+  const PROTECTED_SNAPSHOT_LIMIT=10;
   const stores=["settings","tracks","courses","modules","lessons","sources","notes","fichamentos","sessions","playlists","videos","inbox","reviews","flashcards","calendar","progress","metadata","appState","backupSnapshots","attachments"];
   let db=null;
   let ready=false;
@@ -38,6 +39,24 @@ const ArcanaStorage=(()=>{
       op.onerror=()=>reject(op.error)
     })
   }
+  function clone(value){
+    return typeof structuredClone==="function"?structuredClone(value):JSON.parse(JSON.stringify(value))
+  }
+  function transactionDone(transaction){
+    return new Promise((resolve,reject)=>{
+      transaction.oncomplete=()=>resolve();
+      transaction.onerror=()=>reject(transaction.error);
+      transaction.onabort=()=>reject(transaction.error||new Error("IndexedDB transaction aborted"))
+    })
+  }
+  function prepareStoredState(raw,options={},meta={}){
+    if(typeof options.prepareState==="function"){
+      const prepared=options.prepareState(raw,meta);
+      return prepared?.state?prepared:{state:prepared,original:raw,migrated:false,fromVersion:0,toVersion:0}
+    }
+    const normalized=typeof options.normalize==="function"?options.normalize(clone(raw)):clone(raw);
+    return {state:normalized,original:raw,migrated:false,fromVersion:0,toVersion:0}
+  }
   async function getMeta(key){
     return (await req(tx("metadata").get(key)))?.value
   }
@@ -46,10 +65,13 @@ const ArcanaStorage=(()=>{
   }
   async function loadState(defaultState){
     const found=await req(tx("appState").get("main"));
-    return found?.value||structuredClone(defaultState)
+    if(found){
+      return found.value
+    }
+    return clone(defaultState)
   }
   async function saveState(state){
-    await req(tx("appState","readwrite").put({key:"main",value:structuredClone(state),updatedAt:new Date().toISOString()}))
+    await req(tx("appState","readwrite").put({key:"main",value:clone(state),updatedAt:new Date().toISOString()}))
   }
   async function list(name){
     if(!stores.includes(name)){
@@ -57,7 +79,8 @@ const ArcanaStorage=(()=>{
     }
     return req(tx(name).getAll())
   }
-  async function migrateLocalStorage({storageKey,legacyKeys,defaultState,normalize,migrate}){
+  async function migrateLocalStorage(options={}){
+    const {storageKey,legacyKeys=[],normalize,migrate}=options;
     const done=await getMeta("localStorageMigrationVersion");
     if(done>=MIGRATION_VERSION){
       log(`localStorage migration already at v${done}`);
@@ -77,26 +100,37 @@ const ArcanaStorage=(()=>{
     if(raw){
       try{
         const parsed=JSON.parse(raw);
-        const migrated=source===storageKey?normalize(parsed):migrate(parsed);
-        await saveState(migrated);
+        const rawState=source===storageKey?parsed:typeof migrate==="function"?migrate(parsed):parsed;
+        const prepared=prepareStoredState(rawState,options,{source,storage:"localStorage"});
+        if(prepared.migrated){
+          await snapshot("pre-migration",prepared.original,{source,storage:"localStorage",fromVersion:prepared.fromVersion,toVersion:prepared.toVersion})
+        }
+        await saveState(prepared.state);
         log(`migrated localStorage key ${source} to IndexedDB`,{version:MIGRATION_VERSION});
       }catch(error){
-        console.warn("[Arcana][storage] localStorage migration failed",error)
-      }
-    }else{
-      const existing=await req(tx("appState").get("main"));
-      if(!existing){
-        await saveState(defaultState);
-        log("created empty starter state in IndexedDB")
+        console.warn("[Arcana][storage] localStorage migration failed",error);
+        throw error
       }
     }
     await setMeta("localStorageMigrationVersion",MIGRATION_VERSION)
   }
-  async function init(options){
+  async function init(options={}){
     await open();
-    await migrateLocalStorage(options);
     ready=true;
-    return loadState(options.defaultState)
+    await migrateLocalStorage(options);
+    const existing=await req(tx("appState").get("main"));
+    if(existing?.value){
+      const prepared=prepareStoredState(existing.value,options,{source:"indexedDB",storage:"appState"});
+      if(prepared.migrated){
+        await snapshot("pre-migration",prepared.original,{source:"indexedDB",storage:"appState",fromVersion:prepared.fromVersion,toVersion:prepared.toVersion});
+        await saveState(prepared.state)
+      }
+      return prepared.state
+    }
+    const fresh=typeof options.createDefaultState==="function"?options.createDefaultState():clone(options.defaultState);
+    await saveState(fresh);
+    log("created fresh starter state in IndexedDB");
+    return fresh
   }
 
   function now(){return new Date().toISOString()}
@@ -204,9 +238,12 @@ const ArcanaStorage=(()=>{
     const note=await getNote(id);
     return (await putNote({...note,status:"archived"},id)).note
   }
-  async function saveFlashcard(data){
+  function flashcardDefaults(data={}){
     const ts=now();
-    const card={id:data.id||makeId("card"),front:data.front||"",back:data.back||"",sourceNoteId:data.sourceNoteId||null,tags:Array.isArray(data.tags)?data.tags:[],createdAt:data.createdAt||ts,updatedAt:ts,reviewAt:data.reviewAt||null};
+    return {id:data.id||makeId("card"),front:data.front||"",back:data.back||"",sourceNoteId:data.sourceNoteId||null,tags:Array.isArray(data.tags)?data.tags:[],createdAt:data.createdAt||ts,updatedAt:data.updatedAt||ts,reviewAt:data.reviewAt||null}
+  }
+  async function saveFlashcard(data){
+    const card=flashcardDefaults(data);
     await req(tx("flashcards","readwrite").put(card));
     return card
   }
@@ -228,15 +265,23 @@ const ArcanaStorage=(()=>{
     }
     return copy
   }
-  async function snapshot(reason,state){
+  function protectedSnapshot(reason){
+    return /^pre-(migration|import|restore)/.test(String(reason||""))
+  }
+  async function snapshot(reason,state,metadata={}){
     const notes=await req(tx("notes").getAll());
     const flashcards=await listFlashcards();
-    const data={version:1,createdAt:now(),reason,state:sanitizeStateForPortableExport(state),notes,flashcards};
+    const data={version:1,createdAt:now(),reason,metadata,state:sanitizeStateForPortableExport(state),notes,flashcards};
     const json=JSON.stringify(data);
-    const snap={id:makeId("snapshot"),createdAt:data.createdAt,reason,size:json.length,data};
+    const snap={id:makeId("snapshot"),createdAt:data.createdAt,reason,metadata,protected:protectedSnapshot(reason),size:json.length,data};
     await req(tx("backupSnapshots","readwrite").put(snap));
     const all=(await req(tx("backupSnapshots").getAll())).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
-    for(const old of all.slice(SNAPSHOT_LIMIT)){
+    const protectedSnaps=all.filter(item=>item.protected||protectedSnapshot(item.reason));
+    const regularSnaps=all.filter(item=>!(item.protected||protectedSnapshot(item.reason)));
+    for(const old of regularSnaps.slice(SNAPSHOT_LIMIT)){
+      await req(tx("backupSnapshots","readwrite").delete(old.id))
+    }
+    for(const old of protectedSnaps.slice(PROTECTED_SNAPSHOT_LIMIT)){
       await req(tx("backupSnapshots","readwrite").delete(old.id))
     }
     return snap
@@ -249,7 +294,7 @@ const ArcanaStorage=(()=>{
     if(!snap){
       throw new Error("Snapshot não encontrado")
     }
-    await importFullBackup(snap.data,"replace");
+    await importFullBackup(snap.data,"replace",{restoreSnapshotId:id});
     return snap.data.state
   }
   function download(blob,name){
@@ -809,19 +854,44 @@ const ArcanaStorage=(()=>{
     const data=await fullBackup(state);
     download(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),`arcana-backup-${day()}.json`)
   }
-  async function importFullBackup(data,mode="replace"){
+  async function loadRawState(storageKey="main"){
+    const found=await req(tx("appState").get(storageKey));
+    return {status:found?"VALID_DATA":"NO_DATA",storageKey,value:found?.value||null,updatedAt:found?.updatedAt||null}
+  }
+  async function downloadRawState(storageKey="main"){
+    const raw=await loadRawState(storageKey);
+    const snapshots=await listSnapshots();
+    const data={version:1,createdAt:now(),appState:raw,snapshots:snapshots.map(({data:_,...snap})=>snap)};
+    download(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),`arcana-raw-state-${day()}.json`)
+  }
+  async function importFullBackup(data,mode="replace",options={}){
     const payload=data instanceof File?JSON.parse(await data.text()):data;
     if(!payload?.state){
       throw new Error("Backup Arcana inválido")
     }
+    const prepared=prepareStoredState(payload.state,options,{source:"backup-import",mode});
+    payload.state=prepared.state;
     if(mode==="replace"){
-      for(const name of ["notes","flashcards"]){
-        await new Promise((resolve,reject)=>{
-          const clear=tx(name,"readwrite").clear();
-          clear.onsuccess=resolve;
-          clear.onerror=()=>reject(clear.error)
-        })
+      const current=await loadState(null);
+      if(current&&options.skipSnapshot!==true){
+        await snapshot(options.restoreSnapshotId?"pre-restore":"pre-import-replace",current,{source:"backup-import",restoreSnapshotId:options.restoreSnapshotId||null})
       }
+      const transaction=db.transaction(["appState","notes","flashcards"],"readwrite");
+      const appStore=transaction.objectStore("appState");
+      const notesStore=transaction.objectStore("notes");
+      const flashcardsStore=transaction.objectStore("flashcards");
+      appStore.put({key:"main",value:clone(payload.state),updatedAt:now()});
+      // Explicit user-confirmed replace import: destructive store clears stay inside this transaction.
+      notesStore.clear();
+      flashcardsStore.clear();
+      for(const note of payload.notes||[]){
+        notesStore.put(noteDefaults(note))
+      }
+      for(const card of payload.flashcards||[]){
+        flashcardsStore.put(flashcardDefaults(card))
+      }
+      await transactionDone(transaction);
+      return payload.state
     }
     await saveState(payload.state);
     for(const note of payload.notes||[]){
@@ -980,7 +1050,7 @@ const ArcanaStorage=(()=>{
     throw new Error("Rota estática não implementada")
   }
 
-  return {init,loadState,saveState,list,snapshot,listSnapshots,restoreSnapshot,downloadFullBackup,importFullBackup,obsidianPayload,renderObsidianVault,downloadObsidianVault,downloadVault,importVault,canHandle,route,get ready(){return ready},log}
+  return {init,loadState,saveState,loadRawState,downloadRawState,list,snapshot,listSnapshots,restoreSnapshot,downloadFullBackup,importFullBackup,obsidianPayload,renderObsidianVault,downloadObsidianVault,downloadVault,importVault,canHandle,route,get ready(){return ready},log}
 })();
 if(typeof window!=="undefined"){
   window.ArcanaStorage=ArcanaStorage

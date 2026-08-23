@@ -128,3 +128,11 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 .time-now-options{display:flex;gap:8px;flex-wrap:wrap}
 .time-now-card .routine-actions{margin-top:10px}
 @media(max-width:720px){.sanctuary-section-head{grid-template-columns:1fr auto}.sanctuary-section-head #timeNowBtn{grid-column:1/-1;width:100%}.register-quick,.three-fields,.activity-row{grid-template-columns:1fr}.activity-row .tag{justify-self:start}.journal-date-controls{width:100%}.journal-date-controls label{flex:1;min-width:160px}}
+.data-safety-status{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;color:var(--muted);font-size:.8125rem}
+.data-safety-status span,.safety-pill{border:1px solid var(--line);border-radius:999px;background:#120d18;padding:4px 8px;line-height:1.3}
+.safety-pill.ok{border-color:rgba(132,204,22,.38);color:#d9f99d;background:rgba(132,204,22,.08)}
+.safety-pill.warn{border-color:rgba(199,169,107,.5);color:var(--gold2);background:rgba(199,169,107,.09)}
+.recovery-view{width:min(760px,100%);margin:48px auto;padding:24px;background:#15101c;border:1px solid var(--line);border-radius:14px;display:grid;gap:14px}
+.recovery-view h1{margin:0;color:var(--gold);font-size:1.45rem}
+.recovery-actions{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:720px){.recovery-view{margin:18px auto;padding:18px}.recovery-actions{display:grid;grid-template-columns:1fr}}

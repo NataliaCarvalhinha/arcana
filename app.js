@@ -3,6 +3,8 @@ const STORAGE_KEY="arcana-v5";
 const LEGACY_KEYS=["arcana-activity-hub-v4","arcana-activity-hub-v3","arcana-activity-hub-v2"];
 const STARTER_CONTENT_VERSION=2;
 const STARTER_CURRICULUM_VERSION=1;
+const DATA_SAFETY=window.ArcanaDataSafety;
+const DATA_SCHEMA_VERSION=DATA_SAFETY?.DATA_SCHEMA_VERSION||1;
 const CURRICULUM_FETCHED_AT="2026-08-17T00:00:00.000Z";
 const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vaultPath:"",lastSyncAt:null,noteCount:0,fichamentoCount:0,attachmentCount:0,flashcardCount:0,conflicts:0,autoSync:"manual",syncStatus:"saved",lastPush:{},openUrl:"",error:null};
 const ROUTINE_WEEKDAYS=[{key:1,label:"Segunda",short:"Seg"},{key:2,label:"Terça",short:"Ter"},{key:3,label:"Quarta",short:"Qua"},{key:4,label:"Quinta",short:"Qui"},{key:5,label:"Sexta",short:"Sex"},{key:6,label:"Sábado",short:"Sáb"},{key:7,label:"Domingo",short:"Dom"}];
@@ -244,14 +246,44 @@ const FOCUS_BLOCK_TYPES={concept:{label:"Conceito",target:"permanent"},question:
 const $=id=>document.getElementById(id);
 const YOUTUBE_PLAYLIST_ID_RE=/^[A-Za-z0-9_-]{8,}$/;
 
-function loadState(){
+function createFreshDefaultState(){
+  const fresh=applyStarterContent(structuredClone(DEFAULT_STATE));
+  fresh.dataSchemaVersion=DATA_SCHEMA_VERSION;
+  fresh.migrationMeta={previousSchemaVersion:0,currentSchemaVersion:DATA_SCHEMA_VERSION,lastMigrationAt:new Date().toISOString(),lastMigrationStatus:"fresh"};
+  return normalize(fresh)
+}
+function preparePersistedState(raw,options={}){
+  if(!DATA_SAFETY?.prepareStateMigration){
+    throw new Error("Arcana data safety layer is unavailable.")
+  }
+  return DATA_SAFETY.prepareStateMigration(raw,{normalize,applyStarterContent,starterCurriculumVersion:STARTER_CURRICULUM_VERSION,now:()=>new Date().toISOString(),...options})
+}
+function loadLocalStateRecord(){
   try{
-    const raw=localStorage.getItem(STORAGE_KEY);if(raw)return normalize(JSON.parse(raw));
-    for(const key of LEGACY_KEYS){
-      const old=localStorage.getItem(key);if(old){const s=migrate(JSON.parse(old));localStorage.setItem(STORAGE_KEY,JSON.stringify(s));return s}
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      return {status:"VALID_DATA",state:JSON.parse(raw),source:STORAGE_KEY}
     }
-  }catch(e){}
-  return structuredClone(DEFAULT_STATE)
+    for(const key of LEGACY_KEYS){
+      const old=localStorage.getItem(key);
+      if(old){
+        return {status:"VALID_DATA",state:migrate(JSON.parse(old)),source:key,legacy:true}
+      }
+    }
+  }catch(error){
+    return {status:"LOAD_ERROR",error}
+  }
+  return {status:"NO_DATA"}
+}
+function loadState(){
+  const record=loadLocalStateRecord();
+  if(record.status==="NO_DATA"){
+    return createFreshDefaultState()
+  }
+  if(record.status==="LOAD_ERROR"){
+    throw record.error
+  }
+  return preparePersistedState(record.state,{source:record.source}).state
 }
 function normalize(s){
   const d=structuredClone(DEFAULT_STATE);
@@ -1720,7 +1752,8 @@ function freeTimeSnapshot(date=new Date()){
   return {windows,available,externalCommitments}
 }
 
-function isLocalBackend(){return ["localhost","127.0.0.1",""].includes(location.hostname)}
+function runtimeEnvironment(){return DATA_SAFETY?.detectEnvironment?DATA_SAFETY.detectEnvironment(location):{production:false,local:["localhost","127.0.0.1",""].includes(location.hostname),label:"Unknown",origin:location.origin||"local",path:location.pathname||"/"}}
+function isLocalBackend(){return runtimeEnvironment().local}
 function appBaseUrl(){
   const fallback=`${location.origin||""}${location.pathname||"/"}`;
   return document.baseURI||location.href||fallback
@@ -2769,10 +2802,10 @@ function renderTodayRows(){
     return `<div class="today-row clickable-row ${n===0?"today-row-focus":""}" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><span class="num">${String(n+1).padStart(2,"0")}</span><div class="grow"><strong>${esc(p.title)}</strong><span>${esc(label)}${hierarchy?` · ${hierarchy}`:""}</span></div><div class="today-row-side">${time}<span>${p.minutes} min</span>${n===0?`<span class="tag">EM FOCO</span>`:""}</div></div>`
   }).join(""):`<div class="hint">Nenhum ritual planejado ainda.</div>`
 }
-function generatePlan(){
+function generatePlan(date=new Date()){
   const mins=Number($("todayMinutes")?.value||state.dailyPlan.minutes||60);
-  const result=planActivitiesIntoWindows(new Date(),{minutes:mins});
-  state.dailyPlan={...state.dailyPlan,date:dayKey(),minutes:mins,items:result.items,freeWindows:result.freeWindows,availableMinutes:result.availableMinutes,notices:result.notices,generatedAt:new Date().toISOString(),calendarConflictDismissedAt:null};
+  const result=planActivitiesIntoWindows(date,{minutes:mins});
+  state.dailyPlan={...state.dailyPlan,date:dayKey(date),minutes:mins,items:result.items,freeWindows:result.freeWindows,availableMinutes:result.availableMinutes,notices:result.notices,generatedAt:new Date().toISOString(),calendarConflictDismissedAt:null};
   save(false,"daily-plan");renderDailyPlan()
 }
 function intervalsOverlap(aStart,aEnd,bStart,bEnd){
@@ -4247,13 +4280,18 @@ async function copyCatalogRequestJson(){
 function renderSettings(){
   const f=$("youtubeSettingsForm"),s=state.youtubeSettings;
   if(!f){return}
-  const local=isLocalBackend(),connected=!!state.obsidian.connected;
+  const env=runtimeEnvironment(),local=env.local,connected=!!state.obsidian.connected;
   f.mode.value=s.mode;
   f.minutes.value=s.minutes;
   f.count.value=s.count;
   f.hideAfterLimit.checked=s.hideAfterLimit;
   if($("environmentStatus")){
-    $("environmentStatus").textContent=`Ambiente: ${local?"Arcana Local disponível para yt-dlp":"estático/GitHub Pages"} · dados primários em IndexedDB do navegador.`
+    $("environmentStatus").textContent=`Ambiente: ${local?"Arcana Local disponível para yt-dlp":env.production?"GitHub Pages de produção":"preview estático"} · dados primários em IndexedDB do navegador.`
+  }
+  if($("dataSafetyStatus")){
+    const meta=state.migrationMeta||{};
+    const migrated=meta.lastMigrationAt?` · migração ${new Date(meta.lastMigrationAt).toLocaleString("pt-BR")}`:"";
+    $("dataSafetyStatus").innerHTML=`<span class="safety-pill ${env.production?"warn":"ok"}">${esc(env.label)}</span><span>Schema ${DATA_SCHEMA_VERSION}</span><span>${window.ArcanaStorage?.ready?"IndexedDB ativo":"localStorage ativo"}</span><span>${esc(meta.lastMigrationStatus||"ok")}${esc(migrated)}</span>`
   }
   if($("youtubeCatalogStatus")){
     const generatedAt=formatCatalogStamp(youtubeCatalogMeta.generatedAt);
@@ -4284,7 +4322,7 @@ function renderSettings(){
   renderExternalCalendarSettings();
   renderSnapshots()
 }
-async function renderSnapshots(){if(!$("snapshotList")||!window.ArcanaStorage?.ready){return}try{const snaps=await ArcanaStorage.listSnapshots();$("snapshotList").innerHTML=snaps.length?snaps.map(s=>`<option value="${esc(s.id)}">${new Date(s.createdAt).toLocaleString("pt-BR")} · ${esc(s.reason||"auto")}</option>`).join(""):`<option value="">Nenhum snapshot</option>`}catch(e){$("snapshotList").innerHTML=`<option value="">Snapshots indisponíveis</option>`}}
+async function renderSnapshots(){if(!$("snapshotList")||!window.ArcanaStorage?.ready){return}try{const snaps=await ArcanaStorage.listSnapshots();$("snapshotList").innerHTML=snaps.length?snaps.map(s=>`<option value="${esc(s.id)}">${new Date(s.createdAt).toLocaleString("pt-BR")} · ${esc(s.reason||"auto")}</option>`).join(""):`<option value="">Nenhum snapshot</option>`;if($("snapshotRecoveryInfo")){const protectedSnap=snaps.find(s=>s.protected||/^pre-/.test(String(s.reason||"")));$("snapshotRecoveryInfo").textContent=protectedSnap?`Snapshot protegido mais recente: ${new Date(protectedSnap.createdAt).toLocaleString("pt-BR")} · ${protectedSnap.reason||"pre-migration"}`:"Snapshots de pré-migração/importação serão preservados separadamente."}}catch(e){$("snapshotList").innerHTML=`<option value="">Snapshots indisponíveis</option>`;if($("snapshotRecoveryInfo")){$("snapshotRecoveryInfo").textContent=e.message||"Snapshots indisponíveis."}}}
 async function autoBackup(reason="auto"){try{if(window.ArcanaStorage?.ready){await ArcanaStorage.snapshot(reason,state);state.lastAutoBackup=new Date().toISOString();await ArcanaStorage.saveState(state)}else{localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}renderSettings()}catch(e){console.warn("[Arcana] snapshot failed",e)}}
 let backupDebounce=null;function scheduleAutoBackup(reason="change"){clearTimeout(backupDebounce);backupDebounce=setTimeout(()=>autoBackup(reason),1800)}
 
@@ -4319,10 +4357,11 @@ async function migrateLocalVaultFromBackend(){
 
 async function importFullBackupFile(file){
   const replace=confirm("OK substitui os dados locais. Cancelar mescla o backup com o vault atual.");
-  state=normalize(await ArcanaStorage.importFullBackup(file,replace?"replace":"merge"));
-  await ArcanaStorage.saveState(state);
+  const imported=await ArcanaStorage.importFullBackup(file,replace?"replace":"merge",{prepareState:raw=>preparePersistedState(raw,{source:"backup-import"})});
+  state=preparePersistedState(imported,{source:"backup-result"}).state;
   await loadVaultNotes();
-  renderAll()
+  renderAll();
+  toast(replace?"Backup restaurado com snapshot de segurança.":"Backup mesclado.","ok")
 }
 
 async function importPlaylistFile(file){
@@ -4332,23 +4371,80 @@ async function importPlaylistFile(file){
   save();
 }
 
+function downloadLocalRawState(){
+  const payload={version:1,createdAt:new Date().toISOString(),storageKey:STORAGE_KEY,raw:localStorage.getItem(STORAGE_KEY),legacyKeys:LEGACY_KEYS.map(key=>({key,raw:localStorage.getItem(key)})).filter(item=>item.raw)};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`arcana-raw-state-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000)
+}
+function showStartupRecovery(error){
+  const main=document.querySelector("main");
+  const status=error?.arcanaStatus||"LOAD_ERROR";
+  const message=error?.message||"Arcana não conseguiu validar seus dados locais.";
+  console.warn("[Arcana] startup recovery required",error);
+  if(!main){
+    alert(message);
+    return
+  }
+  main.innerHTML=`<section class="recovery-view"><div class="kicker">DATA SAFETY</div><h1>Arcana pausou para proteger seus dados</h1><p class="hint">Status: ${esc(status)} · ${esc(message)}</p><p>O app não vai substituir seu IndexedDB por dados vazios depois de uma falha de leitura ou migração.</p><div class="recovery-actions"><button id="recoveryExportRawBtn" class="gold-btn">Exportar estado bruto</button><button id="recoveryRetryBtn" class="ghost-btn">Tentar novamente</button></div><div class="snapshot-tools"><label class="snapshot-label" for="recoverySnapshotList">Snapshot</label><select id="recoverySnapshotList"><option value="">Carregando snapshots...</option></select><button id="recoveryRestoreSnapshotBtn" class="ghost-btn">Restaurar snapshot</button></div><p id="recoveryStatus" class="hint"></p></section>`;
+  $("recoveryExportRawBtn").onclick=()=>window.ArcanaStorage?.downloadRawState?ArcanaStorage.downloadRawState():downloadLocalRawState();
+  $("recoveryRetryBtn").onclick=()=>location.reload();
+  if(window.ArcanaStorage?.listSnapshots){
+    ArcanaStorage.listSnapshots().then(snaps=>{
+      $("recoverySnapshotList").innerHTML=snaps.length?snaps.map(s=>`<option value="${esc(s.id)}">${new Date(s.createdAt).toLocaleString("pt-BR")} · ${esc(s.reason||"snapshot")}</option>`).join(""):`<option value="">Nenhum snapshot disponível</option>`
+    }).catch(err=>{
+      $("recoverySnapshotList").innerHTML=`<option value="">Snapshots indisponíveis</option>`;
+      $("recoveryStatus").textContent=err.message||String(err)
+    })
+  }
+  $("recoveryRestoreSnapshotBtn").onclick=async()=>{
+    const id=$("recoverySnapshotList").value;
+    if(!id){
+      return
+    }
+    if(!confirm("Restaurar este snapshot local? O estado atual será preservado em um snapshot pré-restauração.")){
+      return
+    }
+    try{
+      const restored=await ArcanaStorage.restoreSnapshot(id);
+      state=preparePersistedState(restored,{source:"snapshot-restore"}).state;
+      await ArcanaStorage.saveState(state);
+      location.reload()
+    }catch(err){
+      $("recoveryStatus").textContent=err.message||String(err)
+    }
+  }
+}
+
 async function initApp(){
   if("serviceWorker" in navigator){
     navigator.serviceWorker.register("./service-worker.js").catch(e=>console.info("[Arcana] service worker unavailable",e.message||e))
   }
   try{
     if(window.ArcanaStorage){
-      state=applyStarterContent(await ArcanaStorage.init({storageKey:STORAGE_KEY,legacyKeys:LEGACY_KEYS,defaultState:DEFAULT_STATE,normalize,migrate}));
-      await ArcanaStorage.saveState(state);
+      state=await ArcanaStorage.init({storageKey:STORAGE_KEY,legacyKeys:LEGACY_KEYS,defaultState:DEFAULT_STATE,createDefaultState:createFreshDefaultState,normalize,migrate,prepareState:preparePersistedState});
       await migrateLocalVaultFromBackend()
     }else{
-      state=applyStarterContent(loadState());
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
+      const record=loadLocalStateRecord();
+      if(record.status==="NO_DATA"){
+        state=createFreshDefaultState();
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
+      }else if(record.status==="LOAD_ERROR"){
+        throw record.error
+      }else{
+        const prepared=preparePersistedState(record.state,{source:record.source});
+        state=prepared.state;
+        if(prepared.migrated||record.legacy){
+          localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
+        }
+      }
     }
   }catch(e){
-    console.warn("[Arcana] IndexedDB unavailable, falling back to localStorage",e);
-    state=applyStarterContent(loadState());
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(state))
+    showStartupRecovery(e);
+    return
   }
   renderAll();
   await loadVaultNotes();
@@ -4418,7 +4514,8 @@ $("fullBackupImportInput").onchange=async e=>{const f=e.target.files[0];if(!f)re
 $("exportVaultBtn").onclick=()=>ArcanaStorage.downloadObsidianVault(state);
 $("vaultImportInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const summary=await ArcanaStorage.importVault(f);await loadVaultNotes();renderAll();if(summary){alert(`Importação concluída: ${summary.importedNotes||0} notas (${summary.arcanaManagedNotes||0} gerenciadas pelo Arcana, ${summary.externalNotes||0} externas) e ${summary.importedFlashcards||0} flashcards.`)}}catch(err){alert(err.message)}e.target.value=""};
 $("reindexVaultBtn").onclick=async()=>{try{await api("/api/reindex",{method:"POST"});await loadVaultNotes();alert("Vault reindexado.")}catch(e){alert(e.message)}};
-$("restoreSnapshotBtn").onclick=async()=>{const id=$("snapshotList").value;if(!id)return;try{state=normalize(await ArcanaStorage.restoreSnapshot(id));await loadVaultNotes();renderAll()}catch(e){alert(e.message)}};
+if($("exportRawStateBtn")){$("exportRawStateBtn").onclick=()=>{if(window.ArcanaStorage?.ready&&ArcanaStorage.downloadRawState){ArcanaStorage.downloadRawState()}else{downloadLocalRawState()}}}
+$("restoreSnapshotBtn").onclick=async()=>{const id=$("snapshotList").value;if(!id)return;if(!confirm("Restaurar este snapshot? O estado atual será protegido em um snapshot antes da troca."))return;try{const restored=await ArcanaStorage.restoreSnapshot(id);state=preparePersistedState(restored,{source:"snapshot-restore"}).state;await ArcanaStorage.saveState(state);await loadVaultNotes();renderAll();toast("Snapshot restaurado.","ok")}catch(e){alert(e.message)}};
 if($("syncCalendarBtn")){$("syncCalendarBtn").onclick=()=>syncExternalCalendars({force:true}).then(result=>{if(result?.error){toast(result.error,"error")}else if(!result?.throttled){toast("Agenda externa sincronizada.","ok")}}).catch(err=>alert(err.message||String(err)))}
 $("obsidianConnectBtn").onclick=()=>connectObsidianVault().catch(e=>alert(e.message||String(e)));
 $("obsidianSyncBtn").onclick=()=>runObsidianSync("push").catch(()=>{});

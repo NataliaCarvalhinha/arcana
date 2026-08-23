@@ -7,8 +7,12 @@ cookies.txt
 
 backups/
 arcana-backup-*.json
+arcana-raw-state-*.json
+arcana-pre-migration-*.json
 arcana-vault-*.zip
 Arcana-Obsidian-Vault-*.zip
+*-private-vault*.zip
+google-calendar-token*.json
 Arcana-Vault/
 test-vault/
 tmp-vault/

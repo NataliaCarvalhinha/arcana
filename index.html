@@ -403,16 +403,19 @@
 	        <article class="card">
 	          <div class="card-head"><div><div class="kicker">BACKUP</div><h2>Segurança local</h2></div></div>
 	          <div id="environmentStatus" class="hint"></div>
+	          <div id="dataSafetyStatus" class="data-safety-status"></div>
 	          <div id="backupStatus"></div>
 	          <div class="item-actions">
 	            <button id="backupNowBtn" class="gold-btn">Criar snapshot</button>
 	            <button id="exportFullBackupBtn" class="ghost-btn">Exportar backup</button>
+	            <button id="exportRawStateBtn" class="ghost-btn">Exportar estado bruto</button>
 	            <label class="ghost-btn file-label">Importar backup<input id="fullBackupImportInput" type="file" accept="application/json"></label>
 	            <button id="exportVaultBtn" class="ghost-btn">Exportar Vault para Obsidian</button>
 	            <label class="ghost-btn file-label">Importar Vault<input id="vaultImportInput" type="file" accept=".zip,application/zip"></label>
 	            <button id="reindexVaultBtn" class="ghost-btn">Reindexar notas locais</button>
 	          </div>
 	          <div class="snapshot-tools"><label class="snapshot-label" for="snapshotList">Snapshots</label><select id="snapshotList"></select><button id="restoreSnapshotBtn" class="ghost-btn">Restaurar snapshot</button></div>
+	          <p id="snapshotRecoveryInfo" class="hint"></p>
 	        </article>
         <article class="card">
           <div class="card-head"><div><div class="kicker">☾ OBSIDIAN BRIDGE</div><h2>Integração do vault</h2></div></div>
@@ -644,6 +647,7 @@
   <button class="mobile-nav-btn" data-view="knowledge">🜁<span>Saber</span></button>
 </nav>
 
+<script src="data-safety.js"></script>
 <script src="db.js"></script>
 <script src="app.js"></script>
 </body>
