@@ -170,7 +170,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v14/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v15/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -184,11 +184,18 @@ assert.match(styles, /\.gold-btn\{background-color:var\(--gold-button-fallback\)
 assert.match(styles, /#addBtn,#newTrackBtn,.mobile-capture-btn\{background-color:var\(--gold-button-bg\);background-image:linear-gradient\(180deg,#f5dfa0,var\(--gold-button-bg\)\);color:var\(--gold-button-fg\)/, "capture and track buttons have explicit high-contrast colors");
 assert.match(styles, /\.primary-action\{min-height:var\(--control-height-md\)/, "primary action buttons use the medium control height");
 assert.match(styles, /\.row-menu summary\{[^}]*min-width:var\(--control-hit-area\);min-height:var\(--control-hit-area\)/, "row menu summary has a full touch target");
+assert.match(styles, /\.sidebar\{[^}]*width:100%;min-width:0/, "sidebar fits within its grid column");
+assert.match(styles, /\.sidebar nav,\.nav-support\{width:100%;min-width:0\}/, "sidebar nav and support sections cannot exceed the sidebar content box");
+assert.match(styles, /\.sidebar \.nav-btn\{width:100%;min-width:40px\}/, "sidebar support buttons keep at least a 40px hit width");
+assert.match(styles, /\.brand\{width:100%;justify-content:center;padding-inline:0\}/, "collapsed sidebar brand removes extra inline padding");
+assert.match(styles, /#regenPlanBtn\{width:var\(--control-height-sm\);min-width:var\(--control-height-sm\);height:var\(--control-height-sm\);padding:0\}/, "regenerate plan button has a 40px square hitbox");
 assert.match(styles, /button:focus-visible,a:focus-visible,summary:focus-visible/, "keyboard focus is visible on controls and menus");
 assert.match(styles, /\.course-title,.module-title,.lesson-title[\s\S]*-webkit-line-clamp:2/, "course and curriculum titles are line-clamped with wrapping");
 assert.match(index, /<label class="snapshot-label" for="snapshotList">Snapshots<\/label><select id="snapshotList">/, "snapshot selector has a visible associated label");
 assert.match(styles, /\.next-ritual-card\{[^}]*text-align:center/, "next ritual is centered as the home focal point");
 assert.match(styles, /\.sanctuary-page\{[^}]*width:min\(1120px,100%\)/, "Sanctuary flow has a constrained reading width");
+assert.match(app, /function renderHomePriority\(\)\{[\s\S]*slice\(0,3\)[\s\S]*priority-preview-row/, "Sanctuary priority panel keeps a short clickable-row preview");
+assert.doesNotMatch(app, /function renderHomePriority\(\)\{[\s\S]*?<button class="mini-btn primary-action"[\s\S]*?function renderTracks/, "Sanctuary priority panel does not duplicate row actions with nested buttons");
 
 function makeElement(id) {
   return {
