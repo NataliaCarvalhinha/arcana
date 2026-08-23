@@ -17,6 +17,7 @@ assert.equal(manifest.display, "standalone");
 
 const app = readFileSync("app.js", "utf8");
 const db = readFileSync("db.js", "utf8");
+const styles = readFileSync("styles.css", "utf8");
 const pagesWorkflow = readFileSync(".github/workflows/pages.yml", "utf8");
 const syncWorkflow = readFileSync(".github/workflows/sync-youtube.yml", "utf8");
 const registerWorkflow = readFileSync(".github/workflows/register-youtube-playlist.yml", "utf8");
@@ -83,6 +84,12 @@ assert.match(app, /function captureUniversal/, "universal capture handler is pre
 assert.match(app, /function renderNextRitual/, "Sanctuary next ritual renderer is present");
 assert.match(app, /function continueResource/, "universal continue action is present");
 assert.match(app, /function continueTrack/, "track continue action is present");
+assert.match(app, /function currentModuleLabel/, "course rows expose the current module summary");
+assert.match(app, /class="course-title" title="\$\{esc\(i\.title\)\}"/, "course titles keep accessible full text");
+assert.match(app, /active&&lessons\.length/, "only the active module renders lesson rows by default");
+assert.match(app, /class="mini-btn primary-action"/, "main continue buttons use the primary action size");
+assert.match(app, /role="menu"/, "secondary row actions are grouped in a semantic menu");
+assert.match(app, /closest\("button,a,summary,details\.row-menu"\)/, "row-menu interactions do not toggle course rows");
 assert.match(app, /data-knowledge-id/, "Knowledge cards use stable object ids");
 assert.match(app, /data-search-id/, "search results use stable object ids");
 assert.match(app, /ctrlKey\|\|e\.metaKey/, "global search has a Ctrl/Cmd+K shortcut");
@@ -154,12 +161,21 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v11/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v12/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
 assert.match(worker, /caches\.match\(catalogCacheRequest\(url\)\)/, "service worker falls back to the normalized cached catalog offline");
 assert.ok(!/youtube\.com|youtu\.be/.test(worker), "service worker does not cache YouTube");
+
+assert.match(styles, /--control-height-sm:36px/, "small control height token is defined");
+assert.match(styles, /--control-height-md:42px/, "medium control height token is defined");
+assert.match(styles, /--control-hit-area:42px/, "touch hit-area token is defined");
+assert.match(styles, /#addBtn,#newTrackBtn,.mobile-capture-btn\{background:linear-gradient\(180deg,#f5dfa0,var\(--gold-button-bg\)\);color:var\(--gold-button-fg\)/, "capture and track buttons have explicit high-contrast colors");
+assert.match(styles, /\.primary-action\{min-height:var\(--control-height-md\)/, "primary action buttons use the medium control height");
+assert.match(styles, /\.row-menu summary\{[^}]*min-width:var\(--control-hit-area\);min-height:var\(--control-hit-area\)/, "row menu summary has a full touch target");
+assert.match(styles, /button:focus-visible,a:focus-visible,summary:focus-visible/, "keyboard focus is visible on controls and menus");
+assert.match(styles, /\.course-title,.module-title,.lesson-title[\s\S]*-webkit-line-clamp:2/, "course and curriculum titles are line-clamped with wrapping");
 
 function makeElement(id) {
   return {
@@ -417,7 +433,19 @@ await vm.runInContext(`(async()=>{
   if(!$("trackHero").innerHTML.includes("Progressão: sequencial")){throw new Error("track hero should explain sequential progression")}
   if(!$("trackCourses").innerHTML.includes("Estudar mesmo assim")){throw new Error("locked future curriculum should remain viewable with explicit override")}
   if(!$("trackCourses").innerHTML.includes("openFichamentoForSource")||!$("trackCourses").innerHTML.includes("openNotes")){throw new Error("locked curriculum should keep notes and fichamentos available")}
-  if(!$("trackCourses").innerHTML.includes("module-elec-08-01")||!$("trackCourses").innerHTML.includes("lesson-elec-08-01-01")){throw new Error("expanded courses should render module and lesson ids for navigation")}
+  if(!$("trackCourses").innerHTML.includes("module-elec-08-01")){throw new Error("expanded future courses should render module summaries for navigation")}
+  if($("trackCourses").innerHTML.includes("lesson-elec-08-01-01")){throw new Error("collapsed future modules should not render hidden lesson controls")}
+  const futureMenuCount=($("trackCourses").innerHTML.match(/class="row-menu"/g)||[]).length;
+  if(futureMenuCount>20){throw new Error("collapsed future curriculum should not render a dense hidden action menu stack")}
+  const activeCourse=state.items.find(i=>i.id==="course-elec-01");
+  expandedCourseId=activeCourse.id;
+  renderTracks();
+  const activeHtml=$("trackCourses").innerHTML;
+  if(!activeHtml.includes("Módulo atual: MCU Background and Analysis")){throw new Error("course rows should show the current module")}
+  if(!activeHtml.includes("module-elec-01-01")||!activeHtml.includes("module journey-module journey-active")){throw new Error("the active module should be expanded by default")}
+  if(!activeHtml.includes("primary-action")){throw new Error("continue actions should use the primary action sizing class")}
+  expandedCourseId="course-elec-08";
+  renderTracks();
   if(resourceByScope("module-elec-08-01","module").sourceType!=="module"){throw new Error("module resources should be addressable by scope")}
   if(resourceByScope("lesson-elec-08-01-01","lesson").sourceType!=="lesson"){throw new Error("lesson resources should be addressable by scope")}
   const elec08=state.items.find(i=>i.id==="course-elec-08");
@@ -430,6 +458,10 @@ await vm.runInContext(`(async()=>{
   elec01.progress=itemProgress(elec01);elec01.status=statusFromProgress(elec01.progress);
   if(courseSequenceState(elec02ForSequence)!=="active"){throw new Error("completing a course should unlock the next course in the track")}
   state.items.filter(i=>i.track==="track-electronics"&&i.kind==="course"&&courseOrderValue(i)<courseOrderValue(elec08)).forEach(course=>{course.modules.forEach(module=>{module.lessons.forEach(lesson=>{lesson.progress=100;lesson.done=true;lesson.status="concluido"});module.progress=100;module.done=true;module.status="concluido"});(course.childCourses||[]).forEach(child=>{child.progress=100;child.status="concluido";child.done=true});course.progress=100;course.status="concluido";course.done=true});
+  expandedCourseId=elec08.id;
+  renderTracks();
+  if(!$("trackCourses").innerHTML.includes("lesson-elec-08-01-01")){throw new Error("the active module should render its lesson rows")}
+  if($("trackCourses").innerHTML.includes("lesson-elec-08-02-01")){throw new Error("inactive modules should stay collapsed without hidden lesson rows")}
   if(moduleSequenceState(elec08,elec08.modules[1])!=="locked"){throw new Error("later modules should be locked until the active module is complete")}
   if(elec08.modules[0].lessons[1]&&lessonSequenceState(elec08,elec08.modules[0],elec08.modules[0].lessons[1])!=="active"){throw new Error("lesson completion should unlock the next lesson in the same module")}
   const elec02=state.items.find(i=>i.id==="course-elec-02");

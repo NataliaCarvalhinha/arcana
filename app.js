@@ -1647,11 +1647,11 @@ function renderHomeTracks(){
     $("homeTracks").innerHTML=`<div class="hint">Crie sua primeira trilha para organizar cursos e estudos.</div>`;
     return
   }
-  $("homeTracks").innerHTML=state.tracks.map(t=>{const courses=orderedCoursesForTrack(t.id),arr=courses.length?courses:state.items.filter(i=>i.track===t.id),avg=arr.length?Math.round(arr.reduce((a,b)=>a+itemProgress(b),0)/arr.length):0,target=getActiveLearningTarget(t);return `<div class="track-row clickable-row" role="button" tabindex="0" onclick="navigateTo('tracks',{trackId:${jsArg(t.id)}})" onkeydown="activateRow(event,this)"><div class="num">${esc(t.sigil||"☽")}</div><div class="grow"><strong>${esc(t.name)}</strong><span>${target?`Agora: ${esc(target.title)}`:`${avg}% concluído`}</span><div class="progress"><div style="width:${avg}%"></div></div></div><button class="mini-btn" onclick="event.stopPropagation();continueTrack(${jsArg(t.id)})">Continuar</button></div>`}).join("")
+  $("homeTracks").innerHTML=state.tracks.map(t=>{const courses=orderedCoursesForTrack(t.id),arr=courses.length?courses:state.items.filter(i=>i.track===t.id),avg=arr.length?Math.round(arr.reduce((a,b)=>a+itemProgress(b),0)/arr.length):0,target=getActiveLearningTarget(t);return `<div class="track-row clickable-row" role="button" tabindex="0" onclick="navigateTo('tracks',{trackId:${jsArg(t.id)}})" onkeydown="activateRow(event,this)"><div class="num">${esc(t.sigil||"☽")}</div><div class="grow"><strong title="${esc(t.name)}">${esc(t.name)}</strong><span>${target?`Agora: ${esc(target.title)}`:`${avg}% concluído`}</span><div class="progress"><div style="width:${avg}%"></div></div></div><button class="mini-btn primary-action" onclick="event.stopPropagation();continueTrack(${jsArg(t.id)})">Continuar</button></div>`}).join("")
 }
 function renderHomePriority(){
   const arr=state.items.filter(i=>itemProgress(i)<100).sort((a,b)=>score(b)-score(a)).slice(0,5);
-  $("homePriority").innerHTML=arr.length?arr.map(i=>`<div class="plan-item clickable-row" role="button" tabindex="0" onclick="continueResource(${jsArg(i.id)},'item')" onkeydown="activateRow(event,this)"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><div class="grow"><strong>${esc(i.title)}</strong><span>${esc(trackById(i.track)?.name||"Sem trilha")}</span></div><button class="mini-btn" onclick="event.stopPropagation();continueResource(${jsArg(i.id)},'item')">Continuar</button></div>`).join(""):`<div class="hint">Nada priorizado agora.</div>`
+  $("homePriority").innerHTML=arr.length?arr.map(i=>`<div class="plan-item clickable-row" role="button" tabindex="0" onclick="continueResource(${jsArg(i.id)},'item')" onkeydown="activateRow(event,this)"><span class="tag priority-${priorityCode(i)}">${priorityLabel(i)}</span><div class="grow"><strong title="${esc(i.title)}">${esc(i.title)}</strong><span>${esc(trackById(i.track)?.name||"Sem trilha")}</span></div><button class="mini-btn primary-action" onclick="event.stopPropagation();continueResource(${jsArg(i.id)},'item')">Continuar</button></div>`).join(""):`<div class="hint">Nada priorizado agora.</div>`
 }
 
 function renderTracks(){
@@ -1678,7 +1678,7 @@ function curriculumCounts(course){
   return {modules,lessons}
 }
 function toggleCourseCurriculum(event,id){
-  if(event?.target?.closest("button,a")){
+  if(event?.target?.closest("button,a,summary,details.row-menu")){
     return
   }
   expandedCourseId=expandedCourseId===id?null:id;
@@ -1718,28 +1718,37 @@ function continueResource(id,scope="item"){
   openFocus(target.id,target.scope)
 }
 function continueTrack(id){continueResource(id,"track")}
+function currentModuleLabel(course){
+  const module=activeModuleForCourse(course);
+  if(module){
+    return `Módulo atual: ${esc(module.title)}`
+  }
+  return itemProgress(course)>=100?"Currículo concluído":"Pronto para começar"
+}
 function rowMenu(id,scope){
-  return `<details class="row-menu" onclick="event.stopPropagation()"><summary aria-label="Mais ações">⋯</summary><div><button class="mini-btn" onclick="openFichamentoForSource(${jsArg(id)},${jsArg(scope)})">Fichamento</button><button class="mini-btn" onclick="openNotes(${jsArg(id)},${jsArg(scope)})">Notas</button>${scope==="item"?`<button class="mini-btn" onclick="editItem(${jsArg(id)})">Editar</button>`:""}</div></details>`
+  return `<details class="row-menu" onclick="event.stopPropagation()"><summary aria-label="Mais ações" aria-haspopup="menu">⋯</summary><div role="menu"><button class="mini-btn" role="menuitem" onclick="openFichamentoForSource(${jsArg(id)},${jsArg(scope)})">Fichamento</button><button class="mini-btn" role="menuitem" onclick="openNotes(${jsArg(id)},${jsArg(scope)})">Notas</button>${scope==="item"?`<button class="mini-btn" role="menuitem" onclick="editItem(${jsArg(id)})">Editar</button>`:""}</div></details>`
 }
 function lessonRow(course,module,lesson){
   const progress=lessonProgress(lesson),sequence=lessonSequenceState(course,module,lesson),done=sequence==="completed",locked=sequence==="locked";
-  return `<div class="lesson-row journey-row ${done?"done":""} ${locked?"locked":""}"><span class="journey-dot journey-${sequence}">${journeyMarker(sequence)}</span><div class="grow"><strong>${esc(lesson.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${lesson.estimatedMinutes?` · ${fmtMin(lesson.estimatedMinutes)}`:""}</span></div><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(lesson.id)},'lesson')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${done?"Rever":locked?"Estudar mesmo assim":"Continuar"}</button>${rowMenu(lesson.id,"lesson")}</div>`
+  return `<div class="lesson-row journey-row journey-${sequence} ${done?"done":""} ${locked?"locked":""}"><span class="journey-dot journey-${sequence}">${journeyMarker(sequence)}</span><div class="grow"><strong class="lesson-title" title="${esc(lesson.title)}">${esc(lesson.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${lesson.estimatedMinutes?` · ${fmtMin(lesson.estimatedMinutes)}`:""}</span></div><button class="mini-btn primary-action" onclick="event.stopPropagation();openFocus(${jsArg(lesson.id)},'lesson')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${done?"Rever":locked?"Estudar mesmo assim":"Continuar"}</button>${rowMenu(lesson.id,"lesson")}</div>`
 }
 function moduleRow(course,module){
   const progress=moduleProgress(module),sequence=moduleSequenceState(course,module),done=sequence==="completed",locked=sequence==="locked",lessons=orderedLessons(module);
   const lessonLabel=lessons.length?` · ${lessons.length} aula${lessons.length>1?"s":""}`:"";
-  return `<details class="module journey-module ${done?"done":""} ${locked?"locked":""}" id="${esc(module.id||"")}" ${sequence==="active"?"open":""}><summary class="module-main"><span class="journey-dot journey-${sequence}">${journeyMarker(sequence)}</span><div class="grow"><strong>${esc(module.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${module.estimatedMinutes?` · ${fmtMin(module.estimatedMinutes)}`:""}${lessonLabel}</span><div class="progress"><div style="width:${progress}%"></div></div></div><button class="mini-btn" onclick="event.stopPropagation();continueResource(${jsArg(module.id)},'module')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${done?"Rever":locked?"Estudar mesmo assim":"Continuar"}</button>${rowMenu(module.id,"module")}</summary>${lessons.length?`<div class="lesson-list">${lessons.map(lesson=>lessonRow(course,module,lesson)).join("")}</div>`:""}</details>`
+  const active=sequence==="active";
+  const action=active?`<button class="mini-btn primary-action" onclick="event.stopPropagation();continueResource(${jsArg(module.id)},'module')" title="Abrir Focus Circle">${done?"Rever":"Continuar"}</button>${rowMenu(module.id,"module")}`:"";
+  return `<details class="module journey-module journey-${sequence} ${done?"done":""} ${locked?"locked":""}" id="${esc(module.id||"")}" ${active?"open":""}><summary class="module-main"><span class="journey-dot journey-${sequence}">${journeyMarker(sequence)}</span><div class="grow"><strong class="module-title" title="${esc(module.title)}">${esc(module.title)}</strong><span>${progress}% · ${sequenceStatusLabel(sequence)}${module.estimatedMinutes?` · ${fmtMin(module.estimatedMinutes)}`:""}${lessonLabel}</span><div class="progress"><div style="width:${progress}%"></div></div></div>${action}</summary>${active&&lessons.length?`<div class="lesson-list">${lessons.map(lesson=>lessonRow(course,module,lesson)).join("")}</div>`:""}</details>`
 }
 function childCourseRow(child){
   const progress=childCourseProgress(child);
-  return `<div class="module child-course"><div class="module-main"><div class="grow"><strong>${esc(child.title)}</strong><span>${progress}%${child.estimatedMinutes?` · ${fmtMin(child.estimatedMinutes)}`:""}</span><div class="progress"><div style="width:${progress}%"></div></div></div>${child.sourceUrl?`<a class="mini-btn" href="${esc(child.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Fonte</a>`:""}</div></div>`
+  return `<div class="module child-course"><div class="module-main"><div class="grow"><strong class="module-title" title="${esc(child.title)}">${esc(child.title)}</strong><span>${progress}%${child.estimatedMinutes?` · ${fmtMin(child.estimatedMinutes)}`:""}</span><div class="progress"><div style="width:${progress}%"></div></div></div></div></div>`
 }
 function courseRow(i){
   const p=itemProgress(i),nc=noteCount(i.id),counts=curriculumCounts(i),expanded=expandedCourseId===i.id,sequence=courseSequenceState(i),locked=sequence==="locked";
   const lessonMeta=counts.lessons?` · ${counts.lessons} aula${counts.lessons>1?"s":""}`:"";
   const curriculumMeta=counts.modules?`${counts.modules} módulo${counts.modules>1?"s":""}${lessonMeta}`:"currículo oficial";
   const children=Array.isArray(i.childCourses)?i.childCourses:[];
-  return `<div class="course-row clickable-row journey-row ${expanded?"expanded":""} ${locked?"locked":""}" role="button" tabindex="0" onclick="toggleCourseCurriculum(event,${jsArg(i.id)})" onkeydown="activateRow(event,this)"><span class="journey-dot journey-${sequence}">${journeyMarker(sequence)}</span><div class="grow"><strong>${esc(i.title)}</strong><span>${p}% · ${sequenceStatusLabel(sequence)} · ${priorityLabel(i)} · ${nc} notas · ${curriculumMeta}</span><div class="progress"><div style="width:${p}%"></div></div>${expanded?`<div class="module-list">${children.length?children.map(childCourseRow).join(""):""}${i.modules?.length?orderedModules(i).map(module=>moduleRow(i,module)).join(""):`<div class="hint">Currículo oficial sem aulas detalhadas.</div>`}</div>`:""}</div><button class="mini-btn" onclick="event.stopPropagation();continueResource(${jsArg(i.id)},'item')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${p>=100?"Rever":locked?"Estudar mesmo assim":"Continuar"}</button>${rowMenu(i.id,"item")}</div>`
+  return `<div class="course-row clickable-row journey-row journey-${sequence} ${expanded?"expanded":""} ${locked?"locked":""}" role="button" tabindex="0" onclick="toggleCourseCurriculum(event,${jsArg(i.id)})" onkeydown="activateRow(event,this)"><span class="journey-dot journey-${sequence}">${journeyMarker(sequence)}</span><div class="grow"><strong class="course-title" title="${esc(i.title)}">${esc(i.title)}</strong><span>${p}% · ${sequenceStatusLabel(sequence)} · ${priorityLabel(i)} · ${nc} notas · ${curriculumMeta}</span><span class="course-current">${currentModuleLabel(i)}</span><div class="progress"><div style="width:${p}%"></div></div>${expanded?`<div class="module-list">${children.length?children.map(childCourseRow).join(""):""}${i.modules?.length?orderedModules(i).map(module=>moduleRow(i,module)).join(""):`<div class="hint">Currículo oficial sem aulas detalhadas.</div>`}</div>`:""}</div><button class="mini-btn primary-action" onclick="event.stopPropagation();continueResource(${jsArg(i.id)},'item')" title="${locked?"Pedir confirmação para estudar fora da ordem":"Abrir Focus Circle"}">${p>=100?"Rever":locked?"Estudar mesmo assim":"Continuar"}</button>${rowMenu(i.id,"item")}</div>`
 }
 function setTrack(id){if(!trackById(id)){missingTarget();return}state.activeTrack=id;save();renderTracks()}
 function setTrackFormError(message=""){const el=$("trackFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
