@@ -55,6 +55,7 @@
             <h2 id="greeting"></h2>
             <p id="todaySummary"></p>
             <p id="freeTimeSummary" class="free-time-summary"></p>
+            <div id="calendarConflictNotice" class="calendar-conflict hidden" role="status"></div>
           </div>
           <div class="level-seal" aria-label="Nível atual">
             <span id="levelNumber">1</span>
@@ -258,7 +259,19 @@
       </div>
       <article class="card">
         <div class="calendar-nav"><button id="prevMonthBtn" class="ghost-btn">←</button><h2 id="calendarTitle"></h2><button id="nextMonthBtn" class="ghost-btn">→</button></div>
+        <div class="filters calendar-source-filters" role="group" aria-label="Fontes do calendário">
+          <label class="check"><input type="checkbox" data-calendar-filter="routine" checked> Rotina</label>
+          <label class="check"><input type="checkbox" data-calendar-filter="external" checked> Externo</label>
+          <label class="check"><input type="checkbox" data-calendar-filter="plan" checked> Plano Arcana</label>
+          <label class="check"><input type="checkbox" data-calendar-filter="completed" checked> Concluído</label>
+        </div>
+        <div id="calendarLegend" class="calendar-legend"></div>
         <div id="calendarGrid" class="calendar-grid"></div>
+      </article>
+      <article class="card">
+        <div class="card-head"><div><div class="kicker">AGENDA EXTERNA</div><h2>Compromissos importados</h2></div><button id="syncCalendarBtn" class="ghost-btn" type="button">Sincronizar</button></div>
+        <div id="externalCalendarSummary" class="hint"></div>
+        <div id="externalCalendarEvents" class="external-event-list"></div>
       </article>
       <article class="card">
         <div class="card-head">
@@ -355,6 +368,37 @@
             <button class="gold-btn">Salvar planejamento</button>
           </form>
           <div id="planningStatus" class="hint"></div>
+        </article>
+        <article class="card">
+          <div class="card-head"><div><div class="kicker">CALENDÁRIO</div><h2>Integração externa</h2></div></div>
+          <p class="hint calendar-settings-copy">O Arcana lê Google Calendar em modo somente leitura. Para Toki, sincronize o Toki no Google Calendar e conecte aqui.</p>
+          <form id="calendarIntegrationForm" class="settings-form">
+            <label>Google OAuth Client ID<input name="clientId" type="text" autocomplete="off" placeholder="Client ID público do app web"></label>
+            <label class="check"><input name="storeEventTitles" type="checkbox"> Guardar títulos e locais dos eventos neste navegador</label>
+            <label class="check"><input name="allDayBlocksPlanning" type="checkbox"> Eventos de dia inteiro bloqueiam planejamento</label>
+            <div class="two-fields">
+              <label>Buffer antes (min)<input name="defaultTravelBeforeMinutes" type="number" min="0" max="240" step="5"></label>
+              <label>Buffer depois (min)<input name="defaultTravelAfterMinutes" type="number" min="0" max="240" step="5"></label>
+            </div>
+            <div class="item-actions">
+              <button class="gold-btn" type="submit">Salvar calendário</button>
+              <button id="googleCalendarConnectBtn" class="ghost-btn" type="button">Conectar Google</button>
+              <button id="googleCalendarSyncBtn" class="ghost-btn" type="button">Sincronizar agora</button>
+              <button id="googleCalendarDisconnectBtn" class="ghost-btn danger" type="button">Desconectar</button>
+            </div>
+          </form>
+          <div id="googleCalendarStatus"></div>
+          <div id="googleCalendarList" class="calendar-picker"></div>
+          <div class="toki-calendar-status" aria-label="Como usar Toki com Arcana">
+            <div class="kicker">TOKI</div>
+            <p class="hint">Use Toki com Arcana via sincronização de calendário.</p>
+            <ol class="toki-flow">
+              <li>Conecte o Toki ao Google Calendar.</li>
+              <li>Conecte a mesma conta ou agenda no Arcana.</li>
+              <li>Eventos criados no Toki aparecem como compromissos externos.</li>
+            </ol>
+            <p class="hint">Arcana não verifica sua conta Toki e não pede credenciais do Toki.</p>
+          </div>
         </article>
 	        <article class="card">
 	          <div class="card-head"><div><div class="kicker">BACKUP</div><h2>Segurança local</h2></div></div>

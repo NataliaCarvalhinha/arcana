@@ -110,6 +110,19 @@ assert.match(index, /id="obsidianConnectBtn"/, "settings exposes the obsidian co
 assert.match(index, /id="obsidianSyncBtn"/, "settings exposes the obsidian sync action");
 assert.match(index, /id="obsidianAutoSync"/, "settings exposes autosync selection");
 assert.doesNotMatch(index, /id="obsidianPullBtn"|id="obsidianPushBtn"/, "phase one does not expose direct reverse sync controls");
+assert.match(app, /class ExternalCalendarProvider/, "external calendar provider abstraction is present");
+assert.match(app, /class GoogleCalendarProvider extends ExternalCalendarProvider/, "Google calendar provider implements the provider abstraction");
+assert.match(app, /https:\/\/www\.googleapis\.com\/auth\/calendar\.readonly/, "Google Calendar uses the read-only scope");
+assert.match(app, /google\.accounts\.oauth2\.initTokenClient/, "Google Calendar uses the browser token model");
+assert.match(app, /sessionStorage\.setItem\(googleCalendarTokenStorageKey\(\)/, "Google Calendar access token is session-scoped");
+assert.doesNotMatch(app, /refresh_token|refreshToken/, "Arcana does not request or store refresh tokens");
+assert.match(app, /nextPageToken/, "Google Calendar sync follows paginated API responses");
+assert.match(app, /pageToken/, "Google Calendar pagination passes page tokens");
+assert.match(index, /id="calendarIntegrationForm"/, "settings exposes external calendar integration");
+assert.match(index, /Toki com Arcana via sincroniza/, "settings explains the Toki-through-Google flow");
+assert.match(index, /data-calendar-filter="external"/, "calendar view exposes external source filters");
+assert.match(index, /id="calendarConflictNotice"/, "Sanctuary exposes calendar conflict warning surface");
+assert.match(db, /function sanitizeStateForPortableExport/, "portable exports sanitize OAuth-shaped calendar fields");
 assert.match(index, /id="requestCatalogBtn"/, "YouTube view exposes the catalog request action");
 assert.match(index, /id="requestCatalogBtn" class="mini-btn" href="#" target="_blank" rel="noopener noreferrer"/, "catalog request action opens a safe new tab");
 assert.match(index, /id="catalogOptionsBtn"/, "YouTube view exposes manual catalog fallback options");
@@ -170,7 +183,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v17/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v18/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -258,7 +271,7 @@ function makeSelect(id, values = []) {
 }
 
 const elements = new Map();
-const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost", "registerBtn", "timeNowBtn", "timeNowDialog", "timeNowOptions", "timeNowSuggestion", "registerDialog", "registerForm", "registerQuickInput", "registerParseBtn", "registerPreview", "registerTypeSelect", "registerTrackSelect", "registerCourseSelect", "registerModuleSelect", "registerLessonSelect", "registerHobbySelect", "registerStatus", "journalDate", "journalPrevBtn", "journalNextBtn", "journalTimeline", "weeklyAnalytics"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "calendarConflictNotice", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "calendarIntegrationForm", "googleCalendarStatus", "googleCalendarList", "googleCalendarConnectBtn", "googleCalendarSyncBtn", "googleCalendarDisconnectBtn", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "calendarLegend", "externalCalendarSummary", "externalCalendarEvents", "syncCalendarBtn", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost", "registerBtn", "timeNowBtn", "timeNowDialog", "timeNowOptions", "timeNowSuggestion", "registerDialog", "registerForm", "registerQuickInput", "registerParseBtn", "registerPreview", "registerTypeSelect", "registerTrackSelect", "registerCourseSelect", "registerModuleSelect", "registerLessonSelect", "registerHobbySelect", "registerStatus", "journalDate", "journalPrevBtn", "journalNextBtn", "journalTimeline", "weeklyAnalytics"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }
@@ -301,6 +314,13 @@ elements.get("planningSettingsForm").elements = {
   planningBufferMinutes: makeElement("planningBufferMinutes"),
   useOnlyStudyBlocks: makeElement("planningUseOnlyStudyBlocks"),
   allowHobbySuggestions: makeElement("planningAllowHobbySuggestions")
+};
+elements.get("calendarIntegrationForm").elements = {
+  clientId: makeElement("googleCalendarClientId"),
+  storeEventTitles: makeElement("calendarStoreEventTitles"),
+  allDayBlocksPlanning: makeElement("calendarAllDayBlocksPlanning"),
+  defaultTravelBeforeMinutes: makeElement("calendarDefaultTravelBeforeMinutes"),
+  defaultTravelAfterMinutes: makeElement("calendarDefaultTravelAfterMinutes")
 };
 elements.get("routineForm").elements = {
   id: makeElement("routineId"),
@@ -368,6 +388,7 @@ const context = {
   location: { hostname: "", origin: "https://example.test", href: "https://example.test/arcana/index.html", pathname: "/arcana/index.html" },
   navigator: {},
   localStorage: { getItem() { return null; }, setItem() {} },
+  sessionStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
   alert(message) { throw new Error(`Unexpected alert: ${message}`); },
   confirm() { return true; },
   prompt() { return ""; },
@@ -589,7 +610,59 @@ await vm.runInContext(`(async()=>{
   state.youtubeSettings={mode:"count",minutes:60,count:3,hideAfterLimit:false};
   const youtubeCandidates=buildPlanningCandidates(planningDate).filter(item=>item.type==="youtube");
   if(youtubeCandidates.length!==1||youtubeCandidates[0].id!=="yt-next"){throw new Error("adaptive planning should offer only the strict next YouTube video")}
+  const externalDay=dayKey(planningDate);
+  const nextPlanningDate=new Date(planningDate);
+  nextPlanningDate.setDate(nextPlanningDate.getDate()+1);
+  const makeIso=(hour,minute=0)=>new Date(planningDate.getFullYear(),planningDate.getMonth(),planningDate.getDate(),hour,minute).toISOString();
+  state=normalize({
+    ...structuredClone(DEFAULT_STATE),
+    tracks:[{id:"track-a",name:"A",sigil:"A",subtitle:"",description:"",weeklyGoal:60,progression:"sequential"}],
+    activeTrack:"track-a",
+    items:[{id:"course-a",kind:"course",track:"track-a",title:"Curso A",estimatedMinutes:50,progress:0,status:"nao_iniciado",important:true,urgent:false,modules:[],createdAt:new Date().toISOString()}],
+    routineBlocks:[],
+    planningPreferences:{...DEFAULT_PLANNING_PREFERENCES,dayStart:"08:00",dayEnd:"12:00",minimumSessionMinutes:15,preferredSessionMinutes:30,planningBufferMinutes:0,useOnlyStudyBlocks:false,allowHobbySuggestions:false},
+    externalCalendars:{google:{provider:"google",connected:true,clientId:"client",calendars:[{id:"work-cal",name:"Work",selected:true}],selectedCalendarIds:["work-cal"],privacy:{storeEventTitles:true},preferences:{allDayBlocksPlanning:false,defaultTravelBeforeMinutes:15,defaultTravelAfterMinutes:15,eventTravelOverrides:{}},events:[{id:"meeting",provider:"google",calendarId:"work-cal",title:"Planning",start:makeIso(10),end:makeIso(11),allDay:false,busy:true,transparency:"opaque",location:"",sourceUrl:"",updatedAt:makeIso(9),importedAt:makeIso(9)}]}}
+  });
+  let busy=getBusyIntervals(planningDate);
+  if(!busy.external.some(item=>item.start===585&&item.end===675)){throw new Error("external calendar buffers should block free-time windows")}
+  let externalWindows=getFreeWindows(planningDate,{now:planningNow});
+  if(externalWindows.some(window=>window.start<675&&window.end>585)){throw new Error("external calendar events should be subtracted from free windows")}
+  const privateEvent=normalizeExternalEvent({id:"private",calendarId:"work-cal",summary:"Dentist",location:"Clinic",start:{dateTime:makeIso(10)},end:{dateTime:makeIso(11)},status:"confirmed"},{provider:"google",privacy:{storeEventTitles:false},preferences:{defaultTravelBeforeMinutes:0,defaultTravelAfterMinutes:0,eventTravelOverrides:{}}});
+  if(privateEvent.title!=="Busy"||privateEvent.location){throw new Error("privacy mode should hide external calendar details")}
+  const publicEvent=normalizeExternalEvent({id:"public",calendarId:"work-cal",summary:"Dentist",location:"Clinic",start:{dateTime:makeIso(10)},end:{dateTime:makeIso(11)},status:"confirmed"},{provider:"google",privacy:{storeEventTitles:true},preferences:{defaultTravelBeforeMinutes:0,defaultTravelAfterMinutes:0,eventTravelOverrides:{}}});
+  if(publicEvent.title!=="Dentist"||publicEvent.location!=="Clinic"){throw new Error("privacy opt-in should preserve external calendar details")}
+  const allDay=normalizeExternalEvent({id:"all",calendarId:"work-cal",summary:"OOO",start:{date:externalDay},end:{date:dayKey(nextPlanningDate)},status:"confirmed"},{provider:"google",privacy:{storeEventTitles:true},preferences:{allDayBlocksPlanning:false,defaultTravelBeforeMinutes:0,defaultTravelAfterMinutes:0,eventTravelOverrides:{}}});
+  state.externalCalendars.google.events=[allDay];
+  state.externalCalendars.google.preferences.allDayBlocksPlanning=false;
+  if(!getFreeWindows(planningDate,{now:planningNow}).length){throw new Error("all-day events should be optional blockers")}
+  state.externalCalendars.google.preferences.allDayBlocksPlanning=true;
+  if(getFreeWindows(planningDate,{now:planningNow}).length){throw new Error("all-day events should block planning when enabled")}
+  const range=externalCalendarSyncRange(planningDate,state.externalCalendars.google);
+  const merged=mergeExternalCalendarEvents([{id:"old",provider:"google",calendarId:"work-cal",title:"Old",start:makeIso(8),end:makeIso(9),allDay:false,busy:true,transparency:"opaque",updatedAt:makeIso(7),importedAt:makeIso(7)}],[{id:"old",calendarId:"work-cal",status:"cancelled"},{id:"new",calendarId:"work-cal",summary:"New",start:{dateTime:makeIso(9)},end:{dateTime:makeIso(9,30)},status:"confirmed",updated:makeIso(8)}],{rangeStart:range.start,rangeEnd:range.end,provider:"google",config:externalCalendarConfig()});
+  if(merged.some(event=>event.id==="old")||!merged.some(event=>event.id==="new")){throw new Error("calendar merge should apply changed and deleted events")}
+  state.externalCalendars.google.events=[{id:"cached",provider:"google",calendarId:"work-cal",title:"Cached",start:makeIso(9),end:makeIso(9,30),allDay:false,busy:true,transparency:"opaque",updatedAt:makeIso(8),importedAt:makeIso(8)}];
+  state.externalCalendars.google.lastAttemptAt=null;
+  const cachedLength=state.externalCalendars.google.events.length;
+  const failed=await syncExternalCalendars({force:true,provider:{getCalendars:async()=>state.externalCalendars.google.calendars,getEvents:async()=>{throw new Error("offline")}}});
+  if(!failed.error||state.externalCalendars.google.events.length!==cachedLength){throw new Error("sync errors should retain stale calendar cache")}
+  state.externalCalendars.google.lastSyncError=null;
+  state.externalCalendars.google.lastAttemptAt=new Date().toISOString();
+  const throttled=await syncExternalCalendars({provider:{getCalendars:async()=>[],getEvents:async()=>[]}});
+  if(!throttled.throttled){throw new Error("manual calendar sync should be throttled unless forced")}
+  state.externalCalendars.google.lastAttemptAt=null;
+  state.externalCalendars.google.preferences.allDayBlocksPlanning=false;
+  state.externalCalendars.google.events=[{id:"cached",provider:"google",calendarId:"work-cal",title:"Cached",start:makeIso(10),end:makeIso(10,30),allDay:false,busy:true,transparency:"opaque",updatedAt:makeIso(8),importedAt:makeIso(8)}];
+  state.dailyPlan={date:externalDay,minutes:60,items:[{type:"item",id:"course-a",title:"Focus",minutes:30,startMinute:600,endMinute:630,startTime:"10:00",endTime:"10:30"}],freeWindows:[],availableMinutes:0,notices:[]};
+  if(!planConflictsForDate(planningDate).length){throw new Error("stale daily plans should warn on external calendar conflicts")}
+  calendarCursor=new Date(planningDate);
+  calendarFilters={routine:true,external:false,plan:false,completed:false};
+  renderCalendar();
+  if($("calendarGrid").innerHTML.includes("Externo")){throw new Error("calendar filters should hide external events")}
+  calendarFilters.external=true;
+  renderCalendar();
+  if(!$("calendarGrid").innerHTML.includes("Externo")){throw new Error("calendar filters should show external events")}
   state=structuredClone(seededFresh);
+  renderHomeTracks();
   state.activeTrack="track-electronics";
   expandedCourseId="course-elec-08";
   renderTracks();

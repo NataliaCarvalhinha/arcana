@@ -52,6 +52,28 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 .plan-config label,.settings-form label,.modal label{font-size:.8125rem}
 .snapshot-tools{align-items:center}
 .snapshot-label{color:var(--muted);font-size:.8125rem;font-weight:700}
+.calendar-conflict{margin-top:10px;border:1px solid rgba(199,169,107,.55);background:rgba(199,169,107,.1);color:var(--gold2);border-radius:10px;padding:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.8125rem;line-height:1.4}
+.calendar-conflict.hidden{display:none!important}
+.calendar-source-filters{margin-top:12px;align-items:center}
+.calendar-source-filters .check{font-size:.8125rem}
+.calendar-legend{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.calendar-day-sources{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+.calendar-source{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:3px 6px;font-size:.75rem;line-height:1.2;color:var(--muted);max-width:100%}
+.calendar-source strong{font:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.source-routine{border-color:rgba(120,153,129,.65);color:#a8d0af;background:rgba(120,153,129,.08)}
+.source-external{border-color:rgba(122,135,191,.68);color:#c8d1ff;background:rgba(122,135,191,.1)}
+.source-plan{border-color:rgba(199,169,107,.72);color:var(--gold2);background:rgba(199,169,107,.1)}
+.source-completed{border-color:rgba(196,111,120,.68);color:#f0b4ba;background:rgba(196,111,120,.09)}
+.external-event-list,.calendar-picker{display:grid;gap:8px;margin-top:10px}
+.external-event-row,.calendar-picker-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:10px;background:#120d18;padding:10px;min-width:0}
+.external-event-row strong,.calendar-picker-row strong{display:block;overflow-wrap:anywhere}
+.external-event-row span,.calendar-picker-row span{display:block;color:var(--muted);font-size:.8125rem;line-height:1.4}
+.external-event-row a{color:var(--gold2);font-weight:700}
+.calendar-picker-row .check{min-width:0}
+.calendar-settings-copy{margin:0 0 10px}
+.toki-calendar-status{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.toki-flow{margin:8px 0 8px 18px;color:var(--muted);font-size:.8125rem;line-height:1.5}
+.toki-flow li{padding-left:3px}
 .x{min-width:var(--control-height-sm);min-height:var(--control-height-sm);display:inline-flex;align-items:center;justify-content:center}
 #regenPlanBtn{width:var(--control-height-sm);min-width:var(--control-height-sm);height:var(--control-height-sm);padding:0}
 .module-input-row{grid-template-columns:1fr 100px var(--control-height-sm)}

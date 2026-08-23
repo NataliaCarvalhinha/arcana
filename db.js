@@ -213,10 +213,25 @@ const ArcanaStorage=(()=>{
   async function listFlashcards(){
     return req(tx("flashcards").getAll())
   }
+  function sanitizeStateForPortableExport(value){
+    const copy=structuredClone(value||{});
+    const google=copy.externalCalendars?.google;
+    if(google){
+      for(const key of ["accessToken","token","idToken","expiresAt","clientSecret","secret","refreshToken"]){
+        delete google[key]
+      }
+      if(google.oauth&&typeof google.oauth==="object"){
+        for(const key of ["accessToken","token","idToken","expiresAt","clientSecret","secret","refreshToken"]){
+          delete google.oauth[key]
+        }
+      }
+    }
+    return copy
+  }
   async function snapshot(reason,state){
     const notes=await req(tx("notes").getAll());
     const flashcards=await listFlashcards();
-    const data={version:1,createdAt:now(),reason,state:structuredClone(state),notes,flashcards};
+    const data={version:1,createdAt:now(),reason,state:sanitizeStateForPortableExport(state),notes,flashcards};
     const json=JSON.stringify(data);
     const snap={id:makeId("snapshot"),createdAt:data.createdAt,reason,size:json.length,data};
     await req(tx("backupSnapshots","readwrite").put(snap));
@@ -788,7 +803,7 @@ const ArcanaStorage=(()=>{
     return [...out.values()]
   }
   async function fullBackup(state){
-    return {version:1,createdAt:now(),state:structuredClone(state),notes:await req(tx("notes").getAll()),flashcards:await listFlashcards()}
+    return {version:1,createdAt:now(),state:sanitizeStateForPortableExport(state),notes:await req(tx("notes").getAll()),flashcards:await listFlashcards()}
   }
   async function downloadFullBackup(state){
     const data=await fullBackup(state);
@@ -820,7 +835,7 @@ const ArcanaStorage=(()=>{
   async function obsidianPayload(state={}){
     const notes=await req(tx("notes").getAll());
     const flashcards=await listFlashcards();
-    return {state:structuredClone(state),notes,fichamentos:notes.filter(note=>note.type==="literature"),flashcards}
+    return {state:sanitizeStateForPortableExport(state),notes,fichamentos:notes.filter(note=>note.type==="literature"),flashcards}
   }
   function renderObsidianVault(payload={}){
     const lookups=buildObsidianLookups(payload);

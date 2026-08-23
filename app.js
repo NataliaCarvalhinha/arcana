@@ -8,6 +8,11 @@ const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vault
 const ROUTINE_WEEKDAYS=[{key:1,label:"Segunda",short:"Seg"},{key:2,label:"Terça",short:"Ter"},{key:3,label:"Quarta",short:"Qua"},{key:4,label:"Quinta",short:"Qui"},{key:5,label:"Sexta",short:"Sex"},{key:6,label:"Sábado",short:"Sáb"},{key:7,label:"Domingo",short:"Dom"}];
 const ROUTINE_CATEGORIES={work:{label:"Trabalho",icon:"▦"},class:{label:"Aula",icon:"◐"},study:{label:"Estudo",icon:"☿"},sport:{label:"Esporte",icon:"◇"},meal:{label:"Refeição",icon:"◒"},personal:{label:"Pessoal",icon:"☽"},appointment:{label:"Compromisso",icon:"◎"},hobby:{label:"Hobby",icon:"✧"},travel:{label:"Deslocamento",icon:"→"},sleep:{label:"Sono/descanso",icon:"☾"},other:{label:"Outro",icon:"•"}};
 const DEFAULT_PLANNING_PREFERENCES={dayStart:"07:00",dayEnd:"23:00",minimumSessionMinutes:15,preferredSessionMinutes:30,planningBufferMinutes:5,useOnlyStudyBlocks:false,allowHobbySuggestions:false};
+const GOOGLE_CALENDAR_SCOPE="https://www.googleapis.com/auth/calendar.readonly";
+const GOOGLE_CALENDAR_API_BASE="https://www.googleapis.com/calendar/v3";
+const GOOGLE_IDENTITY_SCRIPT="https://accounts.google.com/gsi/client";
+const EXTERNAL_CALENDAR_SYNC_THROTTLE_MS=5*60*1000;
+const DEFAULT_EXTERNAL_CALENDAR_STATE={google:{provider:"google",connected:false,clientId:"",accountEmail:"",calendars:[],selectedCalendarIds:[],events:[],lastSyncAt:null,lastAttemptAt:null,lastSyncError:null,syncStatus:"idle",syncWindowDays:14,syncHorizonDays:120,privacy:{storeEventTitles:false},preferences:{allDayBlocksPlanning:false,defaultTravelBeforeMinutes:0,defaultTravelAfterMinutes:0,eventTravelOverrides:{}}}};
 const ACTIVITY_LOG_VERSION=1;
 const ACTIVITY_TYPES={study:"Estudo",youtube:"YouTube",review:"Revisão",hobby:"Hobby",sport:"Esporte",journaling:"Journaling",appointment:"Compromisso",routine:"Rotina",other:"Outro"};
 const STARTER_HOBBIES=[
@@ -15,7 +20,7 @@ const STARTER_HOBBIES=[
   {id:"hobby-journaling",name:"Journaling",icon:"✎",description:"Escrita livre ou revisão do dia.",preferredMinutes:15,minimumMinutes:10,frequencyPerWeek:2,preferredDays:[],preferredTimes:["morning","evening"],lastDoneAt:null,sessions:[],active:true,location:"",notes:"",tags:["escrita"]},
   {id:"hobby-games",name:"Jogos",icon:"◇",description:"Tempo de jogo consciente.",preferredMinutes:45,minimumMinutes:20,frequencyPerWeek:1,preferredDays:[6,7],preferredTimes:["evening"],lastDoneAt:null,sessions:[],active:true,location:"",notes:"",tags:["lazer"]}
 ];
-const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120,progression:"sequential"}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],activityLog:[],activityLogVersion:ACTIVITY_LOG_VERSION,weeklyGoals:[],dailyCheckins:{},xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[],freeWindows:[],availableMinutes:0,notices:[]},routineBlocks:[],routineExceptions:[],hobbies:structuredClone(STARTER_HOBBIES),planningPreferences:structuredClone(DEFAULT_PLANNING_PREFERENCES),starterContentVersion:0,starterCurriculumVersion:0};
+const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120,progression:"sequential"}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),externalCalendars:structuredClone(DEFAULT_EXTERNAL_CALENDAR_STATE),inbox:[],sessions:[],activityLog:[],activityLogVersion:ACTIVITY_LOG_VERSION,weeklyGoals:[],dailyCheckins:{},xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[],freeWindows:[],availableMinutes:0,notices:[]},routineBlocks:[],routineExceptions:[],hobbies:structuredClone(STARTER_HOBBIES),planningPreferences:structuredClone(DEFAULT_PLANNING_PREFERENCES),starterContentVersion:0,starterCurriculumVersion:0};
 const STARTER_TRACKS=[
   {id:"track-electronics",name:"Eletrônica",sigil:"☿",subtitle:"Circuitos · FPGA · RISC-V · Verificação",description:"Trilha técnica de sistemas embarcados, lógica digital, FPGA, arquitetura de computadores, RISC-V, SystemVerilog, UVM e VLSI.",weeklyGoal:240,progression:"sequential"},
   {id:"track-finance",name:"Finanças",sigil:"♃",subtitle:"Planejamento · Mercados · Investimentos · Portfólio",description:"Trilha para construir uma base sólida de finanças pessoais, mercados financeiros, investimentos, portfólio e finanças corporativas.",weeklyGoal:120,progression:"sequential"}
@@ -231,6 +236,9 @@ let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=nu
 let youtubeCatalogMeta={version:null,generatedAt:null,lastLoadedAt:null,playlistIds:[],playlistCount:0,videoCount:0,error:null};
 let youtubeCatalogPollHandle=null;
 let obsidianAutoSyncHandle=null,obsidianSyncInFlight=false;
+let calendarFilters={routine:true,external:true,plan:true,completed:true};
+let externalCalendarSyncing=false;
+let calendarRuntime={googleAccessToken:null,googleTokenExpiresAt:0,tokenClient:null,identityScript:null};
 const NOTE_TYPE_LABELS={literature:"Fichamento",permanent:"Permanente",concept:"Conceito",question:"Pergunta",insight:"Insight",quote:"Citação",reference:"Referência",next_action:"Ação",quick:"Rápida",session:"Sessão"};
 const FOCUS_BLOCK_TYPES={concept:{label:"Conceito",target:"permanent"},question:{label:"Pergunta",target:"question"},insight:{label:"Insight",target:"permanent"},quote:{label:"Citação"},example:{label:"Exemplo"},formula:{label:"Fórmula / comando"},next_action:{label:"Próximo passo"},free:{label:"Nota livre"}};
 const $=id=>document.getElementById(id);
@@ -261,6 +269,7 @@ function normalize(s){
   s.inbox=Array.isArray(s.inbox)?s.inbox:[];
   s.youtubeSettings={...d.youtubeSettings,...(s.youtubeSettings||{})};
   s.obsidian={...structuredClone(DEFAULT_OBSIDIAN_STATE),...(s.obsidian||{})};
+  s.externalCalendars=normalizeExternalCalendars(s.externalCalendars||d.externalCalendars);
   s.dailyPlan={...structuredClone(d.dailyPlan),...(s.dailyPlan||{})};
   s.dailyPlan.items=Array.isArray(s.dailyPlan.items)?s.dailyPlan.items:[];
   s.dailyPlan.freeWindows=Array.isArray(s.dailyPlan.freeWindows)?s.dailyPlan.freeWindows:[];
@@ -290,6 +299,7 @@ function migrate(old){
   if(old.youtubeQueue)s.youtubeQueue=old.youtubeQueue;
   if(old.youtube?.playlistUrl)s.playlists=[{id:"main-playlist",youtubePlaylistId:youtubePlaylistIdFromUrl(old.youtube.playlistUrl)||"",name:old.youtube.playlistName||"Playlist de foco",url:old.youtube.playlistUrl,enabled:true,createdAt:old.youtube.lastSyncAt||null,updatedAt:old.youtube.lastSyncAt||null,lastSyncAt:old.youtube.lastSyncAt||null,lastSyncError:old.youtube.lastSyncError||null,catalogGeneratedAt:null,catalogTitle:null}];
   if(old.youtubeDailyGlobal)s.youtubeDaily=old.youtubeDailyGlobal;
+  if(old.externalCalendars)s.externalCalendars=old.externalCalendars;
   if(old.youtube)s.youtubeSettings={...s.youtubeSettings,mode:old.youtube.mode||"either",minutes:old.youtube.minutes||45,count:old.youtube.count||3,hideAfterLimit:old.youtube.hideAfterLimit!==false};
   s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=i.modules||[];i.notes=i.notes||""});
   return s
@@ -993,6 +1003,432 @@ function normalizePlanningPreferences(input={}){
     allowHobbySuggestions:!!input.allowHobbySuggestions
   }
 }
+function safeDate(value){
+  const date=new Date(value);
+  return Number.isNaN(date.getTime())?null:date
+}
+function dateOnlyToLocalDate(value){
+  const match=String(value||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!match){
+    return null
+  }
+  return new Date(Number(match[1]),Number(match[2])-1,Number(match[3]),0,0,0,0)
+}
+function normalizeExternalDateValue(value){
+  return dateOnlyToLocalDate(value)||safeDate(value)
+}
+function normalizeExternalCalendar(calendar={}){
+  const id=String(calendar.id||"").trim();
+  if(!id){
+    return null
+  }
+  return {id,name:String(calendar.name||calendar.summary||id).trim()||id,primary:!!calendar.primary,selected:calendar.selected!==false,backgroundColor:String(calendar.backgroundColor||"").trim(),foregroundColor:String(calendar.foregroundColor||"").trim(),accessRole:String(calendar.accessRole||"").trim(),updatedAt:calendar.updatedAt||new Date().toISOString()}
+}
+function normalizeExternalCalendars(value={}){
+  const base=structuredClone(DEFAULT_EXTERNAL_CALENDAR_STATE.google),input=value.google||value||{};
+  const google={...base,...input};
+  google.clientId=String(google.clientId||"").trim();
+  google.accountEmail=String(google.accountEmail||"").trim();
+  google.calendars=Array.isArray(google.calendars)?google.calendars.map(normalizeExternalCalendar).filter(Boolean):[];
+  const knownIds=new Set(google.calendars.map(calendar=>calendar.id));
+  google.selectedCalendarIds=Array.isArray(google.selectedCalendarIds)?google.selectedCalendarIds.map(String).filter(id=>id&&(!knownIds.size||knownIds.has(id))):google.calendars.filter(calendar=>calendar.selected!==false).map(calendar=>calendar.id);
+  google.events=Array.isArray(google.events)?google.events.map(event=>normalizeExternalEvent(event,google)).filter(Boolean):[];
+  google.privacy={...base.privacy,...(google.privacy||{}),storeEventTitles:!!google.privacy?.storeEventTitles};
+  google.preferences={...base.preferences,...(google.preferences||{})};
+  google.preferences.allDayBlocksPlanning=!!google.preferences.allDayBlocksPlanning;
+  google.preferences.defaultTravelBeforeMinutes=clampNumber(google.preferences.defaultTravelBeforeMinutes,0,240,0);
+  google.preferences.defaultTravelAfterMinutes=clampNumber(google.preferences.defaultTravelAfterMinutes,0,240,0);
+  google.preferences.eventTravelOverrides=google.preferences.eventTravelOverrides&&typeof google.preferences.eventTravelOverrides==="object"?google.preferences.eventTravelOverrides:{};
+  google.syncWindowDays=clampNumber(google.syncWindowDays,0,365,14);
+  google.syncHorizonDays=clampNumber(google.syncHorizonDays,1,730,120);
+  google.connected=!!google.connected;
+  google.syncStatus=google.syncStatus||"idle";
+  return {google}
+}
+function externalCalendarConfig(){
+  state.externalCalendars=normalizeExternalCalendars(state.externalCalendars||DEFAULT_EXTERNAL_CALENDAR_STATE);
+  return state.externalCalendars.google
+}
+function selectedExternalCalendarIds(config=externalCalendarConfig()){
+  return new Set((config.selectedCalendarIds||[]).map(String))
+}
+function externalEventBusyValue(event={}){
+  return event.busy!==false&&event.transparency!=="transparent"
+}
+function normalizeExternalEvent(event={},config={}){
+  const provider=String(event.provider||config.provider||"google");
+  const calendarId=String(event.calendarId||event.calendarID||"").trim();
+  const sourceId=String(event.id||event.iCalUID||event.etag||"").trim();
+  const rawStart=event.start?.dateTime||event.start?.date||event.start;
+  const rawEnd=event.end?.dateTime||event.end?.date||event.end;
+  const start=normalizeExternalDateValue(rawStart),end=normalizeExternalDateValue(rawEnd);
+  const id=sourceId||`${provider}:${calendarId}:${rawStart||""}:${rawEnd||""}`;
+  if(!id||!calendarId){
+    return null
+  }
+  if(event.status==="cancelled"||event.deleted){
+    return {id,externalId:id,provider,calendarId,status:"cancelled",deleted:true,updatedAt:event.updated||event.updatedAt||new Date().toISOString(),importedAt:event.importedAt||new Date().toISOString()}
+  }
+  if(!start||!end||end<=start){
+    return null
+  }
+  const privacy={storeEventTitles:false,...(config.privacy||{})};
+  const prefs={defaultTravelBeforeMinutes:0,defaultTravelAfterMinutes:0,eventTravelOverrides:{},...(config.preferences||{})};
+  const override=prefs.eventTravelOverrides?.[id]||{};
+  const allDay=!!(event.allDay||event.start?.date||String(rawStart||"").match(/^\d{4}-\d{2}-\d{2}$/));
+  const title=privacy.storeEventTitles?String(event.title||event.summary||"Sem título").trim()||"Sem título":"Busy";
+  return {
+    id,
+    externalId:id,
+    provider,
+    calendarId,
+    title,
+    description:privacy.storeEventTitles?String(event.description||"").trim():"",
+    status:String(event.status||"confirmed").trim()||"confirmed",
+    start:start.toISOString(),
+    end:end.toISOString(),
+    allDay,
+    busy:externalEventBusyValue(event),
+    transparency:event.transparency==="transparent"?"transparent":"opaque",
+    location:privacy.storeEventTitles?String(event.location||"").trim():"",
+    sourceUrl:String(event.sourceUrl||event.htmlLink||"").trim(),
+    updatedAt:event.updated||event.updatedAt||new Date().toISOString(),
+    importedAt:event.importedAt||new Date().toISOString(),
+    travelBeforeMinutes:clampNumber(override.beforeMinutes??event.travelBeforeMinutes??prefs.defaultTravelBeforeMinutes,0,240,0),
+    travelAfterMinutes:clampNumber(override.afterMinutes??event.travelAfterMinutes??prefs.defaultTravelAfterMinutes,0,240,0)
+  }
+}
+function mergeExternalCalendars(existing=[],incoming=[]){
+  const byId=new Map((existing||[]).map(calendar=>[calendar.id,calendar]));
+  for(const calendar of incoming||[]){
+    const normalized=normalizeExternalCalendar(calendar);
+    if(normalized){
+      byId.set(normalized.id,{...(byId.get(normalized.id)||{}),...normalized})
+    }
+  }
+  return [...byId.values()].sort((a,b)=>(b.primary?1:0)-(a.primary?1:0)||a.name.localeCompare(b.name))
+}
+function mergeExternalCalendarEvents(previous=[],incoming=[],options={}){
+  const rangeStart=options.rangeStart?new Date(options.rangeStart):null,rangeEnd=options.rangeEnd?new Date(options.rangeEnd):null,provider=options.provider||"google",config=options.config||{};
+  const incomingIds=new Set(),deletedIds=new Set(),byKey=new Map();
+  for(const event of previous||[]){
+    const start=safeDate(event.start),end=safeDate(event.end);
+    const inProvider=event.provider===provider;
+    const inRange=rangeStart&&rangeEnd&&start&&end&&end>=rangeStart&&start<=rangeEnd;
+    if(!inProvider||!inRange){
+      byKey.set(`${event.provider}:${event.calendarId}:${event.id}`,event)
+    }
+  }
+  for(const raw of incoming||[]){
+    const event=normalizeExternalEvent(raw,config);
+    if(!event){
+      continue
+    }
+    const key=`${event.provider}:${event.calendarId}:${event.id}`;
+    incomingIds.add(key);
+    if(event.deleted){
+      deletedIds.add(key);
+      byKey.delete(key);
+      continue
+    }
+    byKey.set(key,event)
+  }
+  for(const key of deletedIds){
+    byKey.delete(key)
+  }
+  return [...byKey.values()].filter(event=>!event.deleted).sort((a,b)=>(a.start||"").localeCompare(b.start||"")||(a.title||"").localeCompare(b.title||""))
+}
+function externalCalendarSyncRange(now=new Date(),config=externalCalendarConfig()){
+  const start=new Date(now),end=new Date(now);
+  start.setDate(start.getDate()-Number(config.syncWindowDays||14));
+  start.setHours(0,0,0,0);
+  end.setDate(end.getDate()+Number(config.syncHorizonDays||120));
+  end.setHours(23,59,59,999);
+  return {start,end}
+}
+class ExternalCalendarProvider{
+  constructor(config={}){
+    this.config=config
+  }
+  async connect(){
+    throw new Error("Provider connection is not implemented")
+  }
+  async getCalendars(){
+    throw new Error("Provider calendars are not implemented")
+  }
+  async getEvents(){
+    throw new Error("Provider events are not implemented")
+  }
+}
+function googleCalendarTokenStorageKey(){
+  return "arcana.googleCalendarToken"
+}
+function setGoogleCalendarToken(response={}){
+  const expiresIn=Number(response.expires_in||0);
+  const payload={accessToken:response.access_token||"",expiresAt:Date.now()+Math.max(0,expiresIn-60)*1000,scope:response.scope||GOOGLE_CALENDAR_SCOPE};
+  calendarRuntime.googleAccessToken=payload.accessToken;
+  calendarRuntime.googleTokenExpiresAt=payload.expiresAt;
+  if(payload.accessToken){
+    sessionStorage.setItem(googleCalendarTokenStorageKey(),JSON.stringify(payload))
+  }
+  return payload.accessToken
+}
+function getGoogleCalendarToken(){
+  if(calendarRuntime.googleAccessToken&&calendarRuntime.googleTokenExpiresAt>Date.now()){
+    return calendarRuntime.googleAccessToken
+  }
+  try{
+    const payload=JSON.parse(sessionStorage.getItem(googleCalendarTokenStorageKey())||"{}");
+    if(payload.accessToken&&payload.expiresAt>Date.now()){
+      calendarRuntime.googleAccessToken=payload.accessToken;
+      calendarRuntime.googleTokenExpiresAt=payload.expiresAt;
+      return payload.accessToken
+    }
+  }catch(e){}
+  return ""
+}
+function clearGoogleCalendarToken(){
+  calendarRuntime.googleAccessToken=null;
+  calendarRuntime.googleTokenExpiresAt=0;
+  try{sessionStorage.removeItem(googleCalendarTokenStorageKey())}catch(e){}
+}
+function loadGoogleIdentityScript(){
+  if(window.google?.accounts?.oauth2){
+    return Promise.resolve()
+  }
+  if(calendarRuntime.identityScript){
+    return calendarRuntime.identityScript
+  }
+  calendarRuntime.identityScript=new Promise((resolve,reject)=>{
+    const existing=document.querySelector(`script[src="${GOOGLE_IDENTITY_SCRIPT}"]`);
+    if(existing){
+      existing.addEventListener("load",resolve,{once:true});
+      existing.addEventListener("error",()=>reject(new Error("Google Identity Services indisponível.")),{once:true});
+      return
+    }
+    const script=document.createElement("script");
+    script.src=GOOGLE_IDENTITY_SCRIPT;
+    script.async=true;
+    script.defer=true;
+    script.onload=resolve;
+    script.onerror=()=>reject(new Error("Google Identity Services indisponível."));
+    document.head.appendChild(script)
+  });
+  return calendarRuntime.identityScript
+}
+async function requestGoogleCalendarAccessToken(config=externalCalendarConfig()){
+  if(!config.clientId){
+    throw new Error("Informe o Client ID OAuth do Google Calendar.")
+  }
+  await loadGoogleIdentityScript();
+  return new Promise((resolve,reject)=>{
+    calendarRuntime.tokenClient=window.google.accounts.oauth2.initTokenClient({
+      client_id:config.clientId,
+      scope:GOOGLE_CALENDAR_SCOPE,
+      callback:response=>{
+        if(response.error){
+          reject(new Error(response.error_description||response.error));
+          return
+        }
+        resolve(setGoogleCalendarToken(response))
+      }
+    });
+    calendarRuntime.tokenClient.requestAccessToken({prompt:getGoogleCalendarToken()?"":"consent"})
+  })
+}
+class GoogleCalendarProvider extends ExternalCalendarProvider{
+  async connect(){
+    const token=await requestGoogleCalendarAccessToken(this.config);
+    this.config.connected=!!token;
+    this.config.lastSyncError=null;
+    return token
+  }
+  async fetchJson(path,params={}){
+    const token=getGoogleCalendarToken()||await requestGoogleCalendarAccessToken(this.config);
+    const url=new URL(`${GOOGLE_CALENDAR_API_BASE}${path}`);
+    Object.entries(params).forEach(([key,value])=>{if(value!==undefined&&value!==null&&value!==""){url.searchParams.set(key,value)}});
+    const response=await fetch(url.toString(),{headers:{Authorization:`Bearer ${token}`}});
+    if(!response.ok){
+      throw new Error(`Google Calendar ${response.status}`)
+    }
+    return response.json()
+  }
+  async fetchPages(path,params={}){
+    const items=[];
+    let pageToken="";
+    for(let page=0;page<20;page++){
+      const data=await this.fetchJson(path,{...params,pageToken});
+      items.push(...(data.items||[]));
+      pageToken=data.nextPageToken||"";
+      if(!pageToken){
+        return items
+      }
+    }
+    throw new Error("Google Calendar retornou muitas páginas.")
+  }
+  async getCalendars(){
+    const items=await this.fetchPages("/users/me/calendarList",{minAccessRole:"reader"});
+    return items.map(item=>normalizeExternalCalendar({id:item.id,name:item.summary,primary:item.primary,backgroundColor:item.backgroundColor,foregroundColor:item.foregroundColor,accessRole:item.accessRole}))
+  }
+  async getEvents(calendarIds=[],range={}){
+    const events=[];
+    for(const calendarId of calendarIds){
+      const items=await this.fetchPages(`/calendars/${encodeURIComponent(calendarId)}/events`,{singleEvents:"true",orderBy:"startTime",showDeleted:"true",timeMin:range.start?.toISOString(),timeMax:range.end?.toISOString(),maxResults:"2500"});
+      events.push(...items.map(item=>({...item,calendarId,provider:"google",title:item.summary,sourceUrl:item.htmlLink})))
+    }
+    return events
+  }
+}
+function calendarSyncStatusText(config=externalCalendarConfig()){
+  if(config.syncStatus==="syncing"){
+    return "Sincronizando..."
+  }
+  if(config.lastSyncError){
+    return `Erro: ${config.lastSyncError}${config.lastSyncAt?` · cache de ${new Date(config.lastSyncAt).toLocaleString("pt-BR")}`:""}`
+  }
+  if(config.connected&&config.lastSyncAt){
+    return `Conectado · última sincronização ${new Date(config.lastSyncAt).toLocaleString("pt-BR")}`
+  }
+  if(config.connected){
+    return "Conectado · aguardando sincronização"
+  }
+  return "Não conectado"
+}
+async function syncExternalCalendars(options={}){
+  const config=externalCalendarConfig(),now=Date.now(),lastAttempt=config.lastAttemptAt?new Date(config.lastAttemptAt).getTime():0;
+  if(!options.force&&lastAttempt&&now-lastAttempt<EXTERNAL_CALENDAR_SYNC_THROTTLE_MS){
+    return {throttled:true}
+  }
+  if(externalCalendarSyncing){
+    return {throttled:true}
+  }
+  if(!config.connected&&!options.provider){
+    return {skipped:true}
+  }
+  externalCalendarSyncing=true;
+  config.syncStatus="syncing";
+  config.lastAttemptAt=new Date().toISOString();
+  renderExternalCalendarSettings();
+  try{
+    const provider=options.provider||new GoogleCalendarProvider(config);
+    const calendars=await provider.getCalendars();
+    config.calendars=mergeExternalCalendars(config.calendars,calendars);
+    if(!config.selectedCalendarIds.length){
+      config.selectedCalendarIds=config.calendars.filter(calendar=>calendar.selected!==false).map(calendar=>calendar.id)
+    }
+    const selected=[...selectedExternalCalendarIds(config)];
+    const range=externalCalendarSyncRange(new Date(),config);
+    const events=await provider.getEvents(selected,range);
+    config.events=mergeExternalCalendarEvents(config.events,events,{rangeStart:range.start,rangeEnd:range.end,provider:"google",config});
+    config.connected=true;
+    config.lastSyncAt=new Date().toISOString();
+    config.lastSyncError=null;
+    config.syncStatus="synced";
+    state.dailyPlan.date=null;
+    await save(false,"calendar-sync");
+    renderAll();
+    return {ok:true,events:config.events.length}
+  }catch(err){
+    config.lastSyncError=err.message||"Falha ao sincronizar calendário";
+    config.syncStatus="error";
+    await save(false,"calendar-sync-error");
+    renderAll();
+    return {error:config.lastSyncError}
+  }finally{
+    externalCalendarSyncing=false
+  }
+}
+function applyCalendarSettingsFromForm(){
+  const form=$("calendarIntegrationForm");
+  if(!form){
+    return externalCalendarConfig()
+  }
+  const config=externalCalendarConfig(),fields=form.elements;
+  config.clientId=String(fields.clientId?.value||"").trim();
+  config.privacy.storeEventTitles=!!fields.storeEventTitles?.checked;
+  config.preferences.allDayBlocksPlanning=!!fields.allDayBlocksPlanning?.checked;
+  config.preferences.defaultTravelBeforeMinutes=clampNumber(fields.defaultTravelBeforeMinutes?.value,0,240,0);
+  config.preferences.defaultTravelAfterMinutes=clampNumber(fields.defaultTravelAfterMinutes?.value,0,240,0);
+  return config
+}
+async function connectGoogleCalendar(){
+  const config=applyCalendarSettingsFromForm(),provider=new GoogleCalendarProvider(config);
+  try{
+    await provider.connect();
+    await syncExternalCalendars({force:true,provider});
+    toast("Google Calendar conectado.","ok")
+  }catch(err){
+    config.lastSyncError=err.message||"Não consegui conectar ao Google Calendar.";
+    config.syncStatus="error";
+    await save(false,"calendar-connect-error");
+    renderAll();
+    toast(config.lastSyncError,"error")
+  }
+}
+async function disconnectGoogleCalendar(){
+  const config=externalCalendarConfig();
+  const keepConfig=config.calendars.length&&confirm("Manter calendários selecionados e preferências locais para reconectar depois?");
+  const kept={clientId:config.clientId,calendars:config.calendars,selectedCalendarIds:config.selectedCalendarIds,privacy:config.privacy,preferences:config.preferences};
+  clearGoogleCalendarToken();
+  config.connected=false;
+  config.accountEmail="";
+  config.clientId=keepConfig?kept.clientId:"";
+  config.calendars=keepConfig?kept.calendars:[];
+  config.selectedCalendarIds=keepConfig?kept.selectedCalendarIds:[];
+  config.privacy=kept.privacy;
+  config.preferences=kept.preferences;
+  config.events=[];
+  config.lastSyncError=null;
+  config.syncStatus="idle";
+  state.dailyPlan.date=null;
+  await save(false,"calendar-disconnect");
+  renderAll();
+  toast("Calendário desconectado.","ok")
+}
+async function saveCalendarSettings(event){
+  event.preventDefault();
+  applyCalendarSettingsFromForm();
+  state.dailyPlan.date=null;
+  await save(false,"calendar-settings");
+  renderAll();
+  toast("Preferências de calendário salvas.","ok")
+}
+async function saveCalendarSelection(){
+  const config=externalCalendarConfig(),list=$("googleCalendarList");
+  config.selectedCalendarIds=[...(list?.querySelectorAll("input[data-calendar-id]:checked")||[])].map(input=>input.dataset.calendarId);
+  state.dailyPlan.date=null;
+  await save(false,"calendar-selection");
+  renderAll()
+}
+function renderExternalCalendarSettings(){
+  const form=$("calendarIntegrationForm");
+  if(!form){
+    return
+  }
+  const config=externalCalendarConfig(),fields=form.elements;
+  fields.clientId.value=config.clientId||"";
+  fields.storeEventTitles.checked=!!config.privacy.storeEventTitles;
+  fields.allDayBlocksPlanning.checked=!!config.preferences.allDayBlocksPlanning;
+  fields.defaultTravelBeforeMinutes.value=config.preferences.defaultTravelBeforeMinutes||0;
+  fields.defaultTravelAfterMinutes.value=config.preferences.defaultTravelAfterMinutes||0;
+  if($("googleCalendarStatus")){
+    const selected=config.selectedCalendarIds?.length||0,total=config.calendars?.length||0,events=config.events?.length||0;
+    $("googleCalendarStatus").innerHTML=`<p class="hint">${esc(calendarSyncStatusText(config))}</p><p class="hint">${selected}/${total} agendas selecionadas · ${events} eventos em cache local.</p>`
+  }
+  if($("googleCalendarList")){
+    const selected=selectedExternalCalendarIds(config);
+    $("googleCalendarList").innerHTML=config.calendars.length?config.calendars.map(calendar=>`<label class="check calendar-picker-row"><input type="checkbox" data-calendar-id="${esc(calendar.id)}" ${selected.has(calendar.id)?"checked":""}> <span>${esc(calendar.name)}</span></label>`).join(""):`<div class="hint">Conecte e sincronize para escolher agendas.</div>`
+  }
+  if($("googleCalendarConnectBtn")){
+    $("googleCalendarConnectBtn").disabled=!config.clientId&&!fields.clientId.value.trim()
+  }
+  if($("googleCalendarSyncBtn")){
+    $("googleCalendarSyncBtn").disabled=!config.connected||externalCalendarSyncing
+  }
+  if($("googleCalendarDisconnectBtn")){
+    $("googleCalendarDisconnectBtn").disabled=!config.connected
+  }
+}
 function normalizeRoutineBlock(block={}){
   const title=String(block.title||"").trim();
   const start=parseClock(block.startTime,NaN),end=parseClock(block.endTime,NaN);
@@ -1115,15 +1551,64 @@ function routineBusyIntervalsForDate(date=new Date()){
   }
   return {busy:mergeIntervals(busy),study:mergeIntervals(study),blocks}
 }
+function localDayRange(date=new Date()){
+  const start=new Date(date),end=new Date(date);
+  start.setHours(0,0,0,0);
+  end.setHours(23,59,59,999);
+  return {start,end}
+}
+function externalEventsForRange(start,end){
+  const config=externalCalendarConfig(),selected=selectedExternalCalendarIds(config);
+  return (config.events||[]).filter(event=>{
+    const eventStart=safeDate(event.start),eventEnd=safeDate(event.end);
+    return selected.has(event.calendarId)&&externalEventBusyValue(event)&&eventStart&&eventEnd&&eventEnd>start&&eventStart<end
+  })
+}
+function externalCommitmentsForDate(date=new Date()){
+  const range=localDayRange(date);
+  return externalEventsForRange(range.start,range.end)
+}
+function eventMinuteRangeForDate(event,date=new Date()){
+  const range=localDayRange(date),start=safeDate(event.start),end=safeDate(event.end);
+  if(!start||!end){
+    return null
+  }
+  const clippedStart=Math.max(range.start.getTime(),start.getTime()),clippedEnd=Math.min(range.end.getTime()+1,end.getTime());
+  if(clippedEnd<=clippedStart){
+    return null
+  }
+  const startMinute=Math.floor((clippedStart-range.start.getTime())/60000),endMinute=Math.ceil((clippedEnd-range.start.getTime())/60000);
+  return {start:Math.max(0,startMinute),end:Math.min(24*60,endMinute)}
+}
+function externalEventBusyIntervalsForDate(date=new Date()){
+  const config=externalCalendarConfig();
+  if(!config.connected){
+    return []
+  }
+  return externalCommitmentsForDate(date).map(event=>{
+    if(event.allDay&&!config.preferences.allDayBlocksPlanning){
+      return null
+    }
+    const range=eventMinuteRangeForDate(event,date);
+    if(!range){
+      return null
+    }
+    return interval(range.start-Number(event.travelBeforeMinutes||0),range.end+Number(event.travelAfterMinutes||0),event.allDay?"external-all-day":"external",event)
+  }).filter(Boolean)
+}
+function getBusyIntervals(date=new Date()){
+  const routine=routineBusyIntervalsForDate(date),external=externalEventBusyIntervalsForDate(date);
+  return {busy:mergeIntervals([...routine.busy,...external]),study:routine.study,blocks:routine.blocks,external}
+}
 function getFreeWindows(date=new Date(),options={}){
   const prefs=normalizePlanningPreferences({...state.planningPreferences,...(options.preferences||{})});
   const dayStart=parseClock(prefs.dayStart),dayEnd=parseClock(prefs.dayEnd,24*60),min=Number(options.minimumSessionMinutes||prefs.minimumSessionMinutes)||15;
   const now=options.now||new Date(),today=dayKey(date)===dayKey(now);
   const currentMinute=today?now.getHours()*60+now.getMinutes():dayStart;
   const floor=Math.max(dayStart,currentMinute);
-  const routine=routineBusyIntervalsForDate(date);
-  const base=prefs.useOnlyStudyBlocks&&routine.study.length?routine.study.map(item=>interval(Math.max(item.start,floor),Math.min(item.end,dayEnd),"study-window",item.source)):[interval(floor,dayEnd,"free",null)];
-  const windows=subtractIntervals(base,routine.busy).filter(item=>item.end-item.start>=min);
+  const busy=getBusyIntervals(date);
+  const base=prefs.useOnlyStudyBlocks&&busy.study.length?busy.study.map(item=>interval(Math.max(item.start,floor),Math.min(item.end,dayEnd),"study-window",item.source)):[interval(floor,dayEnd,"free",null)];
+  const windows=subtractIntervals(base,busy.busy).filter(item=>item.end-item.start>=min);
   return windows.map((item,index)=>({id:`${dayKey(date)}-${index}`,start:item.start,end:item.end,startTime:formatClock(item.start),endTime:formatClock(item.end),minutes:item.end-item.start,kind:item.kind||"free"}))
 }
 function getActivityDuration(activity,window=null){
@@ -1231,8 +1716,8 @@ function planActivitiesIntoWindows(date=new Date(),options={}){
   return {items,freeWindows:windows,availableMinutes:windows.reduce((sum,window)=>sum+window.minutes,0),notices}
 }
 function freeTimeSnapshot(date=new Date()){
-  const windows=getFreeWindows(date),available=windows.reduce((sum,window)=>sum+window.minutes,0);
-  return {windows,available}
+  const windows=getFreeWindows(date),available=windows.reduce((sum,window)=>sum+window.minutes,0),externalCommitments=externalCommitmentsForDate(date);
+  return {windows,available,externalCommitments}
 }
 
 function isLocalBackend(){return ["localhost","127.0.0.1",""].includes(location.hostname)}
@@ -2180,7 +2665,8 @@ function renderHome(){
   $("todaySummary").textContent=`${studied} / ${targetMinutes} min hoje · ${state.streak} dias de sequência`;
   if($("freeTimeSummary")){
     const free=freeTimeSnapshot(now);
-    $("freeTimeSummary").textContent=`Hoje: ${free.windows.length} janela${free.windows.length===1?"":"s"} livre${free.windows.length===1?"":"s"} · ${fmtMin(free.available)} disponíveis`
+    const external=free.externalCommitments.length?` · ${free.externalCommitments.length} compromisso${free.externalCommitments.length===1?"":"s"} externo${free.externalCommitments.length===1?"":"s"}`:"";
+    $("freeTimeSummary").textContent=`Hoje: ${free.windows.length} janela${free.windows.length===1?"":"s"} livre${free.windows.length===1?"":"s"} · ${fmtMin(free.available)} disponíveis${external}`
   }
   $("gameStats").innerHTML=[
     ["✦ XP",state.xp],["☽ Sequência",`${state.streak} dias`],["◇ Registros",(state.activityLog||[]).length],["Nível",level]
@@ -2286,8 +2772,37 @@ function renderTodayRows(){
 function generatePlan(){
   const mins=Number($("todayMinutes")?.value||state.dailyPlan.minutes||60);
   const result=planActivitiesIntoWindows(new Date(),{minutes:mins});
-  state.dailyPlan={...state.dailyPlan,date:dayKey(),minutes:mins,items:result.items,freeWindows:result.freeWindows,availableMinutes:result.availableMinutes,notices:result.notices,generatedAt:new Date().toISOString()};
+  state.dailyPlan={...state.dailyPlan,date:dayKey(),minutes:mins,items:result.items,freeWindows:result.freeWindows,availableMinutes:result.availableMinutes,notices:result.notices,generatedAt:new Date().toISOString(),calendarConflictDismissedAt:null};
   save(false,"daily-plan");renderDailyPlan()
+}
+function intervalsOverlap(aStart,aEnd,bStart,bEnd){
+  return aStart<bEnd&&aEnd>bStart
+}
+function planConflictsForDate(date=new Date()){
+  if(state.dailyPlan.date!==dayKey(date)){
+    return []
+  }
+  const busy=getBusyIntervals(date).external;
+  return (state.dailyPlan.items||[]).filter(item=>Number.isFinite(Number(item.startMinute))&&Number.isFinite(Number(item.endMinute))&&busy.some(interval=>intervalsOverlap(Number(item.startMinute),Number(item.endMinute),interval.start,interval.end)))
+}
+async function dismissCalendarConflictNotice(){
+  state.dailyPlan.calendarConflictDismissedAt=new Date().toISOString();
+  await save(false,"calendar-conflict-dismissed");
+  renderCalendarConflictNotice()
+}
+function renderCalendarConflictNotice(){
+  const el=$("calendarConflictNotice");
+  if(!el){
+    return
+  }
+  const conflicts=planConflictsForDate(new Date());
+  if(!conflicts.length||state.dailyPlan.calendarConflictDismissedAt){
+    el.classList.add("hidden");
+    el.innerHTML="";
+    return
+  }
+  el.classList.remove("hidden");
+  el.innerHTML=`<div><strong>Agenda externa conflita com o plano.</strong><span>${conflicts.length} ritual${conflicts.length===1?"":"ais"} cruza${conflicts.length===1?"":"m"} compromisso importado.</span></div><div class="item-actions"><button class="ghost-btn" type="button" onclick="generatePlan()">Recalcular</button><button class="mini-btn" type="button" onclick="dismissCalendarConflictNotice()">Manter</button></div>`
 }
 function renderDailyPlan(){
   if(!$("dailyPlan")){
@@ -2309,7 +2824,7 @@ function renderDailyPlan(){
     const time=p.startTime?`<span class="plan-time">${esc(p.startTime)}${p.endTime?` - ${esc(p.endTime)}`:""}</span>`:"";
     return `<div class="plan-item clickable-row" role="button" tabindex="0" onclick="${action}" onkeydown="activateRow(event,this)"><div class="num">${n+1}</div><div class="grow">${trackLabel?`<span class="kicker">${trackLabel}</span>`:""}<strong>${esc(p.title)}</strong><span>${context?`${context} · `:""}${p.minutes} min</span>${time}</div><button class="mini-btn" onclick="event.stopPropagation();${action}">${p.type==="review"?"Revisar":p.type==="hobby"?"Registrar":"Continuar"}</button></div>`
   }).join(""):`<div class="hint">Nada pendente para hoje.</div>`);
-  renderNextRitual();renderTodayProgress();renderTodayRows()
+  renderNextRitual();renderTodayProgress();renderTodayRows();renderCalendarConflictNotice()
 }
 function renderHomeYoutube(){
   const v=todaysYoutube()[0];$("homeYoutube").innerHTML=v?videoRow(v,0,true):`<div class="hint">Sem vídeo liberado agora.</div>`
@@ -3274,20 +3789,69 @@ function activityRow(entry){
   const started=validDate(entry.startedAt),context=activityContextLabel(entry);
   return `<div class="activity-row"><span class="activity-icon">${esc(activityIcon(entry.type))}</span><div class="grow"><strong>${esc(entry.title)}</strong><span>${esc(started.toLocaleString("pt-BR"))} · ${fmtMin(entry.durationMinutes)}${context?` · ${esc(context)}`:""}</span></div><span class="tag">${esc(activityTypeLabel(entry.type))}</span></div>`
 }
+function calendarDaySources(date){
+  const key=dayKey(date),sources=[];
+  if(calendarFilters.routine&&activeRoutineBlocksForDate(date).length){
+    sources.push({type:"routine",label:"Rotina",count:activeRoutineBlocksForDate(date).length})
+  }
+  if(calendarFilters.external){
+    const external=externalCommitmentsForDate(date);
+    if(external.length){
+      sources.push({type:"external",label:"Externo",count:external.length})
+    }
+  }
+  if(calendarFilters.plan&&state.dailyPlan.date===key&&(state.dailyPlan.items||[]).length){
+    sources.push({type:"plan",label:"Plano",count:state.dailyPlan.items.length})
+  }
+  if(calendarFilters.completed){
+    const entries=activityLogForDate(key),mins=activityMinutesForDate(key);
+    if(entries.length){
+      sources.push({type:"completed",label:`${mins} min`,count:entries.length})
+    }
+  }
+  return sources
+}
+function renderCalendarFilterControls(){
+  document.querySelectorAll("[data-calendar-filter]").forEach(input=>{
+    input.checked=!!calendarFilters[input.dataset.calendarFilter];
+    input.onchange=()=>{calendarFilters[input.dataset.calendarFilter]=input.checked;renderCalendar()}
+  });
+  if($("calendarLegend")){
+    $("calendarLegend").innerHTML=["routine:Rotina","external:Externo","plan:Plano","completed:Concluído"].map(item=>{const [type,label]=item.split(":");return `<span class="calendar-source source-${type}">${label}</span>`}).join("")
+  }
+}
+function renderExternalCalendarPanel(){
+  if(!$("externalCalendarEvents")){
+    return
+  }
+  const config=externalCalendarConfig(),today=new Date(),range=localDayRange(today);
+  const upcoming=(config.events||[]).filter(event=>selectedExternalCalendarIds(config).has(event.calendarId)&&safeDate(event.end)&&safeDate(event.end)>=range.start).slice(0,8);
+  if($("externalCalendarSummary")){
+    $("externalCalendarSummary").textContent=`${calendarSyncStatusText(config)} · ${externalCommitmentsForDate(today).length} compromisso${externalCommitmentsForDate(today).length===1?"":"s"} hoje.`
+  }
+  $("externalCalendarEvents").innerHTML=upcoming.length?upcoming.map(event=>{
+    const start=safeDate(event.start),end=safeDate(event.end),time=event.allDay?"Dia inteiro":`${start.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})} · ${start.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}-${end.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`;
+    const providerLabel=event.provider==="google"?"Google Calendar":"Calendário externo";
+    const mapLink=event.location?` · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}" target="_blank" rel="noopener noreferrer">Abrir no mapa</a>`:"";
+    return `<div class="external-event-row"><span class="calendar-source source-external">Externo</span><div class="grow"><strong>${esc(event.title||"Busy")}</strong><span>${esc(providerLabel)} · ${esc(time)}${event.location?` · ${esc(event.location)}`:""}${mapLink}</span></div></div>`
+  }).join(""):`<div class="hint">${config.connected?"Nenhum compromisso externo futuro no cache.":"Conecte o Google Calendar nas configurações."}</div>`
+}
 function renderCalendar(){
   const y=calendarCursor.getFullYear(),m=calendarCursor.getMonth();$("calendarTitle").textContent=new Date(y,m,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
   const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),heads=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  renderCalendarFilterControls();
   let html=heads.map(h=>`<div class="cal-head">${h}</div>`).join("");
   for(let i=0;i<first;i++){
     html+=`<div class="cal-day empty-day"></div>`
   }
   for(let d=1;d<=days;d++){
-    const key=dayKey(new Date(y,m,d)),entries=activityLogForDate(key),mins=activityMinutesForDate(key);
-    html+=`<div class="cal-day"><strong>${d}</strong>${mins?`<div class="cal-min"><span class="cal-dot"></span>${mins} min · ${entries.length} registro${entries.length===1?"":"s"}</div>`:""}</div>`
+    const date=new Date(y,m,d),sources=calendarDaySources(date);
+    html+=`<div class="cal-day"><strong>${d}</strong>${sources.length?`<div class="calendar-day-sources">${sources.map(source=>`<span class="calendar-source source-${esc(source.type)}">${esc(source.label)}${source.count>1?` · ${source.count}`:""}</span>`).join("")}</div>`:""}</div>`
   }
   $("calendarGrid").innerHTML=html;
   const recent=sortedActivityLog().slice(0,12);
   $("recentSessions").innerHTML=recent.length?recent.map(activityRow).join(""):`<div class="hint">Nenhuma atividade registrada.</div>`
+  renderExternalCalendarPanel()
 }
 function renderJournal(){
   if(!$("journalTimeline")){
@@ -3614,7 +4178,7 @@ function renderPlanningSettings(){
   e.allowHobbySuggestions.checked=!!p.allowHobbySuggestions;
   if($("planningStatus")){
     const free=freeTimeSnapshot(new Date());
-    $("planningStatus").textContent=`Hoje: ${free.windows.length} janelas · ${fmtMin(free.available)} disponíveis.`
+    $("planningStatus").textContent=`Hoje: ${free.windows.length} janelas · ${fmtMin(free.available)} disponíveis · ${free.externalCommitments.length} compromissos externos.`
   }
 }
 async function savePlanningSettings(e){
@@ -3717,6 +4281,7 @@ function renderSettings(){
   if($("obsidianDisconnectBtn")){$("obsidianDisconnectBtn").disabled=!local||!connected;}
   if($("obsidianOpenBtn")){$("obsidianOpenBtn").disabled=!local||!state.obsidian.openUrl;}
   renderPlanningSettings();
+  renderExternalCalendarSettings();
   renderSnapshots()
 }
 async function renderSnapshots(){if(!$("snapshotList")||!window.ArcanaStorage?.ready){return}try{const snaps=await ArcanaStorage.listSnapshots();$("snapshotList").innerHTML=snaps.length?snaps.map(s=>`<option value="${esc(s.id)}">${new Date(s.createdAt).toLocaleString("pt-BR")} · ${esc(s.reason||"auto")}</option>`).join(""):`<option value="">Nenhum snapshot</option>`}catch(e){$("snapshotList").innerHTML=`<option value="">Snapshots indisponíveis</option>`}}
@@ -3732,7 +4297,7 @@ if(typeof window!=="undefined"){
   }
 }
 
-function renderAll(){renderHome();renderTracks();renderYoutube();renderLibrary();renderKnowledge();renderInbox();renderCalendar();renderJournal();renderWeeklyAnalytics();renderRoutine();renderHobbies();renderSettings();renderGlobalSearchResults();$("sideDate").textContent=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});$("streakSide").textContent=`${state.streak} dias de sequência`}
+function renderAll(){renderHome();renderTracks();renderYoutube();renderLibrary();renderKnowledge();renderInbox();renderCalendar();renderJournal();renderWeeklyAnalytics();renderRoutine();renderHobbies();renderSettings();renderGlobalSearchResults();renderCalendarConflictNotice();$("sideDate").textContent=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});$("streakSide").textContent=`${state.streak} dias de sequência`}
 
 async function migrateLocalVaultFromBackend(){
   if(!window.ArcanaStorage?.ready||!isLocalBackend()||localStorage.getItem("arcana-local-vault-migrated-v1")){return}
@@ -3796,7 +4361,11 @@ async function initApp(){
     }
     renderAll()
   }
-  setTimeout(()=>{if(activePlaylist()?.url&&!activePlaylist()?.lastSyncAt&&isLocalBackend()){syncPlaylist()}if(!state.lastAutoBackup){autoBackup("initial")}},700)
+  setTimeout(()=>{
+    if(activePlaylist()?.url&&!activePlaylist()?.lastSyncAt&&isLocalBackend()){syncPlaylist()}
+    if(externalCalendarConfig().connected){syncExternalCalendars().catch(e=>console.info("[Arcana] calendar sync unavailable",e.message||e))}
+    if(!state.lastAutoBackup){autoBackup("initial")}
+  },700)
 }
 
 $("regenPlanBtn").onclick=generatePlan;$("todayMinutes").onchange=generatePlan;
@@ -3824,6 +4393,11 @@ if($("newHobbyBtn")){$("newHobbyBtn").onclick=()=>openHobbyDialog()}
 if($("hobbyForm")){$("hobbyForm").onsubmit=saveHobby}
 if($("deleteHobbyBtn")){$("deleteHobbyBtn").onclick=deleteHobby}
 if($("planningSettingsForm")){$("planningSettingsForm").onsubmit=savePlanningSettings}
+if($("calendarIntegrationForm")){$("calendarIntegrationForm").onsubmit=saveCalendarSettings}
+if($("googleCalendarConnectBtn")){$("googleCalendarConnectBtn").onclick=()=>connectGoogleCalendar().catch(err=>alert(err.message||String(err)))}
+if($("googleCalendarSyncBtn")){$("googleCalendarSyncBtn").onclick=()=>syncExternalCalendars({force:true}).then(result=>{if(result?.error){toast(result.error,"error")}else if(!result?.throttled){toast("Calendário sincronizado.","ok")}}).catch(err=>alert(err.message||String(err)))}
+if($("googleCalendarDisconnectBtn")){$("googleCalendarDisconnectBtn").onclick=()=>disconnectGoogleCalendar().catch(err=>alert(err.message||String(err)))}
+if($("googleCalendarList")){$("googleCalendarList").onchange=e=>{if(e.target?.matches?.("input[data-calendar-id]")){saveCalendarSelection().catch(err=>alert(err.message||String(err)))}}}
 if($("registerBtn")){$("registerBtn").onclick=openRegisterDialog}
 if($("registerForm")){$("registerForm").onsubmit=saveManualRegistration}
 if($("registerParseBtn")){$("registerParseBtn").onclick=()=>fillRegisterForm(parseQuickRegistration($("registerQuickInput").value))}
@@ -3845,6 +4419,7 @@ $("exportVaultBtn").onclick=()=>ArcanaStorage.downloadObsidianVault(state);
 $("vaultImportInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const summary=await ArcanaStorage.importVault(f);await loadVaultNotes();renderAll();if(summary){alert(`Importação concluída: ${summary.importedNotes||0} notas (${summary.arcanaManagedNotes||0} gerenciadas pelo Arcana, ${summary.externalNotes||0} externas) e ${summary.importedFlashcards||0} flashcards.`)}}catch(err){alert(err.message)}e.target.value=""};
 $("reindexVaultBtn").onclick=async()=>{try{await api("/api/reindex",{method:"POST"});await loadVaultNotes();alert("Vault reindexado.")}catch(e){alert(e.message)}};
 $("restoreSnapshotBtn").onclick=async()=>{const id=$("snapshotList").value;if(!id)return;try{state=normalize(await ArcanaStorage.restoreSnapshot(id));await loadVaultNotes();renderAll()}catch(e){alert(e.message)}};
+if($("syncCalendarBtn")){$("syncCalendarBtn").onclick=()=>syncExternalCalendars({force:true}).then(result=>{if(result?.error){toast(result.error,"error")}else if(!result?.throttled){toast("Agenda externa sincronizada.","ok")}}).catch(err=>alert(err.message||String(err)))}
 $("obsidianConnectBtn").onclick=()=>connectObsidianVault().catch(e=>alert(e.message||String(e)));
 $("obsidianSyncBtn").onclick=()=>runObsidianSync("push").catch(()=>{});
 if(document.addEventListener){

@@ -27,6 +27,14 @@ The complete app state is stored in `appState/main`. Notes, fichamentos, snapsho
 
 Daily Journal and weekly analytics read from `activityLog`; Weekly Routine, free-time planning, hobbies, `weeklyGoals`, and `dailyCheckins` live in `appState` and remain local to the browser profile.
 
+## External Calendars
+
+Arcana can read Google Calendar directly from the browser with the Google read-only Calendar scope. It remains GitHub Pages compatible: there is no backend secret, no refresh token storage, and the access token lives only in the current browser session.
+
+For Toki, sync Toki into Google Calendar first, then connect Google Calendar in `Configuracoes -> Calendario -> Integracao externa`. Arcana imports selected calendars as local busy blocks for free-time planning and calendar display. Event titles and locations are private by default and are cached only if the settings toggle is enabled.
+
+See `docs/calendar-integration.md` for provider details, privacy behavior, and planning rules.
+
 ## Backups
 
 Use `Configurações -> Exportar backup` to download a full JSON backup containing app state, notes, fichamentos, flashcards, and metadata needed by Arcana.
