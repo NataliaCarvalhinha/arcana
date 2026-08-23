@@ -2,13 +2,14 @@ import { readFileSync, existsSync } from "node:fs";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 
-for (const file of ["index.html", "app.js", "db.js", "data-safety.js", "manifest.webmanifest", "service-worker.js", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", ".github/workflows/register-youtube-playlist.yml", ".github/ISSUE_TEMPLATE/arcana-playlist.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py", "tests/data-safety-tests.mjs", "docs/data-safety.md"]) {
+for (const file of ["index.html", "app.js", "db.js", "data-safety.js", "routine-excel.js", "manifest.webmanifest", "service-worker.js", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", ".github/workflows/register-youtube-playlist.yml", ".github/ISSUE_TEMPLATE/arcana-playlist.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py", "tests/data-safety-tests.mjs", "tests/routine-excel-tests.mjs", "docs/data-safety.md", "docs/routine-excel.md"]) {
   assert.ok(existsSync(file), `${file} exists`);
 }
 
 const index = readFileSync("index.html", "utf8");
 assert.ok(index.indexOf("data-safety.js") < index.indexOf("db.js"), "data-safety.js loads before db.js");
-assert.ok(index.indexOf("db.js") < index.indexOf("app.js"), "db.js loads before app.js");
+assert.ok(index.indexOf("db.js") < index.indexOf("routine-excel.js"), "db.js loads before routine-excel.js");
+assert.ok(index.indexOf("routine-excel.js") < index.indexOf("app.js"), "routine-excel.js loads before app.js");
 assert.match(index, /rel="manifest"/, "manifest linked");
 
 const manifest = JSON.parse(readFileSync("manifest.webmanifest", "utf8"));
@@ -19,6 +20,7 @@ assert.equal(manifest.display, "standalone");
 const app = readFileSync("app.js", "utf8");
 const db = readFileSync("db.js", "utf8");
 const dataSafety = readFileSync("data-safety.js", "utf8");
+const routineExcel = readFileSync("routine-excel.js", "utf8");
 const styles = readFileSync("styles.css", "utf8");
 const pagesWorkflow = readFileSync(".github/workflows/pages.yml", "utf8");
 const syncWorkflow = readFileSync(".github/workflows/sync-youtube.yml", "utf8");
@@ -192,8 +194,9 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v19/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v20/, "service worker cache version invalidates old app shell");
 assert.match(worker, /data-safety\.js/, "service worker caches the data safety module");
+assert.match(worker, /routine-excel\.js/, "service worker caches the routine Excel module");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -224,9 +227,25 @@ assert.match(app, /function getFreeWindows/, "free-time window calculation is pr
 assert.match(app, /function planActivitiesIntoWindows/, "adaptive daily planning is present");
 assert.match(app, /function renderRoutine/, "routine screen renderer is present");
 assert.match(app, /function renderHobbies/, "hobby screen renderer is present");
+assert.match(app, /function routineBlockWeekdays/, "routine blocks support multi-day import semantics");
+assert.match(app, /function buildRoutineExcelWorkbookData/, "routine Excel export builder is present");
+assert.match(app, /function buildRoutineExcelImportPreview/, "routine Excel import preview is present");
+assert.match(app, /function parseExcelClock/, "routine Excel importer parses Excel time values");
+assert.match(app, /function parseExcelDays/, "routine Excel importer normalizes Portuguese weekdays");
+assert.match(app, /ArcanaStorage\.snapshot\("before-routine-excel-import"/, "routine Excel import snapshots before applying");
+assert.match(routineExcel, /createWorkbookBlob/, "routine Excel module writes XLSX workbooks");
+assert.match(routineExcel, /parseWorkbookFile/, "routine Excel module reads XLSX workbooks");
+assert.doesNotMatch(routineExcel, /<f>/, "routine Excel writer does not emit formula cells");
 assert.match(index, /id="routineView"/, "weekly routine view is present");
 assert.match(index, /id="hobbiesView"/, "hobbies view is present");
 assert.match(index, /id="planningSettingsForm"/, "planning preferences form is present");
+assert.match(index, /id="routineTemplateBtn"/, "routine view exposes Excel template download");
+assert.match(index, /id="routineImportInput"/, "routine view exposes Excel import");
+assert.match(index, /id="routineExportBtn"/, "routine view exposes current Excel export");
+assert.match(index, /id="settingsRoutineTemplateBtn"/, "settings exposes Excel template download");
+assert.match(index, /id="settingsRoutineImportInput"/, "settings exposes Excel import");
+assert.match(index, /id="settingsRoutineExportBtn"/, "settings exposes current Excel export");
+assert.match(index, /id="routineImportDialog"/, "routine Excel import preview dialog is present");
 assert.match(app, /const ACTIVITY_LOG_VERSION=1/, "activity log schema is versioned");
 assert.match(app, /function upsertActivityLogEntry/, "activity log upsert is present");
 assert.match(app, /function parseQuickRegistration/, "universal registrar parser is present");
@@ -253,6 +272,7 @@ function makeElement(id) {
       contains() { return false; }
     },
     focus() { this.focused = true; },
+    click() { this.clicked = true; },
     select() { this.selected = true; },
     showModal() { this.open = true; },
     close() { this.closed = true; this.open = false; },
@@ -281,7 +301,7 @@ function makeSelect(id, values = []) {
 }
 
 const elements = new Map();
-const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "calendarConflictNotice", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "calendarIntegrationForm", "googleCalendarStatus", "googleCalendarList", "googleCalendarConnectBtn", "googleCalendarSyncBtn", "googleCalendarDisconnectBtn", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "calendarLegend", "externalCalendarSummary", "externalCalendarEvents", "syncCalendarBtn", "youtubeSettingsForm", "environmentStatus", "dataSafetyStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "exportRawStateBtn", "snapshotRecoveryInfo", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost", "registerBtn", "timeNowBtn", "timeNowDialog", "timeNowOptions", "timeNowSuggestion", "registerDialog", "registerForm", "registerQuickInput", "registerParseBtn", "registerPreview", "registerTypeSelect", "registerTrackSelect", "registerCourseSelect", "registerModuleSelect", "registerLessonSelect", "registerHobbySelect", "registerStatus", "journalDate", "journalPrevBtn", "journalNextBtn", "journalTimeline", "weeklyAnalytics"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "calendarConflictNotice", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "routineTemplateBtn", "routineImportInput", "routineExportBtn", "settingsRoutineTemplateBtn", "settingsRoutineImportInput", "settingsRoutineExportBtn", "routineImportDialog", "routineImportTitle", "routineImportFileName", "routineImportSummary", "routineImportErrors", "routineImportChanges", "cancelRoutineImportBtn", "applyRoutineImportBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "calendarIntegrationForm", "googleCalendarStatus", "googleCalendarList", "googleCalendarConnectBtn", "googleCalendarSyncBtn", "googleCalendarDisconnectBtn", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "calendarLegend", "externalCalendarSummary", "externalCalendarEvents", "syncCalendarBtn", "youtubeSettingsForm", "environmentStatus", "dataSafetyStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "exportRawStateBtn", "snapshotRecoveryInfo", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost", "registerBtn", "timeNowBtn", "timeNowDialog", "timeNowOptions", "timeNowSuggestion", "registerDialog", "registerForm", "registerQuickInput", "registerParseBtn", "registerPreview", "registerTypeSelect", "registerTrackSelect", "registerCourseSelect", "registerModuleSelect", "registerLessonSelect", "registerHobbySelect", "registerStatus", "journalDate", "journalPrevBtn", "journalNextBtn", "journalTimeline", "weeklyAnalytics"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }
@@ -387,9 +407,15 @@ elements.get("registerForm").elements = {
 elements.get("registerForm").elements.studyResult.value = "session_only";
 
 const savedStates = [];
+const snapshots = [];
 const context = {
   console,
   structuredClone,
+  Blob,
+  TextEncoder,
+  TextDecoder,
+  Response,
+  DecompressionStream: typeof DecompressionStream === "undefined" ? undefined : DecompressionStream,
   setTimeout,
   clearTimeout,
   setInterval,
@@ -426,6 +452,7 @@ const context = {
 };
 context.window = context;
 context.__notes = [];
+context.__snapshots = snapshots;
 context.ArcanaStorage = {
   ready: true,
   canHandle(path) {
@@ -436,6 +463,9 @@ context.ArcanaStorage = {
   },
   async loadState(defaultState) {
     return structuredClone(savedStates.at(-1) || defaultState);
+  },
+  async snapshot(reason, value, metadata) {
+    snapshots.push({ reason, value: structuredClone(value), metadata: structuredClone(metadata || {}) });
   },
   async list(name) {
     if (name === "appState") {
@@ -461,6 +491,7 @@ context.ArcanaStorage = {
 
 vm.createContext(context);
 vm.runInContext(dataSafety, context, { filename: "data-safety.js" });
+vm.runInContext(routineExcel, context, { filename: "routine-excel.js" });
 vm.runInContext(app.slice(0, app.indexOf("async function initApp")), context, { filename: "app.js" });
 
 await vm.runInContext(`(async()=>{
@@ -516,6 +547,55 @@ await vm.runInContext(`(async()=>{
   if(state.activityLog.length!==1||state.activityLog[0].durationMinutes!==20){throw new Error("activity log upsert should replace duplicate source records")}
   const parsed=parseQuickRegistration("estudei FPGA 45 min");
   if(parsed.type!=="study"||parsed.durationMinutes!==45){throw new Error("registrar parser should infer study duration")}
+
+  const excelWorkbook={sheets:{
+    Rotina:{rows:[ROUTINE_EXCEL_HEADERS.routine,
+      ["work-1","Trabalho profundo","Trabalho","Seg, Qua",0.375,"10:30","Casa","Rua",5,10,"Semanal","Sim",""],
+      ["sport-1","Corrida","Esporte","Sábado","07:00","08:00","","",0,0,"Weekly","Não",""]
+    ]},
+    Hobbies:{rows:[ROUTINE_EXCEL_HEADERS.hobbies,
+      ["hobby-existing","Tarot","☽",45,15,2,"Ter, Qui","18:00-22:00","Sim","cartas"]
+    ]},
+    Configuração:{rows:[ROUTINE_EXCEL_HEADERS.config,
+      ["Início do dia","06:30"],
+      ["Permitir sugestões de hobbies","Sim"]
+    ]}
+  }};
+  state=normalize({
+    ...structuredClone(DEFAULT_STATE),
+    routineBlocks:[],
+    hobbies:[{id:"hobby-existing",name:"Tarot",icon:"☽",description:"preserve",preferredMinutes:20,minimumMinutes:10,frequencyPerWeek:1,preferredDays:[],preferredTimes:["evening"],lastDoneAt:"2026-08-20",sessions:[{id:"s1"}],active:true,location:"Casa",notes:"old",tags:["x"]}],
+    planningPreferences:{...DEFAULT_PLANNING_PREFERENCES}
+  });
+  const preview=buildRoutineExcelImportPreview(excelWorkbook,state,"fixture.xlsx");
+  if(preview.errors.length){throw new Error("routine Excel fixture should validate: "+preview.errors.join("; "))}
+  if(preview.sections.routine.created!==2||preview.sections.routine.disabled!==1){throw new Error("routine Excel should create two blocks and count one disabled row")}
+  if(preview.sections.hobbies.updated!==1){throw new Error("routine Excel should update the existing hobby by stable ID")}
+  const work=preview.nextState.routineBlocks.find(block=>block.id==="work-1");
+  if(work.startTime!=="09:00"||work.endTime!=="10:30"||work.weekdays.join(",")!=="1,3"){throw new Error("routine Excel should parse numeric times and Portuguese weekdays")}
+  const sport=preview.nextState.routineBlocks.find(block=>block.id==="sport-1");
+  if(sport.active!==false){throw new Error("Ativo=Não should disable routine rows without deleting them")}
+  const hobby=preview.nextState.hobbies.find(item=>item.id==="hobby-existing");
+  if(hobby.lastDoneAt!=="2026-08-20"||hobby.sessions.length!==1||hobby.preferredTimes[0]!=="18:00-22:00"){throw new Error("hobby import should preserve activity history and accept preferred time ranges")}
+  if(preview.nextState.planningPreferences.dayStart!=="06:30"||preview.nextState.planningPreferences.allowHobbySuggestions!==true){throw new Error("configuration sheet should update planning preferences only")}
+  state=preview.nextState;
+  const reimport=buildRoutineExcelImportPreview(excelWorkbook,state,"fixture.xlsx");
+  if(reimport.sections.routine.created!==0||reimport.sections.routine.updated!==0||reimport.sections.routine.unchanged!==2){throw new Error("same-file routine reimport should be unchanged")}
+  const missingRowPreview=buildRoutineExcelImportPreview({sheets:{Rotina:{rows:[ROUTINE_EXCEL_HEADERS.routine,["work-1","Trabalho profundo","Trabalho","Seg, Qua","09:00","10:30","Casa","Rua",5,10,"Semanal","Sim",""]]}}},state,"missing.xlsx");
+  if(!missingRowPreview.nextState.routineBlocks.some(block=>block.id==="sport-1")){throw new Error("missing Excel rows must not delete existing routine blocks")}
+  const invalid=buildRoutineExcelImportPreview({sheets:{Rotina:{rows:[ROUTINE_EXCEL_HEADERS.routine,
+    ["dup","A","Trabalho","Seg","25:00","26:00","","",0,0,"Semanal","Sim",""],
+    ["dup","B","Trabalho","Ter","09:00","10:00","","",0,0,"Semanal","Sim",""]
+  ]}}},state,"bad.xlsx");
+  if(!invalid.errors.length||invalid.nextState){throw new Error("invalid routine Excel imports should block apply before mutating state")}
+  const applyPreview=buildRoutineExcelImportPreview({sheets:{Rotina:{rows:[ROUTINE_EXCEL_HEADERS.routine,["new-apply","Aplicar","Estudo","Dom","11:00","12:00","","",0,0,"Semanal","Sim",""]]}}},state,"apply.xlsx");
+  await applyRoutineExcelImportPreview(applyPreview);
+  if(!globalThis.__snapshots.some(snapshot=>snapshot.reason==="before-routine-excel-import")){throw new Error("routine Excel apply should snapshot the original state before mutation")}
+  if(!state.routineBlocks.some(block=>block.id==="new-apply")){throw new Error("routine Excel apply should persist the previewed state")}
+  const exported=buildRoutineExcelWorkbookData();
+  const parsedWorkbook=await ArcanaRoutineExcel.parseWorkbookBuffer(await ArcanaRoutineExcel.createWorkbookBlob(exported).arrayBuffer());
+  const roundTrip=buildRoutineExcelImportPreview(parsedWorkbook,state,"roundtrip.xlsx");
+  if(roundTrip.errors.length||routineImportTotal(roundTrip,"created")||routineImportTotal(roundTrip,"updated")){throw new Error("exported routine workbook should reimport unchanged")}
 
   const preservedState=applyStarterContent(structuredClone(DEFAULT_STATE));
   const preservedCourse=preservedState.items.find(i=>i.id==="course-elec-01");

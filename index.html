@@ -297,7 +297,14 @@
     <section id="routineView" class="view">
       <div class="section-toolbar">
         <div><div class="kicker">ROTINA SEMANAL</div><h2>Janelas livres</h2></div>
-        <button id="newRoutineBtn" class="gold-btn">＋ Bloco</button>
+        <div class="routine-toolbar-actions">
+          <button id="newRoutineBtn" class="gold-btn">＋ Novo bloco</button>
+          <div class="routine-excel-actions" aria-label="Rotina em Excel">
+            <button id="routineTemplateBtn" class="ghost-btn" title="Baixa um modelo .xlsx para editar rotina, hobbies e preferências.">Baixar modelo</button>
+            <label class="ghost-btn file-label">Importar<input id="routineImportInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+            <button id="routineExportBtn" class="ghost-btn">Exportar atual</button>
+          </div>
+        </div>
       </div>
       <div class="filters routine-controls">
         <label>Visualização
@@ -414,6 +421,14 @@
 	            <label class="ghost-btn file-label">Importar Vault<input id="vaultImportInput" type="file" accept=".zip,application/zip"></label>
 	            <button id="reindexVaultBtn" class="ghost-btn">Reindexar notas locais</button>
 	          </div>
+	          <div class="settings-data-group">
+	            <div><div class="kicker">ROTINA EM EXCEL</div><p class="hint">Planilha local para rotina semanal, hobbies e preferências de planejamento. Backups completos continuam separados.</p></div>
+	            <div class="routine-excel-actions">
+	              <button id="settingsRoutineTemplateBtn" class="ghost-btn" title="Baixa um modelo .xlsx para editar rotina, hobbies e preferências.">Baixar modelo</button>
+	              <label class="ghost-btn file-label">Importar rotina<input id="settingsRoutineImportInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+	              <button id="settingsRoutineExportBtn" class="ghost-btn">Exportar rotina</button>
+	            </div>
+	          </div>
 	          <div class="snapshot-tools"><label class="snapshot-label" for="snapshotList">Snapshots</label><select id="snapshotList"></select><button id="restoreSnapshotBtn" class="ghost-btn">Restaurar snapshot</button></div>
 	          <p id="snapshotRecoveryInfo" class="hint"></p>
 	        </article>
@@ -496,6 +511,15 @@
   <div id="routineFormError" class="form-error hidden" role="alert"></div>
   <div class="modal-actions"><button id="deleteRoutineBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button id="duplicateRoutineBtn" type="button" class="ghost-btn hidden">Duplicar</button><button type="button" class="ghost-btn" data-close="routineDialog">Cancelar</button><button id="routineSaveBtn" type="submit" class="gold-btn">Salvar</button></div>
 </form></dialog>
+
+<dialog id="routineImportDialog"><div class="modal routine-import-modal">
+  <div class="modal-head"><div><div class="kicker">IMPORTAR ROTINA</div><h2 id="routineImportTitle">Prévia do Excel</h2></div><button type="button" class="x" data-close="routineImportDialog">×</button></div>
+  <p id="routineImportFileName" class="hint"></p>
+  <div id="routineImportSummary" class="routine-import-summary"></div>
+  <div id="routineImportErrors" class="routine-import-errors" role="alert"></div>
+  <div id="routineImportChanges" class="routine-import-changes"></div>
+  <div class="modal-actions"><button id="cancelRoutineImportBtn" type="button" class="ghost-btn" data-close="routineImportDialog">Cancelar</button><button id="applyRoutineImportBtn" type="button" class="gold-btn">Aplicar importação</button></div>
+</div></dialog>
 
 <dialog id="hobbyDialog"><form id="hobbyForm" class="modal" novalidate>
   <div class="modal-head"><div><div class="kicker">HOBBY</div><h2 id="hobbyDialogTitle">Novo hobby</h2></div><button type="button" class="x" data-close="hobbyDialog">×</button></div>
@@ -649,6 +673,7 @@
 
 <script src="data-safety.js"></script>
 <script src="db.js"></script>
+<script src="routine-excel.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

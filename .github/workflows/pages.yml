@@ -40,6 +40,7 @@ jobs:
           node --check data-safety.js
           node tests/static-tests.mjs
           node tests/data-safety-tests.mjs
+          node tests/routine-excel-tests.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

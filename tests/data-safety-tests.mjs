@@ -87,6 +87,7 @@ assert.doesNotMatch(app, /localStorage\.clear|sessionStorage\.clear/, "app must 
 assert.doesNotMatch(worker, /indexedDB|localStorage|sessionStorage/, "service worker must not touch user storage");
 assert.match(db, /pre-migration/, "storage creates protected pre-migration snapshots");
 assert.match(db, /pre-import-replace/, "replace import snapshots current state first");
+assert.match(app, /before-routine-excel-import/, "routine Excel import snapshots current state before applying");
 assert.match(db, /transactionDone/, "replace import waits for the atomic transaction");
 assert.match(db, /Explicit user-confirmed replace import/, "destructive import path is documented");
 assert.match(app, /showStartupRecovery/, "startup failures show recovery UI");

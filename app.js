@@ -10,6 +10,22 @@ const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vault
 const ROUTINE_WEEKDAYS=[{key:1,label:"Segunda",short:"Seg"},{key:2,label:"Terça",short:"Ter"},{key:3,label:"Quarta",short:"Qua"},{key:4,label:"Quinta",short:"Qui"},{key:5,label:"Sexta",short:"Sex"},{key:6,label:"Sábado",short:"Sáb"},{key:7,label:"Domingo",short:"Dom"}];
 const ROUTINE_CATEGORIES={work:{label:"Trabalho",icon:"▦"},class:{label:"Aula",icon:"◐"},study:{label:"Estudo",icon:"☿"},sport:{label:"Esporte",icon:"◇"},meal:{label:"Refeição",icon:"◒"},personal:{label:"Pessoal",icon:"☽"},appointment:{label:"Compromisso",icon:"◎"},hobby:{label:"Hobby",icon:"✧"},travel:{label:"Deslocamento",icon:"→"},sleep:{label:"Sono/descanso",icon:"☾"},other:{label:"Outro",icon:"•"}};
 const DEFAULT_PLANNING_PREFERENCES={dayStart:"07:00",dayEnd:"23:00",minimumSessionMinutes:15,preferredSessionMinutes:30,planningBufferMinutes:5,useOnlyStudyBlocks:false,allowHobbySuggestions:false};
+const ROUTINE_EXCEL_FORMAT_VERSION=1;
+const ROUTINE_EXCEL_HEADERS={
+  routine:["ID","Atividade","Categoria","Dias","Início","Fim","Local","Endereço","Ida (min)","Volta (min)","Repetição","Ativo","Observações"],
+  hobbies:["ID","Hobby","Ícone","Duração preferida (min)","Duração mínima (min)","Meta semanal","Dias preferidos","Horários preferidos","Ativo","Observações"],
+  config:["Configuração","Valor"]
+};
+const ROUTINE_EXCEL_REQUIRED_HEADERS=["ID","Atividade","Dias","Início","Fim"];
+const ROUTINE_EXCEL_CONFIG=[
+  {key:"dayStart",label:"Início do dia",type:"time"},
+  {key:"dayEnd",label:"Fim do dia",type:"time"},
+  {key:"planningBufferMinutes",label:"Buffer de planejamento (min)",type:"minutes"},
+  {key:"minimumSessionMinutes",label:"Sessão mínima (min)",type:"minutes"},
+  {key:"preferredSessionMinutes",label:"Sessão preferida (min)",type:"minutes"},
+  {key:"useOnlyStudyBlocks",label:"Usar apenas blocos de estudo",type:"boolean"},
+  {key:"allowHobbySuggestions",label:"Permitir sugestões de hobbies",type:"boolean"}
+];
 const GOOGLE_CALENDAR_SCOPE="https://www.googleapis.com/auth/calendar.readonly";
 const GOOGLE_CALENDAR_API_BASE="https://www.googleapis.com/calendar/v3";
 const GOOGLE_IDENTITY_SCRIPT="https://accounts.google.com/gsi/client";
@@ -233,7 +249,7 @@ const STARTER_PLAYLISTS=[
   {id:"playlist-learning-main",youtubePlaylistId:"PLNur2Ccbfc5k",name:"Playlist de aprendizado",url:"https://www.youtube.com/playlist?list=PLNur2Ccbfc5k",enabled:true,createdAt:"2026-08-17T00:00:00.000Z",updatedAt:"2026-08-17T00:00:00.000Z",lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}
 ];
 const ARCANA_PLAYLIST_ISSUE_URL="https://github.com/NataliaCarvalhinha/arcana/issues/new";
-let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),journalCursor=new Date(),syncing=false,expandedCourseId=null,activeKnowledgeTab="all",globalSearchQuery="",routineViewMode="week";
+let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),journalCursor=new Date(),syncing=false,expandedCourseId=null,activeKnowledgeTab="all",globalSearchQuery="",routineViewMode="week",routineImportPreview=null;
 let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,focusBlocks=[],currentReviewNote=null;
 let youtubeCatalogMeta={version:null,generatedAt:null,lastLoadedAt:null,playlistIds:[],playlistCount:0,videoCount:0,error:null};
 let youtubeCatalogPollHandle=null;
@@ -1019,6 +1035,11 @@ function weekdayKeyForDate(date=new Date()){
   const day=date.getDay();
   return day===0?7:day
 }
+function routineBlockWeekdays(block={}){
+  const source=Array.isArray(block.weekdays)&&block.weekdays.length?block.weekdays:Array.isArray(block.days)&&block.days.length?block.days:[block.weekday];
+  const days=source.map(day=>Number(day)).filter(day=>Number.isFinite(day)&&day>=1&&day<=7).map(day=>Math.round(day)).filter((day,index,arr)=>arr.indexOf(day)===index).sort((a,b)=>a-b);
+  return days.length?days:[weekdayKeyForDate()]
+}
 function normalizePlanningPreferences(input={}){
   const start=parseClock(input.dayStart,parseClock(DEFAULT_PLANNING_PREFERENCES.dayStart));
   let end=parseClock(input.dayEnd,parseClock(DEFAULT_PLANNING_PREFERENCES.dayEnd));
@@ -1467,13 +1488,15 @@ function normalizeRoutineBlock(block={}){
   if(!title||!Number.isFinite(start)||!Number.isFinite(end)||end<=start){
     return null
   }
-  const weekday=clampNumber(block.weekday,1,7,weekdayKeyForDate());
+  const weekdays=routineBlockWeekdays(block);
+  const weekday=weekdays[0]||clampNumber(block.weekday,1,7,weekdayKeyForDate());
   const category=ROUTINE_CATEGORIES[block.category]?block.category:"other";
   return {
     id:block.id||crypto.randomUUID(),
     title,
     category,
     weekday,
+    weekdays,
     startTime:formatClock(start),
     endTime:formatClock(end),
     location:String(block.location||"").trim(),
@@ -1525,7 +1548,7 @@ function routineExceptionFor(block,date){
 }
 function activeRoutineBlocksForDate(date=new Date()){
   const weekday=weekdayKeyForDate(date),key=dayKey(date);
-  const weekly=(state.routineBlocks||[]).filter(block=>block.active!==false&&block.weekday===weekday&&!routineExceptionFor(block,date));
+  const weekly=(state.routineBlocks||[]).filter(block=>block.active!==false&&routineBlockWeekdays(block).includes(weekday)&&!routineExceptionFor(block,date));
   const added=(state.routineExceptions||[]).filter(ex=>ex.date===key&&ex.type==="add"&&ex.routine).map(ex=>({...ex.routine,id:ex.id,exceptionId:ex.id}));
   return [...weekly,...added].sort((a,b)=>parseClock(a.startTime)-parseClock(b.startTime)||parseClock(a.endTime)-parseClock(b.endTime))
 }
@@ -3620,7 +3643,7 @@ function buildSearchResults(query=""){
   });
   state.youtubeQueue.forEach(video=>{if(searchTextMatches(q,video.title,video.channel,video.url)){results.push({kind:"focus",scope:"youtube",id:video.id,title:video.title,meta:`YouTube · ${video.channel||activePlaylist()?.name||""}`,icon:"▶"})}});
   vaultNotes.filter(note=>note.status!=="archived").forEach(note=>{if(searchTextMatches(q,note.title,note.excerpt,note.content,(note.tags||[]).join(" "))){results.push({kind:"note",id:note.id,title:note.title,meta:noteMeta(note),icon:"🜁"})}});
-  (state.routineBlocks||[]).forEach(block=>{if(searchTextMatches(q,block.title,block.category,block.location,block.address,block.notes)){results.push({kind:"routine",id:block.id,title:block.title,meta:`Rotina · ${routineWeekdayLabel(block.weekday)} · ${clockRangeLabel(parseClock(block.startTime),parseClock(block.endTime))}`,icon:"◷"})}});
+  (state.routineBlocks||[]).forEach(block=>{if(searchTextMatches(q,block.title,block.category,block.location,block.address,block.notes)){results.push({kind:"routine",id:block.id,title:block.title,meta:`Rotina · ${routineDaysLabel(block)} · ${clockRangeLabel(parseClock(block.startTime),parseClock(block.endTime))}`,icon:"◷"})}});
   (state.hobbies||[]).forEach(hobby=>{if(searchTextMatches(q,hobby.name,hobby.description,hobby.location,hobby.notes,(hobby.tags||[]).join(" "))){results.push({kind:"hobby",id:hobby.id,title:hobby.name,meta:`Hobby · ${fmtMin(hobby.preferredMinutes)} · ${hobby.frequencyPerWeek}/semana`,icon:hobby.icon||"✧"})}});
   return results.slice(0,24)
 }
@@ -3948,13 +3971,461 @@ function routineChanged(message="Rotina atualizada. Recalcule o ritual de hoje."
   }
   toast(message,"ok")
 }
+function routineDaysLabel(block,full=false){
+  return routineBlockWeekdays(block).map(key=>{
+    const day=ROUTINE_WEEKDAYS.find(item=>item.key===key);
+    return full?day?.label:day?.short
+  }).filter(Boolean).join(", ")||"Dia"
+}
+function normalizeExcelLookup(value){
+  return String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[().]/g,"").replace(/\s+/g," ").trim()
+}
+function excelSheet(workbook,name){
+  const wanted=normalizeExcelLookup(name);
+  const entries=Object.entries(workbook?.sheets||{});
+  return entries.find(([key])=>normalizeExcelLookup(key)===wanted)?.[1]||null
+}
+function excelTable(sheet){
+  const rows=(sheet?.rows||[]).filter(row=>Array.isArray(row)&&row.some(cell=>String(cell??"").trim()!==""));
+  if(!rows.length){
+    return {headers:[],items:[]}
+  }
+  const headers=rows[0].map(cell=>String(cell??"").trim()),lookup=new Map(headers.map((header,index)=>[normalizeExcelLookup(header),index]));
+  const items=rows.slice(1).map((row,rowIndex)=>({rowNumber:rowIndex+2,row,get(name){const index=lookup.get(normalizeExcelLookup(name));return index===undefined?"":row[index]}}));
+  return {headers,lookup,items}
+}
+function hasExcelHeaders(table,headers){
+  return headers.every(header=>table.lookup?.has(normalizeExcelLookup(header)))
+}
+function excelId(value,section,rowNumber,errors){
+  const id=String(value??"").trim();
+  if(!id){
+    errors.push(`${section} linha ${rowNumber}: informe um ID estável.`);
+  }
+  return id
+}
+function parseExcelBoolean(value,fallback=true){
+  const raw=normalizeExcelLookup(value);
+  if(raw===""){
+    return fallback
+  }
+  if(["sim","yes","true","1","ativo","ativa"].includes(raw)){
+    return true
+  }
+  if(["nao","no","false","0","inativo","inativa"].includes(raw)){
+    return false
+  }
+  return null
+}
+function parseExcelClock(value,label,errors){
+  if(typeof value==="number"&&Number.isFinite(value)){
+    const fraction=((value%1)+1)%1,minutes=Math.round(fraction*24*60);
+    return formatClock(minutes)
+  }
+  const raw=String(value??"").trim();
+  const match=raw.match(/^(\d{1,2}):(\d{2})$/);
+  if(match){
+    const h=Number(match[1]),m=Number(match[2]);
+    if(Number.isInteger(h)&&Number.isInteger(m)&&h>=0&&h<=23&&m>=0&&m<=59){
+      return formatClock(h*60+m)
+    }
+  }
+  errors.push(`${label}: use HH:MM.`);
+  return ""
+}
+function parseExcelMinutes(value,label,errors,fallback=0){
+  if(value===undefined||value===null||String(value).trim()===""){
+    return fallback
+  }
+  const minutes=Number(value);
+  if(Number.isInteger(minutes)&&minutes>=0){
+    return minutes
+  }
+  errors.push(`${label}: use um número inteiro maior ou igual a zero.`);
+  return fallback
+}
+function dayAliasMap(){
+  return new Map([
+    ["1",1],["seg",1],["segunda",1],["segunda feira",1],
+    ["2",2],["ter",2],["terca",2],["terça",2],["terca feira",2],["terça feira",2],
+    ["3",3],["qua",3],["quarta",3],["quarta feira",3],
+    ["4",4],["qui",4],["quinta",4],["quinta feira",4],
+    ["5",5],["sex",5],["sexta",5],["sexta feira",5],
+    ["6",6],["sab",6],["sabado",6],["sábado",6],
+    ["7",7],["dom",7],["domingo",7]
+  ])
+}
+function parseExcelDays(value,label,errors){
+  const raw=String(value??"").trim();
+  if(!raw){
+    errors.push(`${label}: informe pelo menos um dia.`);
+    return []
+  }
+  const aliases=dayAliasMap(),days=[];
+  for(const part of raw.split(/[,;/|]+/)){
+    const token=normalizeExcelLookup(part);
+    if(!token){
+      continue
+    }
+    const range=token.split(/\s*-\s*/);
+    if(range.length===2&&aliases.has(range[0])&&aliases.has(range[1])){
+      const start=aliases.get(range[0]),end=aliases.get(range[1]),step=start<=end?1:-1;
+      for(let day=start;step>0?day<=end:day>=end;day+=step){
+        days.push(day)
+      }
+      continue
+    }
+    if(!aliases.has(token)){
+      errors.push(`${label}: dia inválido "${part.trim()}".`);
+      continue
+    }
+    days.push(aliases.get(token))
+  }
+  return days.filter((day,index,arr)=>arr.indexOf(day)===index).sort((a,b)=>a-b)
+}
+function parseExcelCategory(value){
+  const raw=normalizeExcelLookup(value);
+  const labels=new Map(Object.entries(ROUTINE_CATEGORIES).flatMap(([key,entry])=>[[normalizeExcelLookup(key),key],[normalizeExcelLookup(entry.label),key]]));
+  labels.set("sono","sleep");
+  labels.set("refeicao","meal");
+  labels.set("deslocamento","travel");
+  return labels.get(raw)||"other"
+}
+function parseExcelPreferredTimes(value,label,errors){
+  const raw=String(value??"").trim();
+  if(!raw){
+    return []
+  }
+  const acceptedWords=new Set(["manha","morning","tarde","afternoon","noite","evening"]);
+  return raw.split(/[,;]+/).map(item=>item.trim()).filter(Boolean).map(item=>{
+    const normalized=normalizeExcelLookup(item);
+    if(acceptedWords.has(normalized)){
+      return normalized==="manha"?"morning":normalized==="tarde"?"afternoon":normalized==="noite"?"evening":normalized
+    }
+    const parts=item.split(/\s*-\s*/);
+    const localErrors=[];
+    if(parts.length===2){
+      const start=parseExcelClock(parts[0],label,localErrors),end=parseExcelClock(parts[1],label,localErrors);
+      if(!localErrors.length&&parseClock(end)>parseClock(start)){
+        return `${start}-${end}`
+      }
+    }
+    errors.push(`${label}: intervalo inválido "${item}". Use HH:MM-HH:MM.`);
+    return ""
+  }).filter(Boolean)
+}
+function routineExcelManagedDiff(existing,next,fields){
+  const changes=[];
+  for(const [key,label] of fields){
+    const before=JSON.stringify(existing?.[key]??null),after=JSON.stringify(next?.[key]??null);
+    if(before!==after){
+      changes.push(label)
+    }
+  }
+  return changes
+}
+function routineExcelSection(){
+  return {created:0,updated:0,unchanged:0,disabled:0,changes:[]}
+}
+function buildRoutineExcelWorkbookData(options={}){
+  const source=options.sourceState||state,prefs=normalizePlanningPreferences(source.planningPreferences||{});
+  const routineRows=[ROUTINE_EXCEL_HEADERS.routine,...(options.template?[]:(source.routineBlocks||[]).map(block=>[
+    block.id,block.title,routineCategoryLabel(block.category),routineDaysLabel(block),block.startTime,block.endTime,block.location,block.address,block.travelBeforeMinutes||0,block.travelAfterMinutes||0,block.recurrence==="weekly"?"Semanal":block.recurrence,block.active===false?"Não":"Sim",block.notes
+  ]))];
+  const hobbyRows=[ROUTINE_EXCEL_HEADERS.hobbies,...(options.template?[]:(source.hobbies||[]).map(hobby=>[
+    hobby.id,hobby.name,hobby.icon,hobby.preferredMinutes,hobby.minimumMinutes,hobby.frequencyPerWeek,(hobby.preferredDays||[]).map(day=>ROUTINE_WEEKDAYS.find(item=>item.key===Number(day))?.short).filter(Boolean).join(", "),(hobby.preferredTimes||[]).join(", "),hobby.active===false?"Não":"Sim",hobby.notes
+  ]))];
+  const configRows=[ROUTINE_EXCEL_HEADERS.config,...ROUTINE_EXCEL_CONFIG.map(item=>[item.label,item.type==="boolean"?(prefs[item.key]?"Sim":"Não"):prefs[item.key]])];
+  const instructionRows=[
+    ["Arcana Routine Format Version",ROUTINE_EXCEL_FORMAT_VERSION],
+    ["Rotina","Edite blocos semanais. Cabeçalhos mínimos: ID, Atividade, Dias, Início, Fim."],
+    ["Hobbies","Opcional. IDs atualizam hobbies; linhas ausentes não apagam dados."],
+    ["Configuração","Opcional. Apenas preferências de planejamento existentes são importadas."],
+    ["IDs","ID existente atualiza; ID novo cria; ID repetido bloqueia a importação."],
+    ["Remoção","Linhas ausentes não removem nada. Use Ativo=Não para pausar."],
+    ["Dias","Use Seg, Ter, Qua, Qui, Sex, Sáb, Dom ou nomes completos."],
+    ["Horários","Use HH:MM. Excel pode armazenar horas como frações do dia."],
+    ["Segurança","A planilha não inclui registros de atividade, notas, fichamentos, tokens, calendário, Obsidian ou conhecimento pessoal."]
+  ];
+  return {sheets:[
+    {name:"Rotina",rows:routineRows},
+    {name:"Hobbies",rows:hobbyRows},
+    {name:"Configuração",rows:configRows},
+    {name:"Instruções",rows:instructionRows}
+  ]}
+}
+function routineExcelBlob(workbook){
+  if(!window.ArcanaRoutineExcel?.createWorkbookBlob){
+    throw new Error("Exportação Excel indisponível neste navegador.")
+  }
+  return window.ArcanaRoutineExcel.createWorkbookBlob(workbook)
+}
+function downloadRoutineExcel(blob,fileName){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=fileName;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000)
+}
+function exportRoutineExcel(template=false){
+  const workbook=buildRoutineExcelWorkbookData({template});
+  const name=template?"Arcana-Rotina-Modelo.xlsx":`Arcana-Rotina-${dayKey(new Date())}.xlsx`;
+  downloadRoutineExcel(routineExcelBlob(workbook),name);
+  toast(template?"Modelo de rotina exportado.":"Arquivo de rotina exportado.","ok")
+}
+function applyRoutineRow(row,table,draft,summary,errors,seen){
+  const rowLabel=`Rotina linha ${row.rowNumber}`,id=excelId(row.get("ID"),"Rotina",row.rowNumber,errors);
+  if(!id){
+    return
+  }
+  if(seen.has(id)){
+    errors.push(`${rowLabel}: ID duplicado "${id}".`);
+    return
+  }
+  seen.add(id);
+  const title=String(row.get("Atividade")??"").trim();
+  if(!title){
+    errors.push(`${rowLabel}: Atividade é obrigatória.`);
+  }
+  const weekdays=parseExcelDays(row.get("Dias"),`${rowLabel} Dias`,errors),startTime=parseExcelClock(row.get("Início"),`${rowLabel} Início`,errors),endTime=parseExcelClock(row.get("Fim"),`${rowLabel} Fim`,errors);
+  const active=parseExcelBoolean(row.get("Ativo"),true);
+  if(active===null){
+    errors.push(`${rowLabel}: Ativo deve ser Sim/Não, Yes/No, True/False ou 1/0.`);
+  }
+  const travelBeforeMinutes=parseExcelMinutes(row.get("Ida (min)"),`${rowLabel} Ida`,errors,0),travelAfterMinutes=parseExcelMinutes(row.get("Volta (min)"),`${rowLabel} Volta`,errors,0);
+  if(startTime&&endTime&&parseClock(endTime)<=parseClock(startTime)){
+    errors.push(`${rowLabel}: Fim deve ser depois de Início.`);
+  }
+  const recurrence=normalizeExcelLookup(row.get("Repetição")||"Semanal");
+  if(recurrence&&recurrence!=="semanal"&&recurrence!=="weekly"){
+    errors.push(`${rowLabel}: apenas repetição semanal é aceita.`);
+  }
+  const existing=(draft.routineBlocks||[]).find(block=>block.id===id),now=new Date().toISOString();
+  const next=normalizeRoutineBlock({
+    ...(existing||{}),id,title,category:parseExcelCategory(row.get("Categoria")),weekdays,startTime,endTime,location:row.get("Local"),address:row.get("Endereço"),travelBeforeMinutes,travelAfterMinutes,recurrence:"weekly",active:active!==false,notes:row.get("Observações"),createdAt:existing?.createdAt||now,colorKey:existing?.colorKey||parseExcelCategory(row.get("Categoria"))
+  });
+  if(!next){
+    errors.push(`${rowLabel}: bloco inválido.`);
+    return
+  }
+  if(active===false){
+    summary.disabled+=1
+  }
+  const fields=[["title","Atividade"],["category","Categoria"],["weekdays","Dias"],["startTime","Início"],["endTime","Fim"],["location","Local"],["address","Endereço"],["travelBeforeMinutes","Ida"],["travelAfterMinutes","Volta"],["recurrence","Repetição"],["active","Ativo"],["notes","Observações"]];
+  if(existing){
+    const changes=routineExcelManagedDiff(existing,next,fields);
+    if(changes.length){
+      next.updatedAt=now;
+      draft.routineBlocks=draft.routineBlocks.map(block=>block.id===id?next:block);
+      summary.updated+=1;
+      summary.changes.push({kind:"Atualizado",id,title:next.title,fields:changes})
+    }else{
+      summary.unchanged+=1
+    }
+  }else{
+    draft.routineBlocks=[...(draft.routineBlocks||[]),next];
+    summary.created+=1;
+    summary.changes.push({kind:"Criado",id,title:next.title,fields:["novo bloco"]})
+  }
+}
+function applyHobbyRow(row,draft,summary,errors,seen){
+  const rowLabel=`Hobbies linha ${row.rowNumber}`,id=excelId(row.get("ID"),"Hobbies",row.rowNumber,errors);
+  if(!id){
+    return
+  }
+  if(seen.has(id)){
+    errors.push(`${rowLabel}: ID duplicado "${id}".`);
+    return
+  }
+  seen.add(id);
+  const name=String(row.get("Hobby")??"").trim();
+  if(!name){
+    errors.push(`${rowLabel}: Hobby é obrigatório.`);
+  }
+  const active=parseExcelBoolean(row.get("Ativo"),true);
+  if(active===null){
+    errors.push(`${rowLabel}: Ativo deve ser Sim/Não, Yes/No, True/False ou 1/0.`);
+  }
+  const preferredDays=String(row.get("Dias preferidos")??"").trim()?parseExcelDays(row.get("Dias preferidos"),`${rowLabel} Dias preferidos`,errors):[];
+  const preferredTimes=parseExcelPreferredTimes(row.get("Horários preferidos"),`${rowLabel} Horários preferidos`,errors);
+  const existing=(draft.hobbies||[]).find(hobby=>hobby.id===id);
+  const next=normalizeHobby({
+    ...(existing||{}),id,name,icon:row.get("Ícone")||existing?.icon||"✧",preferredMinutes:parseExcelMinutes(row.get("Duração preferida (min)"),`${rowLabel} Duração preferida`,errors,existing?.preferredMinutes||30),minimumMinutes:parseExcelMinutes(row.get("Duração mínima (min)"),`${rowLabel} Duração mínima`,errors,existing?.minimumMinutes||10),frequencyPerWeek:parseExcelMinutes(row.get("Meta semanal"),`${rowLabel} Meta semanal`,errors,existing?.frequencyPerWeek||1),preferredDays,preferredTimes,active:active!==false,notes:row.get("Observações")
+  });
+  if(!next){
+    errors.push(`${rowLabel}: hobby inválido.`);
+    return
+  }
+  if(active===false){
+    summary.disabled+=1
+  }
+  const fields=[["name","Hobby"],["icon","Ícone"],["preferredMinutes","Duração preferida"],["minimumMinutes","Duração mínima"],["frequencyPerWeek","Meta semanal"],["preferredDays","Dias preferidos"],["preferredTimes","Horários preferidos"],["active","Ativo"],["notes","Observações"]];
+  if(existing){
+    const changes=routineExcelManagedDiff(existing,next,fields);
+    if(changes.length){
+      draft.hobbies=draft.hobbies.map(hobby=>hobby.id===id?next:hobby);
+      summary.updated+=1;
+      summary.changes.push({kind:"Atualizado",id,title:next.name,fields:changes})
+    }else{
+      summary.unchanged+=1
+    }
+  }else{
+    draft.hobbies=[...(draft.hobbies||[]),next];
+    summary.created+=1;
+    summary.changes.push({kind:"Criado",id,title:next.name,fields:["novo hobby"]})
+  }
+}
+function applyConfigRows(table,draft,summary,errors){
+  const prefs={...(draft.planningPreferences||DEFAULT_PLANNING_PREFERENCES)},byLabel=new Map(ROUTINE_EXCEL_CONFIG.map(item=>[normalizeExcelLookup(item.label),item]));
+  for(const row of table.items){
+    const item=byLabel.get(normalizeExcelLookup(row.get("Configuração")));
+    if(!item){
+      continue
+    }
+    const value=row.get("Valor"),before=prefs[item.key];
+    if(item.type==="time"){
+      prefs[item.key]=parseExcelClock(value,`Configuração linha ${row.rowNumber} Valor`,errors)
+    }else if(item.type==="boolean"){
+      const parsed=parseExcelBoolean(value,!!before);
+      if(parsed===null){
+        errors.push(`Configuração linha ${row.rowNumber}: valor booleano inválido.`);
+      }else{
+        prefs[item.key]=parsed
+      }
+    }else{
+      prefs[item.key]=parseExcelMinutes(value,`Configuração linha ${row.rowNumber} Valor`,errors,before)
+    }
+  }
+  const normalized=normalizePlanningPreferences(prefs),changes=routineExcelManagedDiff(draft.planningPreferences||{},normalized,ROUTINE_EXCEL_CONFIG.map(item=>[item.key,item.label]));
+  draft.planningPreferences=normalized;
+  if(changes.length){
+    summary.updated+=1;
+    summary.changes.push({kind:"Atualizado",id:"planningPreferences",title:"Preferências de planejamento",fields:changes})
+  }else{
+    summary.unchanged+=1
+  }
+}
+function buildRoutineExcelImportPreview(workbook,currentState=state,fileName="rotina.xlsx"){
+  const errors=[],sections={routine:routineExcelSection(),hobbies:routineExcelSection(),config:routineExcelSection()},draft=normalize(structuredClone(currentState));
+  const routineSheet=excelSheet(workbook,"Rotina");
+  if(!routineSheet){
+    errors.push("A planilha Rotina é obrigatória.")
+  }else{
+    const table=excelTable(routineSheet);
+    if(!hasExcelHeaders(table,ROUTINE_EXCEL_REQUIRED_HEADERS)){
+      errors.push(`Rotina precisa dos cabeçalhos mínimos: ${ROUTINE_EXCEL_REQUIRED_HEADERS.join(", ")}.`)
+    }else{
+      const seen=new Set();
+      table.items.forEach(row=>applyRoutineRow(row,table,draft,sections.routine,errors,seen))
+    }
+  }
+  const hobbiesSheet=excelSheet(workbook,"Hobbies");
+  if(hobbiesSheet){
+    const table=excelTable(hobbiesSheet),seen=new Set();
+    applyExcelOptionalHeaders(table,ROUTINE_EXCEL_HEADERS.hobbies,"Hobbies",errors)&&table.items.forEach(row=>applyHobbyRow(row,draft,sections.hobbies,errors,seen))
+  }
+  const configSheet=excelSheet(workbook,"Configuração");
+  if(configSheet){
+    const table=excelTable(configSheet);
+    applyExcelOptionalHeaders(table,ROUTINE_EXCEL_HEADERS.config,"Configuração",errors)&&applyConfigRows(table,draft,sections.config,errors)
+  }
+  if(!errors.length){
+    draft.dailyPlan={...(draft.dailyPlan||DEFAULT_STATE.dailyPlan),date:null}
+  }
+  return {fileName,errors,sections,nextState:errors.length?null:normalize(draft)}
+}
+function applyExcelOptionalHeaders(table,headers,section,errors){
+  if(!table.headers.length){
+    return false
+  }
+  if(!hasExcelHeaders(table,headers)){
+    errors.push(`${section}: cabeçalhos esperados não encontrados.`);
+    return false
+  }
+  return true
+}
+function routineImportTotal(preview,key){
+  return Object.values(preview?.sections||{}).reduce((sum,section)=>sum+(section[key]||0),0)
+}
+function routineImportToast(preview){
+  return `Rotina atualizada: ${routineImportTotal(preview,"created")} criadas, ${routineImportTotal(preview,"updated")} alteradas.`
+}
+function renderRoutineImportPreview(preview){
+  if(!$("routineImportDialog")){
+    return
+  }
+  $("routineImportFileName").textContent=preview.fileName||"";
+  $("routineImportSummary").innerHTML=Object.entries(preview.sections).map(([key,section])=>`<article><strong>${key==="routine"?"Rotina":key==="hobbies"?"Hobbies":"Configuração"}</strong><span>${section.created} criadas · ${section.updated} alteradas</span><span>${section.unchanged} iguais · ${section.disabled} pausadas</span></article>`).join("");
+  $("routineImportErrors").innerHTML=preview.errors.length?preview.errors.map(error=>`<div>${esc(error)}</div>`).join(""):"";
+  const changes=Object.entries(preview.sections).flatMap(([key,section])=>section.changes.map(change=>({...change,section:key})));
+  $("routineImportChanges").innerHTML=changes.length?changes.map(change=>`<details><summary>${esc(change.kind)} · ${esc(change.title)} <span>${esc(change.id)}</span></summary><span>${esc(change.fields.join(", "))}</span></details>`).join(""):`<div class="hint">Nenhuma alteração detectada.</div>`;
+  $("applyRoutineImportBtn").disabled=!!preview.errors.length
+}
+async function handleRoutineExcelImportFile(file){
+  try{
+    if(!window.ArcanaRoutineExcel?.parseWorkbookFile){
+      throw new Error("Importação Excel indisponível neste navegador.")
+    }
+    const workbook=await window.ArcanaRoutineExcel.parseWorkbookFile(file);
+    routineImportPreview=buildRoutineExcelImportPreview(workbook,state,file.name);
+    renderRoutineImportPreview(routineImportPreview);
+    $("routineImportDialog")?.showModal?.();
+    if(routineImportPreview.errors.length){
+      toast("A importação contém erros de validação.","error")
+    }
+  }catch(err){
+    alert(err.message||String(err))
+  }
+}
+async function applyRoutineExcelImportPreview(preview=routineImportPreview,options={}){
+  if(!preview||preview.errors?.length||!preview.nextState){
+    throw new Error("Não há uma importação válida para aplicar.")
+  }
+  const original=state;
+  try{
+    if(!options.skipSnapshot&&window.ArcanaStorage?.snapshot){
+      await ArcanaStorage.snapshot("before-routine-excel-import",original,{source:"routine-excel",fileName:preview.fileName,formatVersion:ROUTINE_EXCEL_FORMAT_VERSION})
+    }
+    state=normalize(structuredClone(preview.nextState));
+    await save(false,"routine-excel-import");
+    routineChanged("Seu tempo livre de hoje mudou.");
+    renderAll();
+    return state
+  }catch(err){
+    state=original;
+    renderAll();
+    throw err
+  }
+}
+async function applyRoutineImportFromDialog(){
+  try{
+    const preview=routineImportPreview;
+    await applyRoutineExcelImportPreview(preview);
+    $("routineImportDialog")?.close?.();
+    toast(routineImportToast(preview),"ok")
+  }catch(err){
+    alert(err.message||String(err))
+  }
+}
+function bindRoutineExcelImportInput(input){
+  if(!input){
+    return
+  }
+  input.onchange=async e=>{
+    const file=e.target.files?.[0];
+    if(file){
+      await handleRoutineExcelImportFile(file)
+    }
+    e.target.value=""
+  }
+}
 function routineBlockCard(block,compact=false){
   const icon=ROUTINE_CATEGORIES[block.category]?.icon||"•";
   const start=parseClock(block.startTime),end=parseClock(block.endTime);
   const commute=[block.travelBeforeMinutes?`${fmtMin(block.travelBeforeMinutes)} antes`:"",block.travelAfterMinutes?`${fmtMin(block.travelAfterMinutes)} depois`:""].filter(Boolean).join(" · ");
   const place=[block.location,block.address].filter(Boolean).join(" · ");
   const actions=compact?"":`<div class="routine-actions"><button class="mini-btn" onclick="openRoutineDialog(${jsArg(block.id)})">Editar</button><button class="mini-btn" onclick="duplicateRoutineBlock(${jsArg(block.id)})">Copiar</button><button class="mini-btn" onclick="cancelRoutineBlockToday(${jsArg(block.id)})">Cancelar hoje</button><button class="mini-btn" onclick="toggleRoutineBlock(${jsArg(block.id)})">${block.active===false?"Ativar":"Pausar"}</button>${block.address?`<button class="mini-btn" onclick="openMapForRoutine(${jsArg(block.id)})">Mapa</button>`:""}</div>`;
-  return `<article class="routine-block-card ${block.active===false?"is-paused":""}"><div class="routine-block-head"><span class="routine-icon">${esc(icon)}</span><div class="grow"><strong>${esc(block.title)}</strong><span>${esc(routineCategoryLabel(block.category))} · ${esc(clockRangeLabel(start,end))}</span></div><span class="tag">${block.fixed===false?"flexível":"fixo"}</span></div>${commute?`<div class="routine-meta">${esc(commute)}</div>`:""}${place?`<div class="routine-meta">${esc(place)}</div>`:""}${block.notes&&!compact?`<p>${esc(block.notes)}</p>`:""}${actions}</article>`
+  return `<article class="routine-block-card ${block.active===false?"is-paused":""}"><div class="routine-block-head"><span class="routine-icon">${esc(icon)}</span><div class="grow"><strong>${esc(block.title)}</strong><span>${esc(routineCategoryLabel(block.category))} · ${esc(routineDaysLabel(block))} · ${esc(clockRangeLabel(start,end))}</span></div><span class="tag">${block.fixed===false?"flexível":"fixo"}</span></div>${commute?`<div class="routine-meta">${esc(commute)}</div>`:""}${place?`<div class="routine-meta">${esc(place)}</div>`:""}${block.notes&&!compact?`<p>${esc(block.notes)}</p>`:""}${actions}</article>`
 }
 function renderRoutineTodayTimeline(){
   if(!$("routineTodayTimeline")){
@@ -3973,7 +4444,7 @@ function renderRoutineWeek(){
     return
   }
   $("routineWeek").innerHTML=ROUTINE_WEEKDAYS.map(day=>{
-    const blocks=(state.routineBlocks||[]).filter(block=>block.weekday===day.key).sort((a,b)=>parseClock(a.startTime)-parseClock(b.startTime));
+    const blocks=(state.routineBlocks||[]).filter(block=>routineBlockWeekdays(block).includes(day.key)).sort((a,b)=>parseClock(a.startTime)-parseClock(b.startTime));
     return `<article class="routine-day-card"><div class="routine-day-head"><strong>${esc(day.label)}</strong><button class="mini-btn" onclick="openRoutineDialog('',{weekday:${day.key}})">＋</button></div>${blocks.length?blocks.map(block=>routineBlockCard(block,true)).join(""):`<div class="hint">Sem blocos.</div>`}</article>`
   }).join("")
 }
@@ -3981,7 +4452,7 @@ function renderRoutineList(){
   if(!$("routineList")){
     return
   }
-  const blocks=[...(state.routineBlocks||[])].sort((a,b)=>a.weekday-b.weekday||parseClock(a.startTime)-parseClock(b.startTime));
+  const blocks=[...(state.routineBlocks||[])].sort((a,b)=>routineBlockWeekdays(a)[0]-routineBlockWeekdays(b)[0]||parseClock(a.startTime)-parseClock(b.startTime));
   $("routineList").innerHTML=`<div class="card-head"><div><div class="kicker">BLOCOS</div><h2>Rotina editável</h2></div></div>${blocks.length?blocks.map(block=>routineBlockCard(block)).join(""):`<div class="hint">Crie blocos para o Arcana inferir suas janelas livres.</div>`}`
 }
 function renderRoutine(){
@@ -4014,7 +4485,7 @@ function openRoutineDialog(id="",defaults={}){
   e.id.value=existing?.id||"";
   e.title.value=existing?.title||block.title||"";
   e.category.value=block.category;
-  e.weekday.value=block.weekday;
+  e.weekday.value=routineBlockWeekdays(block)[0];
   e.startTime.value=block.startTime;
   e.endTime.value=block.endTime;
   e.travelBeforeMinutes.value=block.travelBeforeMinutes||0;
@@ -4035,7 +4506,7 @@ function openRoutineDialog(id="",defaults={}){
 async function saveRoutineBlock(e){
   e.preventDefault();
   const form=e.currentTarget,field=form.elements,id=field.id.value;
-  const block=normalizeRoutineBlock({id:id||crypto.randomUUID(),title:field.title.value,category:field.category.value,weekday:field.weekday.value,startTime:field.startTime.value,endTime:field.endTime.value,travelBeforeMinutes:field.travelBeforeMinutes.value,travelAfterMinutes:field.travelAfterMinutes.value,location:field.location.value,address:field.address.value,recurrence:field.recurrence.value,colorKey:field.colorKey.value,notes:field.notes.value,fixed:field.fixed.checked,active:field.active.checked,createdAt:(state.routineBlocks||[]).find(item=>item.id===id)?.createdAt});
+  const block=normalizeRoutineBlock({id:id||crypto.randomUUID(),title:field.title.value,category:field.category.value,weekday:field.weekday.value,weekdays:[Number(field.weekday.value)],startTime:field.startTime.value,endTime:field.endTime.value,travelBeforeMinutes:field.travelBeforeMinutes.value,travelAfterMinutes:field.travelAfterMinutes.value,location:field.location.value,address:field.address.value,recurrence:field.recurrence.value,colorKey:field.colorKey.value,notes:field.notes.value,fixed:field.fixed.checked,active:field.active.checked,createdAt:(state.routineBlocks||[]).find(item=>item.id===id)?.createdAt});
   if(!block){
     setRoutineFormError("Informe título, dia e horários válidos.");
     return
@@ -4481,6 +4952,13 @@ document.querySelectorAll("[data-capture-kind]").forEach(button=>button.onclick=
 document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openGlobalSearch()}});
 $("youtubeSettingsForm").onsubmit=e=>{e.preventDefault();const f=e.currentTarget;state.youtubeSettings={mode:f.mode.value,minutes:Number(f.minutes.value)||0,count:Number(f.count.value)||0,hideAfterLimit:f.hideAfterLimit.checked};save()};
 if($("newRoutineBtn")){$("newRoutineBtn").onclick=()=>openRoutineDialog()}
+if($("routineTemplateBtn")){$("routineTemplateBtn").onclick=()=>exportRoutineExcel(true)}
+if($("routineExportBtn")){$("routineExportBtn").onclick=()=>exportRoutineExcel(false)}
+bindRoutineExcelImportInput($("routineImportInput"));
+if($("settingsRoutineTemplateBtn")){$("settingsRoutineTemplateBtn").onclick=()=>exportRoutineExcel(true)}
+if($("settingsRoutineExportBtn")){$("settingsRoutineExportBtn").onclick=()=>exportRoutineExcel(false)}
+bindRoutineExcelImportInput($("settingsRoutineImportInput"));
+if($("applyRoutineImportBtn")){$("applyRoutineImportBtn").onclick=applyRoutineImportFromDialog}
 if($("routineViewMode")){$("routineViewMode").onchange=e=>{routineViewMode=e.currentTarget.value;renderRoutine()}}
 if($("routineForm")){$("routineForm").onsubmit=saveRoutineBlock}
 if($("deleteRoutineBtn")){$("deleteRoutineBtn").onclick=deleteRoutineBlock}
