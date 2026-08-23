@@ -8,12 +8,14 @@ const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vault
 const ROUTINE_WEEKDAYS=[{key:1,label:"Segunda",short:"Seg"},{key:2,label:"Terça",short:"Ter"},{key:3,label:"Quarta",short:"Qua"},{key:4,label:"Quinta",short:"Qui"},{key:5,label:"Sexta",short:"Sex"},{key:6,label:"Sábado",short:"Sáb"},{key:7,label:"Domingo",short:"Dom"}];
 const ROUTINE_CATEGORIES={work:{label:"Trabalho",icon:"▦"},class:{label:"Aula",icon:"◐"},study:{label:"Estudo",icon:"☿"},sport:{label:"Esporte",icon:"◇"},meal:{label:"Refeição",icon:"◒"},personal:{label:"Pessoal",icon:"☽"},appointment:{label:"Compromisso",icon:"◎"},hobby:{label:"Hobby",icon:"✧"},travel:{label:"Deslocamento",icon:"→"},sleep:{label:"Sono/descanso",icon:"☾"},other:{label:"Outro",icon:"•"}};
 const DEFAULT_PLANNING_PREFERENCES={dayStart:"07:00",dayEnd:"23:00",minimumSessionMinutes:15,preferredSessionMinutes:30,planningBufferMinutes:5,useOnlyStudyBlocks:false,allowHobbySuggestions:false};
+const ACTIVITY_LOG_VERSION=1;
+const ACTIVITY_TYPES={study:"Estudo",youtube:"YouTube",review:"Revisão",hobby:"Hobby",sport:"Esporte",journaling:"Journaling",appointment:"Compromisso",routine:"Rotina",other:"Outro"};
 const STARTER_HOBBIES=[
   {id:"hobby-tarot",name:"Tarot",icon:"☽",description:"Prática reflexiva curta.",preferredMinutes:20,minimumMinutes:10,frequencyPerWeek:1,preferredDays:[],preferredTimes:["evening"],lastDoneAt:null,sessions:[],active:true,location:"",notes:"",tags:["reflexão"]},
   {id:"hobby-journaling",name:"Journaling",icon:"✎",description:"Escrita livre ou revisão do dia.",preferredMinutes:15,minimumMinutes:10,frequencyPerWeek:2,preferredDays:[],preferredTimes:["morning","evening"],lastDoneAt:null,sessions:[],active:true,location:"",notes:"",tags:["escrita"]},
   {id:"hobby-games",name:"Jogos",icon:"◇",description:"Tempo de jogo consciente.",preferredMinutes:45,minimumMinutes:20,frequencyPerWeek:1,preferredDays:[6,7],preferredTimes:["evening"],lastDoneAt:null,sessions:[],active:true,location:"",notes:"",tags:["lazer"]}
 ];
-const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120,progression:"sequential"}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[],freeWindows:[],availableMinutes:0,notices:[]},routineBlocks:[],routineExceptions:[],hobbies:structuredClone(STARTER_HOBBIES),planningPreferences:structuredClone(DEFAULT_PLANNING_PREFERENCES),starterContentVersion:0,starterCurriculumVersion:0};
+const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120,progression:"sequential"}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),inbox:[],sessions:[],activityLog:[],activityLogVersion:ACTIVITY_LOG_VERSION,weeklyGoals:[],dailyCheckins:{},xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[],freeWindows:[],availableMinutes:0,notices:[]},routineBlocks:[],routineExceptions:[],hobbies:structuredClone(STARTER_HOBBIES),planningPreferences:structuredClone(DEFAULT_PLANNING_PREFERENCES),starterContentVersion:0,starterCurriculumVersion:0};
 const STARTER_TRACKS=[
   {id:"track-electronics",name:"Eletrônica",sigil:"☿",subtitle:"Circuitos · FPGA · RISC-V · Verificação",description:"Trilha técnica de sistemas embarcados, lógica digital, FPGA, arquitetura de computadores, RISC-V, SystemVerilog, UVM e VLSI.",weeklyGoal:240,progression:"sequential"},
   {id:"track-finance",name:"Finanças",sigil:"♃",subtitle:"Planejamento · Mercados · Investimentos · Portfólio",description:"Trilha para construir uma base sólida de finanças pessoais, mercados financeiros, investimentos, portfólio e finanças corporativas.",weeklyGoal:120,progression:"sequential"}
@@ -224,7 +226,7 @@ const STARTER_PLAYLISTS=[
   {id:"playlist-learning-main",youtubePlaylistId:"PLNur2Ccbfc5k",name:"Playlist de aprendizado",url:"https://www.youtube.com/playlist?list=PLNur2Ccbfc5k",enabled:true,createdAt:"2026-08-17T00:00:00.000Z",updatedAt:"2026-08-17T00:00:00.000Z",lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}
 ];
 const ARCANA_PLAYLIST_ISSUE_URL="https://github.com/NataliaCarvalhinha/arcana/issues/new";
-let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),syncing=false,expandedCourseId=null,activeKnowledgeTab="all",globalSearchQuery="",routineViewMode="week";
+let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),journalCursor=new Date(),syncing=false,expandedCourseId=null,activeKnowledgeTab="all",globalSearchQuery="",routineViewMode="week";
 let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,focusBlocks=[],currentReviewNote=null;
 let youtubeCatalogMeta={version:null,generatedAt:null,lastLoadedAt:null,playlistIds:[],playlistCount:0,videoCount:0,error:null};
 let youtubeCatalogPollHandle=null;
@@ -246,12 +248,16 @@ function loadState(){
 function normalize(s){
   const d=structuredClone(DEFAULT_STATE);
   s={...d,...s};
+  const previousActivityLogVersion=Math.max(0,Number(s.activityLogVersion)||0);
   s.tracks=Array.isArray(s.tracks)?s.tracks:d.tracks;
   s.tracks=s.tracks.map(t=>({...t,progression:t?.progression||"sequential"}));
   s.items=Array.isArray(s.items)?s.items:d.items;
   s.playlists=Array.isArray(s.playlists)&&s.playlists.length?s.playlists:d.playlists;
   s.youtubeQueue=Array.isArray(s.youtubeQueue)?s.youtubeQueue:[];
   s.sessions=Array.isArray(s.sessions)?s.sessions:[];
+  s.activityLog=Array.isArray(s.activityLog)?s.activityLog.map(normalizeActivityEntry).filter(Boolean):[];
+  s.weeklyGoals=Array.isArray(s.weeklyGoals)?s.weeklyGoals.map(normalizeWeeklyGoal).filter(Boolean):[];
+  s.dailyCheckins=s.dailyCheckins&&typeof s.dailyCheckins==="object"?s.dailyCheckins:{};
   s.inbox=Array.isArray(s.inbox)?s.inbox:[];
   s.youtubeSettings={...d.youtubeSettings,...(s.youtubeSettings||{})};
   s.obsidian={...structuredClone(DEFAULT_OBSIDIAN_STATE),...(s.obsidian||{})};
@@ -272,11 +278,15 @@ function normalize(s){
   s.tracks.forEach(t=>{if(t?.id&&!Object.prototype.hasOwnProperty.call(s.weeklyProgress,t.id)){s.weeklyProgress[t.id]=0}});
   s.items.forEach(i=>{i.important=i.important!==false;i.urgent=!!i.urgent;i.modules=Array.isArray(i.modules)?i.modules:[];i.modules.forEach((m,moduleIndex)=>{m.lessons=Array.isArray(m.lessons)?m.lessons:[];m.order=Number(m.order)||moduleIndex+1;m.lessons.forEach((lesson,lessonIndex)=>{lesson.order=Number(lesson.order)||lessonIndex+1});m.progress=Number(m.progress)||0;m.status=m.status||statusFromProgress(m.progress)});i.notes=typeof i.notes==="string"?i.notes:"";i.description=typeof i.description==="string"?i.description:"";i.catalogOrder=Number(i.catalogOrder)||0;if(i.kind==="course"){i.order=Number(i.order)||Number(i.catalogOrder)||0}});
   s.youtubeQueue.forEach(v=>{v.catalogManaged=v.catalogManaged!==false;v.activeInCatalog=v.activeInCatalog!==false;v.archivedAt=v.archivedAt||null;const playlistId=youtubePlaylistIdFromUrl(v.youtubePlaylistId);if(playlistId){v.youtubePlaylistId=playlistId}});
+  if(previousActivityLogVersion<ACTIVITY_LOG_VERSION){
+    backfillActivityLog(s)
+  }
+  s.activityLogVersion=ACTIVITY_LOG_VERSION;
   return s
 }
 function migrate(old){
   const s=structuredClone(DEFAULT_STATE);
-  if(old.activeTrack)s.activeTrack=old.activeTrack;if(old.tracks)s.tracks=old.tracks;if(old.items)s.items=old.items;if(old.inbox)s.inbox=old.inbox;if(old.weeklyProgress)s.weeklyProgress=old.weeklyProgress;if(old.shortcuts)s.shortcuts=old.shortcuts;
+  if(old.activeTrack)s.activeTrack=old.activeTrack;if(old.tracks)s.tracks=old.tracks;if(old.items)s.items=old.items;if(old.inbox)s.inbox=old.inbox;if(old.sessions)s.sessions=old.sessions;if(old.activityLog)s.activityLog=old.activityLog;if(old.weeklyProgress)s.weeklyProgress=old.weeklyProgress;if(old.shortcuts)s.shortcuts=old.shortcuts;
   if(old.youtubeQueue)s.youtubeQueue=old.youtubeQueue;
   if(old.youtube?.playlistUrl)s.playlists=[{id:"main-playlist",youtubePlaylistId:youtubePlaylistIdFromUrl(old.youtube.playlistUrl)||"",name:old.youtube.playlistName||"Playlist de foco",url:old.youtube.playlistUrl,enabled:true,createdAt:old.youtube.lastSyncAt||null,updatedAt:old.youtube.lastSyncAt||null,lastSyncAt:old.youtube.lastSyncAt||null,lastSyncError:old.youtube.lastSyncError||null,catalogGeneratedAt:null,catalogTitle:null}];
   if(old.youtubeDailyGlobal)s.youtubeDaily=old.youtubeDailyGlobal;
@@ -572,6 +582,165 @@ function dayKey(d=new Date()){return d.toLocaleDateString("en-CA")}
 function esc(v=""){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 function jsArg(v=""){return `'${String(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\n/g,"\\n").replace(/\r/g,"\\r")}'`}
 function fmtMin(m){m=Math.round(Number(m)||0);return m<60?`${m} min`:`${Math.floor(m/60)}h${m%60?` ${m%60}m`:""}`}
+function validDate(value,fallback=new Date()){
+  const date=value instanceof Date?value:new Date(value);
+  if(Number.isNaN(date.getTime())){
+    return fallback instanceof Date?fallback:new Date(fallback)
+  }
+  return date
+}
+function isoFromDateTime(dateValue,timeValue=""){
+  const date=String(dateValue||dayKey()).trim(),time=String(timeValue||"").trim();
+  const value=time?`${date}T${time}`:`${date}T12:00`;
+  return validDate(value).toISOString()
+}
+function safeIdPart(value="entry"){
+  return String(value||"entry").trim().replace(/[^a-zA-Z0-9_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,80)||"entry"
+}
+function activityIdFor(source,sourceRecordId){
+  return `activity-${safeIdPart(source)}-${safeIdPart(sourceRecordId)}`
+}
+function activitySubtypeSlug(value="session"){
+  return safeIdPart(String(value||"session").toLowerCase()).replace(/_/g,"-")
+}
+function normalizeActivityEntry(entry={}){
+  if(!entry||typeof entry!=="object"){
+    return null
+  }
+  const fallbackNow=new Date(),type=ACTIVITY_TYPES[entry.type]?entry.type:"other";
+  const startedDate=validDate(entry.startedAt||entry.timestamp||entry.createdAt||entry.date||fallbackNow,fallbackNow);
+  const duration=Math.max(0,Math.round(Number(entry.durationMinutes??entry.minutes??0)||0));
+  const endedDate=entry.endedAt?validDate(entry.endedAt,new Date(startedDate.getTime()+duration*60000)):(duration?new Date(startedDate.getTime()+duration*60000):startedDate);
+  const source=String(entry.source||"manual").trim()||"manual";
+  const sourceRecordId=String(entry.sourceRecordId||entry.sessionId||entry.id||crypto.randomUUID()).trim();
+  const title=String(entry.title||ACTIVITY_TYPES[type]||"Atividade").trim()||ACTIVITY_TYPES[type]||"Atividade";
+  return {
+    id:String(entry.id||activityIdFor(source,sourceRecordId)),
+    type,
+    subtype:String(entry.subtype||type).trim()||type,
+    title,
+    date:entry.date||dayKey(startedDate),
+    startedAt:startedDate.toISOString(),
+    endedAt:endedDate.toISOString(),
+    durationMinutes:duration,
+    source,
+    sourceRecordId,
+    status:String(entry.status||"completed"),
+    trackId:entry.trackId||entry.track||null,
+    courseId:entry.courseId||null,
+    moduleId:entry.moduleId||null,
+    lessonId:entry.lessonId||null,
+    hobbyId:entry.hobbyId||null,
+    noteId:entry.noteId||null,
+    sourceId:entry.sourceId||entry.id||null,
+    notes:typeof entry.notes==="string"?entry.notes:"",
+    metadata:entry.metadata&&typeof entry.metadata==="object"?entry.metadata:{},
+    createdAt:entry.createdAt||startedDate.toISOString(),
+    updatedAt:entry.updatedAt||new Date().toISOString()
+  }
+}
+function normalizeWeeklyGoal(goal={}){
+  const title=String(goal.title||"").trim();
+  if(!title){
+    return null
+  }
+  const type=ACTIVITY_TYPES[goal.type]?goal.type:"study";
+  return {id:goal.id||crypto.randomUUID(),title,type,targetMinutes:Math.max(0,Math.round(Number(goal.targetMinutes)||0)),trackId:goal.trackId||null,hobbyId:goal.hobbyId||null,active:goal.active!==false,createdAt:goal.createdAt||new Date().toISOString()}
+}
+function activityFromSession(session={}){
+  if(!session?.id){
+    return null
+  }
+  const rawType=String(session.type||"study");
+  const type=rawType==="video"||rawType==="youtube"?"youtube":"study";
+  return normalizeActivityEntry({
+    id:activityIdFor("session",session.id),
+    type,
+    subtype:type==="youtube"?"youtube.video":`study.${activitySubtypeSlug(rawType)}`,
+    title:session.title||ACTIVITY_TYPES[type],
+    date:session.date,
+    startedAt:session.timestamp||session.createdAt||session.date,
+    durationMinutes:session.minutes,
+    source:"session",
+    sourceRecordId:session.id,
+    sourceId:session.sourceId||null,
+    trackId:session.trackId||session.track||null,
+    courseId:session.courseId||null,
+    moduleId:session.moduleId||null,
+    lessonId:session.lessonId||null,
+    metadata:{legacySessionType:rawType}
+  })
+}
+function activityFromFocusSession(session,resource,scope,sourcePayload={}){
+  const base=activityFromSession(session);
+  if(!base){
+    return null
+  }
+  base.type=scope==="youtube"?"youtube":"study";
+  base.subtype=scope==="youtube"?"youtube.video":`study.${activitySubtypeSlug(scope)}`;
+  base.title=resource?.title||session.title||base.title;
+  base.trackId=sourcePayload.trackId||base.trackId;
+  base.courseId=sourcePayload.courseId||base.courseId;
+  base.moduleId=sourcePayload.moduleId||base.moduleId;
+  base.lessonId=sourcePayload.lessonId||base.lessonId;
+  base.sourceId=resource?.id||session.sourceId||base.sourceId;
+  base.metadata={...base.metadata,scope,sourceTitle:sourcePayload.sourceTitle||base.title};
+  return base
+}
+function backfillActivityLog(targetState=state){
+  targetState.activityLog=Array.isArray(targetState.activityLog)?targetState.activityLog:[];
+  const seen=new Set(targetState.activityLog.map(entry=>`${entry.source}:${entry.sourceRecordId}`));
+  for(const session of targetState.sessions||[]){
+    const activity=activityFromSession(session);
+    if(activity&&!seen.has(`${activity.source}:${activity.sourceRecordId}`)){
+      targetState.activityLog.push(activity);
+      seen.add(`${activity.source}:${activity.sourceRecordId}`)
+    }
+  }
+}
+function upsertActivityLogEntry(entry){
+  const activity=normalizeActivityEntry(entry);
+  if(!activity){
+    return null
+  }
+  state.activityLog=Array.isArray(state.activityLog)?state.activityLog:[];
+  const index=state.activityLog.findIndex(item=>item.id===activity.id||(item.source===activity.source&&item.sourceRecordId===activity.sourceRecordId));
+  if(index>=0){
+    state.activityLog[index]={...state.activityLog[index],...activity,updatedAt:new Date().toISOString()}
+  }else{
+    state.activityLog.push(activity)
+  }
+  state.activityLogVersion=ACTIVITY_LOG_VERSION;
+  return activity
+}
+function sortedActivityLog(entries=state.activityLog||[]){
+  return [...entries].filter(Boolean).sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt))
+}
+function activityLogForDate(dateKey=dayKey()){
+  return sortedActivityLog().filter(entry=>(entry.date||dayKey(validDate(entry.startedAt)))===dateKey)
+}
+function weekStartDate(date=new Date()){
+  const d=new Date(date);
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-(weekdayKeyForDate(d)-1));
+  return d
+}
+function activityLogForWeek(date=new Date()){
+  const start=weekStartDate(date),end=new Date(start);
+  end.setDate(start.getDate()+7);
+  return sortedActivityLog().filter(entry=>{
+    const started=validDate(entry.startedAt);
+    return started>=start&&started<end
+  })
+}
+function activityMinutesForDate(dateKey=dayKey(),types=null){
+  const allowed=types?new Set(types):null;
+  return activityLogForDate(dateKey).filter(entry=>!allowed||allowed.has(entry.type)).reduce((sum,entry)=>sum+Number(entry.durationMinutes||0),0)
+}
+function activityMinutesForWeek(date=new Date(),types=null){
+  const allowed=types?new Set(types):null;
+  return activityLogForWeek(date).filter(entry=>!allowed||allowed.has(entry.type)).reduce((sum,entry)=>sum+Number(entry.durationMinutes||0),0)
+}
 function trackById(id){return state.tracks.find(t=>t.id===id)}
 function ensureActiveTrack(){
   if(!Array.isArray(state.tracks)){state.tracks=[]}
@@ -978,6 +1147,10 @@ function hobbySessionsThisWeek(hobby,date=new Date()){
   const d=new Date(date),start=new Date(d);
   start.setDate(d.getDate()-(weekdayKeyForDate(d)-1));
   start.setHours(0,0,0,0);
+  const logged=(state.activityLog||[]).filter(entry=>(entry.type==="hobby"||entry.type==="journaling")&&entry.hobbyId===hobby.id&&validDate(entry.startedAt)>=start);
+  if(logged.length){
+    return logged.length
+  }
   return (hobby.sessions||[]).filter(session=>session.date&&new Date(session.date)>=start).length
 }
 function buildPlanningCandidates(date=new Date(),minutes=60){
@@ -1714,6 +1887,11 @@ function showView(v){
   if(v==="hobbies"){
     renderHobbies()
   }
+  if(v==="calendar"){
+    renderCalendar();
+    renderJournal();
+    renderWeeklyAnalytics()
+  }
 }
 function toast(message,tone="info"){
   const host=$("toastHost");
@@ -1802,6 +1980,191 @@ async function navigateTo(view,options={}){
     missingTarget()
   }
 }
+
+function registerCourseOptions(trackId=""){
+  const courses=state.items.filter(item=>item.kind==="course"&&(!trackId||item.track===trackId));
+  return `<option value="">Nenhum curso específico</option>`+courses.map(course=>`<option value="${esc(course.id)}">${esc(course.title)}</option>`).join("")
+}
+function registerModuleOptions(courseId=""){
+  const course=state.items.find(item=>item.id===courseId);
+  return `<option value="">Nenhum módulo específico</option>`+(course?orderedModules(course).map(module=>`<option value="${esc(module.id)}">${esc(module.title)}</option>`).join(""):"")
+}
+function registerLessonOptions(courseId="",moduleId=""){
+  const course=state.items.find(item=>item.id===courseId),module=course?.modules?.find(item=>item.id===moduleId);
+  return `<option value="">Nenhuma aula específica</option>`+(module?orderedLessons(module).map(lesson=>`<option value="${esc(lesson.id)}">${esc(lesson.title)}</option>`).join(""):"")
+}
+function renderRegisterCurriculumOptions(){
+  const form=$("registerForm");
+  if(!form){
+    return
+  }
+  const e=form.elements,trackId=e.trackId.value,courseId=e.courseId.value,moduleId=e.moduleId.value;
+  e.courseId.innerHTML=registerCourseOptions(trackId);
+  if(courseId&&Array.from(e.courseId.options||[]).some(option=>option.value===courseId)){
+    e.courseId.value=courseId
+  }
+  e.moduleId.innerHTML=registerModuleOptions(e.courseId.value);
+  if(moduleId&&Array.from(e.moduleId.options||[]).some(option=>option.value===moduleId)){
+    e.moduleId.value=moduleId
+  }
+  e.lessonId.innerHTML=registerLessonOptions(e.courseId.value,e.moduleId.value)
+}
+function registerTrackOptions(value=""){
+  return `<option value="">Sem trilha</option>`+state.tracks.map(item=>`<option value="${esc(item.id)}" ${value===item.id?"selected":""}>${esc(item.name)}</option>`).join("")
+}
+function registerHobbyOptions(value=""){
+  return `<option value="">Sem hobby</option>`+(state.hobbies||[]).map(item=>`<option value="${esc(item.id)}" ${value===item.id?"selected":""}>${esc(item.name)}</option>`).join("")
+}
+function parseQuickRegistration(text=""){
+  const raw=String(text||"").trim(),lower=raw.toLowerCase();
+  const parsed={type:"other",title:raw||"Atividade registrada",durationMinutes:30,date:dayKey(),time:new Date().toTimeString().slice(0,5),trackId:"",hobbyId:"",confidence:"baixa"};
+  const duration=lower.match(/(\d+)\s*(h|hora|horas|min|m)\b/);
+  if(duration){
+    parsed.durationMinutes=duration[2].startsWith("h")?Number(duration[1])*60:Number(duration[1])
+  }
+  if(/\b(estudei|estudo|aula|curso|lição|modulo|módulo)\b/.test(lower)){
+    parsed.type="study";
+    parsed.confidence="média"
+  }else if(/\b(youtube|video|vídeo|assisti)\b/.test(lower)){
+    parsed.type="youtube";
+    parsed.confidence="média"
+  }else if(/\b(revisei|revisão|flashcard)\b/.test(lower)){
+    parsed.type="review";
+    parsed.durationMinutes=Math.min(parsed.durationMinutes,20);
+    parsed.confidence="média"
+  }else if(/\b(journal|journaling|diário|escrevi)\b/.test(lower)){
+    parsed.type="journaling";
+    parsed.confidence="média"
+  }else if(/\b(treino|corrida|academia|yoga|esporte)\b/.test(lower)){
+    parsed.type="sport";
+    parsed.confidence="média"
+  }
+  const trackMatch=state.tracks.find(track=>lower.includes(String(track.name||"").toLowerCase()));
+  if(trackMatch){
+    parsed.trackId=trackMatch.id;
+    parsed.type="study";
+    parsed.confidence="alta"
+  }
+  const hobbyMatch=(state.hobbies||[]).find(hobby=>lower.includes(String(hobby.name||"").toLowerCase()));
+  if(hobbyMatch){
+    parsed.hobbyId=hobbyMatch.id;
+    parsed.type=hobbyMatch.id==="hobby-journaling"?"journaling":"hobby";
+    parsed.title=hobbyMatch.name;
+    parsed.confidence="alta"
+  }else{
+    parsed.title=raw.replace(/(\d+)\s*(h|hora|horas|min|m)\b/gi,"").replace(/^(eu\s+)?(estudei|assisti|fiz|revisei|li|joguei|registrei)\s+/i,"").trim()||parsed.title
+  }
+  return parsed
+}
+function fillRegisterForm(parsed={}){
+  const form=$("registerForm");
+  if(!form){
+    return
+  }
+  const e=form.elements;
+  e.type.value=parsed.type||"other";
+  e.title.value=parsed.title||"";
+  e.date.value=parsed.date||dayKey();
+  e.time.value=parsed.time||new Date().toTimeString().slice(0,5);
+  e.durationMinutes.value=String(parsed.durationMinutes||30);
+  e.trackId.value=parsed.trackId||"";
+  e.hobbyId.value=parsed.hobbyId||"";
+  renderRegisterCurriculumOptions();
+  renderRegisterPreview(parsed)
+}
+function renderRegisterPreview(parsed=null){
+  const form=$("registerForm"),preview=$("registerPreview");
+  if(!form||!preview){
+    return
+  }
+  const e=form.elements,data=parsed||{type:e.type.value,title:e.title.value,durationMinutes:Number(e.durationMinutes.value)||0,date:e.date.value,time:e.time.value,confidence:"manual"};
+  const typeLabel=ACTIVITY_TYPES[data.type]||ACTIVITY_TYPES.other;
+  preview.innerHTML=`<strong>${esc(typeLabel)} · ${esc(data.title||"Atividade")}</strong><span>${esc(data.date||dayKey())} ${esc(data.time||"")} · ${fmtMin(data.durationMinutes||0)} · confiança ${esc(data.confidence||"manual")}</span>`
+}
+function openRegisterDialog(){
+  const form=$("registerForm");
+  if(!form){
+    return
+  }
+  form.reset();
+  form.elements.trackId.innerHTML=registerTrackOptions(state.activeTrack||"");
+  form.elements.hobbyId.innerHTML=registerHobbyOptions("");
+  fillRegisterForm({type:"study",title:"Sessão registrada",durationMinutes:30,date:dayKey(),time:new Date().toTimeString().slice(0,5),trackId:state.activeTrack||"",confidence:"manual"});
+  $("registerStatus").textContent="";
+  $("registerDialog").showModal();
+  setTimeout(()=>$("registerQuickInput")?.focus?.(),40)
+}
+function markLessonComplete(lesson,module,course,completedAt=new Date().toISOString()){
+  if(lesson){
+    lesson.progress=100;lesson.done=true;lesson.status="concluido";lesson.completedAt=completedAt
+  }
+  if(module){
+    module.progress=moduleProgress(module);module.done=moduleDone(module);module.status=statusFromProgress(module.progress);if(module.done&&!module.completedAt){module.completedAt=completedAt}
+  }
+  if(course){
+    course.progress=itemProgress(course);course.status=statusFromProgress(course.progress);if(itemProgress(course)>=100&&!course.completedAt){course.completedAt=completedAt}
+  }
+}
+function applyStudyRegistrationResult(payload){
+  const result=payload.studyResult;
+  if(!result||result==="session_only"){
+    return
+  }
+  const course=state.items.find(item=>item.id===payload.courseId),module=course?.modules?.find(item=>item.id===payload.moduleId),lesson=module?.lessons?.find(item=>item.id===payload.lessonId),completedAt=payload.endedAt||new Date().toISOString();
+  if(result==="lesson_completed"){
+    markLessonComplete(lesson,module,course,completedAt)
+  }else if(result==="module_completed"&&module){
+    for(const item of module.lessons||[]){
+      item.progress=100;item.done=true;item.status="concluido";item.completedAt=item.completedAt||completedAt
+    }
+    module.progress=100;module.done=true;module.status="concluido";module.completedAt=completedAt;
+    if(course){course.progress=itemProgress(course);course.status=statusFromProgress(course.progress)}
+  }else if(result==="course_completed"&&course){
+    for(const mod of course.modules||[]){
+      for(const item of mod.lessons||[]){
+        item.progress=100;item.done=true;item.status="concluido";item.completedAt=item.completedAt||completedAt
+      }
+      mod.progress=100;mod.done=true;mod.status="concluido";mod.completedAt=mod.completedAt||completedAt
+    }
+    course.progress=100;course.done=true;course.status="concluido";course.completedAt=completedAt
+  }
+}
+async function saveManualRegistration(event){
+  event.preventDefault();
+  const form=event.currentTarget,e=form.elements,type=ACTIVITY_TYPES[e.type.value]?e.type.value:"other",duration=Math.max(0,Math.round(Number(e.durationMinutes.value)||0));
+  const startedAt=isoFromDateTime(e.date.value,e.time.value),endedAt=new Date(new Date(startedAt).getTime()+duration*60000).toISOString();
+  const title=String(e.title.value||ACTIVITY_TYPES[type]||"Atividade").trim();
+  if(!title){
+    $("registerStatus").textContent="Informe uma atividade antes de salvar.";
+    e.title.focus();
+    return
+  }
+  const payload={type,subtype:type==="study"?"study.manual":type==="hobby"?`hobby.${activitySubtypeSlug(title)}`:type,title,startedAt,endedAt,durationMinutes:duration,trackId:e.trackId.value||null,courseId:e.courseId.value||null,moduleId:e.moduleId.value||null,lessonId:e.lessonId.value||null,hobbyId:e.hobbyId.value||null,notes:e.notes.value,studyResult:e.studyResult.value};
+  if(type==="study"||type==="youtube"){
+    const session={id:crypto.randomUUID(),date:dayKey(validDate(startedAt)),timestamp:startedAt,minutes:duration,title,type:type==="youtube"?"video":"manual",sourceId:payload.lessonId||payload.moduleId||payload.courseId||payload.trackId||null,trackId:payload.trackId,courseId:payload.courseId,moduleId:payload.moduleId,lessonId:payload.lessonId,track:payload.trackId};
+    state.sessions.push(session);
+    upsertActivityLogEntry({...payload,source:"session",sourceRecordId:session.id,sourceId:session.sourceId});
+    if(payload.trackId){state.weeklyProgress[payload.trackId]=(state.weeklyProgress[payload.trackId]||0)+duration}
+    if(type==="study"){applyStudyRegistrationResult(payload)}
+  }else{
+    const sourceRecordId=crypto.randomUUID();
+    upsertActivityLogEntry({...payload,source:"manual-register",sourceRecordId});
+    if(type==="hobby"||type==="journaling"){
+      const hobby=(state.hobbies||[]).find(item=>item.id===payload.hobbyId);
+      if(hobby){
+        hobby.sessions=[...(hobby.sessions||[]),{id:sourceRecordId,date:dayKey(validDate(startedAt)),minutes:duration,createdAt:endedAt}];
+        hobby.lastDoneAt=endedAt
+      }
+    }
+  }
+  if(type==="study"||type==="youtube"){
+    updateStreak()
+  }
+  await save(false,"manual-registration");
+  $("registerDialog").close();
+  renderAll();
+  toast("Atividade registrada.","ok")
+}
 document.querySelectorAll(".nav-btn,.mobile-nav-btn").forEach(b=>b.onclick=()=>navigateTo(b.dataset.view));
 
 function renderHome(){
@@ -1813,14 +2176,14 @@ function renderHome(){
     $("sanctuaryDate").innerHTML=`<span>${dateText}</span><small>${weekday}</small>`
   }
   const level=Math.floor(state.xp/500)+1;$("levelNumber").textContent=level;
-  const studied=state.sessions.filter(s=>s.date===dayKey()).reduce((a,b)=>a+b.minutes,0),targetMinutes=state.dailyPlan.minutes||60;
+  const studied=activityMinutesForDate(dayKey()),targetMinutes=state.dailyPlan.minutes||60;
   $("todaySummary").textContent=`${studied} / ${targetMinutes} min hoje · ${state.streak} dias de sequência`;
   if($("freeTimeSummary")){
     const free=freeTimeSnapshot(now);
     $("freeTimeSummary").textContent=`Hoje: ${free.windows.length} janela${free.windows.length===1?"":"s"} livre${free.windows.length===1?"":"s"} · ${fmtMin(free.available)} disponíveis`
   }
   $("gameStats").innerHTML=[
-    ["✦ XP",state.xp],["☽ Sequência",`${state.streak} dias`],["◇ Sessões",state.sessions.length],["Nível",level]
+    ["✦ XP",state.xp],["☽ Sequência",`${state.streak} dias`],["◇ Registros",(state.activityLog||[]).length],["Nível",level]
   ].map(([a,b])=>`<div class="stat"><span>${a}</span><strong>${b}</strong></div>`).join("");
   renderDailyPlan();renderHomeYoutube();renderHomeTracks();renderHomePriority();renderVaultHome()
 }
@@ -1905,7 +2268,7 @@ function renderTodayProgress(){
   if(!$("todayProgress")){
     return
   }
-  const planned=(state.dailyPlan.items||[]).reduce((sum,item)=>sum+Number(item.minutes||0),0),studied=state.sessions.filter(s=>s.date===dayKey()).reduce((sum,item)=>sum+Number(item.minutes||0),0),pct=planned?Math.min(100,Math.round(studied/planned*100)):0;
+  const planned=(state.dailyPlan.items||[]).reduce((sum,item)=>sum+Number(item.minutes||0),0),studied=activityMinutesForDate(dayKey()),pct=planned?Math.min(100,Math.round(studied/planned*100)):0;
   $("todayProgress").innerHTML=`<div class="today-progress-line"><span>Hoje</span><strong>${studied} / ${planned||0} min</strong><span>${pct}%</span></div><div class="progress"><div style="width:${pct}%"></div></div>`
 }
 function renderTodayRows(){
@@ -2541,6 +2904,7 @@ async function completeFocus(){
     alert(`Não consegui salvar a sessão no vault: ${e.message||String(e)}`);
     return
   }
+  upsertActivityLogEntry(activityFromFocusSession(session,i,focusRef.scope,source));
   i.focusDraftNoteId=null;focusNoteId=null;
   state.xp+=Math.max(10,mins*2);updateStreak();
   if(focusRef.scope==="youtube"){
@@ -2868,14 +3232,103 @@ async function createFlashcardFromActive(){
 async function scheduleActiveReview(days){if(!$("vaultReviewAt"))return;$("vaultReviewAt").value=isoDate(days);await saveActiveVaultNote()}
 async function archiveActiveNote(){if(!activeVaultNote||!confirm("Arquivar esta nota?"))return;const targetId=activeVaultMode==="fichamentos"?"fichamentoEditor":"vaultEditorPane";await api(`/api/notes/${encodeURIComponent(activeVaultNote.id)}`,{method:"DELETE"});activeVaultNote=null;await loadVaultNotes();if($(targetId)){$(targetId).innerHTML=`<div class="hint">Nota arquivada.</div>`}}
 async function openReviewNote(id){try{activeVaultMode="review";await loadFullNote(id);currentReviewNote=activeVaultNote;$("reviewActive").innerHTML=`<h2>${esc(currentReviewNote.title)}</h2><div class="markdown-preview">${mdToHtml(currentReviewNote.content||"")}</div><div class="editor-actions"><button class="mini-btn" onclick="reviewAction(1)">Difícil</button><button class="mini-btn" onclick="reviewAction(7)">Bom</button><button class="mini-btn" onclick="reviewAction(30)">Fácil</button><button class="mini-btn danger" onclick="reviewAction(null)">Arquivar</button></div>`}catch(e){missingTarget()}}
-async function reviewAction(days){if(!currentReviewNote)return;if(days===null){await api(`/api/notes/${encodeURIComponent(currentReviewNote.id)}`,{method:"DELETE"})}else{await api(`/api/notes/${encodeURIComponent(currentReviewNote.id)}`,{method:"PUT",body:JSON.stringify({...currentReviewNote,reviewAt:isoDate(days),tags:[...(currentReviewNote.tags||[]).filter(t=>t!=="due"),"reviewed"]})});state.xp+=5;save(false)}currentReviewNote=null;await loadVaultNotes()}
+async function reviewAction(days){
+  if(!currentReviewNote){
+    return
+  }
+  if(days===null){
+    await api(`/api/notes/${encodeURIComponent(currentReviewNote.id)}`,{method:"DELETE"})
+  }else{
+    await api(`/api/notes/${encodeURIComponent(currentReviewNote.id)}`,{method:"PUT",body:JSON.stringify({...currentReviewNote,reviewAt:isoDate(days),tags:[...(currentReviewNote.tags||[]).filter(t=>t!=="due"),"reviewed"]})});
+    const now=new Date().toISOString();
+    upsertActivityLogEntry({type:"review",subtype:"review.note",title:currentReviewNote.title||"Revisão",startedAt:now,endedAt:now,durationMinutes:0,source:"review",sourceRecordId:`${currentReviewNote.id}:${dayKey()}`,noteId:currentReviewNote.id,metadata:{intervalDays:days}});
+    state.xp+=5;
+    await save(false,"review")
+  }
+  currentReviewNote=null;
+  await loadVaultNotes()
+}
 
+function activityIcon(type){
+  return {study:"☿",youtube:"▶",review:"◌",hobby:"✧",sport:"◇",journaling:"✎",appointment:"◎",routine:"▦",other:"•"}[type]||"•"
+}
+function activityTypeLabel(type){
+  return ACTIVITY_TYPES[type]||ACTIVITY_TYPES.other
+}
+function activityContextLabel(entry){
+  const parts=[],track=trackById(entry.trackId);
+  if(track){
+    parts.push(track.name)
+  }
+  const course=state.items.find(item=>item.id===entry.courseId);
+  if(course){
+    parts.push(course.title)
+  }
+  const hobby=(state.hobbies||[]).find(item=>item.id===entry.hobbyId);
+  if(hobby){
+    parts.push(hobby.name)
+  }
+  return parts.join(" · ")
+}
+function activityRow(entry){
+  const started=validDate(entry.startedAt),context=activityContextLabel(entry);
+  return `<div class="activity-row"><span class="activity-icon">${esc(activityIcon(entry.type))}</span><div class="grow"><strong>${esc(entry.title)}</strong><span>${esc(started.toLocaleString("pt-BR"))} · ${fmtMin(entry.durationMinutes)}${context?` · ${esc(context)}`:""}</span></div><span class="tag">${esc(activityTypeLabel(entry.type))}</span></div>`
+}
 function renderCalendar(){
   const y=calendarCursor.getFullYear(),m=calendarCursor.getMonth();$("calendarTitle").textContent=new Date(y,m,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
   const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),heads=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-  let html=heads.map(h=>`<div class="cal-head">${h}</div>`).join("");for(let i=0;i<first;i++)html+=`<div class="cal-day empty-day"></div>`;
-  for(let d=1;d<=days;d++){const key=dayKey(new Date(y,m,d)),ss=state.sessions.filter(s=>s.date===key),mins=ss.reduce((a,b)=>a+b.minutes,0);html+=`<div class="cal-day"><strong>${d}</strong>${mins?`<div class="cal-min"><span class="cal-dot"></span>${mins} min · ${ss.length} sessões</div>`:""}</div>`}
-  $("calendarGrid").innerHTML=html;$("recentSessions").innerHTML=[...state.sessions].reverse().slice(0,12).map(s=>`<div class="session-row"><div class="grow"><strong>${esc(s.title)}</strong><span>${new Date(s.timestamp).toLocaleString("pt-BR")} · ${s.minutes} min</span></div><span class="tag">+${Math.max(10,s.minutes*2)} XP</span></div>`).join("")||`<div class="hint">Nenhuma sessão registrada.</div>`
+  let html=heads.map(h=>`<div class="cal-head">${h}</div>`).join("");
+  for(let i=0;i<first;i++){
+    html+=`<div class="cal-day empty-day"></div>`
+  }
+  for(let d=1;d<=days;d++){
+    const key=dayKey(new Date(y,m,d)),entries=activityLogForDate(key),mins=activityMinutesForDate(key);
+    html+=`<div class="cal-day"><strong>${d}</strong>${mins?`<div class="cal-min"><span class="cal-dot"></span>${mins} min · ${entries.length} registro${entries.length===1?"":"s"}</div>`:""}</div>`
+  }
+  $("calendarGrid").innerHTML=html;
+  const recent=sortedActivityLog().slice(0,12);
+  $("recentSessions").innerHTML=recent.length?recent.map(activityRow).join(""):`<div class="hint">Nenhuma atividade registrada.</div>`
+}
+function renderJournal(){
+  if(!$("journalTimeline")){
+    return
+  }
+  const key=dayKey(journalCursor);
+  if($("journalDate")){
+    $("journalDate").value=key
+  }
+  const entries=activityLogForDate(key),minutes=entries.reduce((sum,entry)=>sum+Number(entry.durationMinutes||0),0);
+  $("journalTimeline").innerHTML=entries.length?`<div class="hint">${fmtMin(minutes)} registrados em ${entries.length} atividade${entries.length===1?"":"s"}.</div>${entries.map(activityRow).join("")}`:`<div class="hint">Nenhuma atividade registrada neste dia.</div>`
+}
+function renderWeeklyAnalytics(){
+  if(!$("weeklyAnalytics")){
+    return
+  }
+  const week=activityLogForWeek(journalCursor),total=week.reduce((sum,entry)=>sum+Number(entry.durationMinutes||0),0);
+  const byType=Object.entries(week.reduce((memo,entry)=>{memo[entry.type]=(memo[entry.type]||0)+Number(entry.durationMinutes||0);return memo},{})).sort((a,b)=>b[1]-a[1]);
+  const goal=(state.dailyPlan.minutes||60)*5,pct=goal?Math.min(100,Math.round(total/goal*100)):0;
+  $("weeklyAnalytics").innerHTML=`<div class="weekly-goal"><div class="weekly-bar-head"><strong>Semana</strong><span>${fmtMin(total)} / ${fmtMin(goal)}</span></div><div class="progress"><div style="width:${pct}%"></div></div></div><div class="weekly-bars">${byType.length?byType.map(([type,minutes])=>`<div class="weekly-bar"><div class="weekly-bar-head"><span>${esc(activityTypeLabel(type))}</span><strong>${fmtMin(minutes)}</strong></div><div class="progress"><div style="width:${total?Math.round(minutes/total*100):0}%"></div></div></div>`).join(""):`<div class="hint">Ainda sem registros nesta semana.</div>`}</div>`
+}
+function suggestActivityNow(minutes=30){
+  const free=freeTimeSnapshot(new Date()),nowMinutes=new Date().getHours()*60+new Date().getMinutes();
+  const activeWindow=free.windows.find(window=>window.start<=nowMinutes&&window.end>=nowMinutes);
+  const plan=planActivitiesIntoWindows(new Date(),{minutes:Math.min(minutes,activeWindow?.minutes||minutes)});
+  return plan.items[0]||nextRitualTarget()
+}
+function renderTimeNowSuggestion(minutes=30){
+  const target=suggestActivityNow(minutes);
+  if(!$("timeNowSuggestion")){
+    return
+  }
+  if(!target){
+    $("timeNowSuggestion").innerHTML=`<div class="hint">Nenhuma sugestão agora. Use Registrar para anotar uma atividade livre.</div>`;
+    return
+  }
+  $("timeNowSuggestion").innerHTML=`<div class="time-now-card"><strong>${esc(target.title)}</strong><span>${esc(target.trackName||target.detail||target.type||"Atividade")} · ${fmtMin(target.minutes||minutes)}</span><div class="routine-actions"><button class="gold-btn" onclick="${dailyPlanAction(target)};document.getElementById('timeNowDialog').close()">Começar</button><button class="mini-btn" onclick="document.getElementById('timeNowDialog').close();openRegisterDialog()">Registrar outra</button></div></div>`
+}
+function openTimeNowDialog(){
+  renderTimeNowSuggestion(30);
+  $("timeNowDialog")?.showModal?.()
 }
 
 function routineCategoryLabel(key){
@@ -3043,9 +3496,16 @@ function openMapForRoutine(id){
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(block.address)}`,"_blank","noopener")
   }
 }
+function hobbyTotalMinutes(hobby){
+  const logged=(state.activityLog||[]).filter(entry=>(entry.type==="hobby"||entry.type==="journaling")&&entry.hobbyId===hobby.id);
+  if(logged.length){
+    return logged.reduce((sum,entry)=>sum+Number(entry.durationMinutes||0),0)
+  }
+  return (hobby.sessions||[]).reduce((sum,session)=>sum+Number(session.minutes||0),0)
+}
 function hobbyCard(hobby){
   const sessions=hobbySessionsThisWeek(hobby);
-  const total=(hobby.sessions||[]).reduce((sum,session)=>sum+Number(session.minutes||0),0);
+  const total=hobbyTotalMinutes(hobby);
   const tags=(hobby.tags||[]).slice(0,3).map(tag=>`<span class="tag">#${esc(tag)}</span>`).join("");
   return `<article class="hobby-card ${hobby.active===false?"is-paused":""}"><div class="hobby-head"><span class="hobby-icon">${esc(hobby.icon||"✧")}</span><div class="grow"><strong>${esc(hobby.name)}</strong><span>${fmtMin(hobby.preferredMinutes)} preferidos · ${sessions}/${hobby.frequencyPerWeek} na semana</span></div></div>${hobby.description?`<p>${esc(hobby.description)}</p>`:""}<div class="routine-meta">${fmtMin(total)} registrados${hobby.location?` · ${esc(hobby.location)}`:""}</div>${tags?`<div class="knowledge-tags">${tags}</div>`:""}<div class="routine-actions"><button class="mini-btn" onclick="startHobbySessionById(${jsArg(hobby.id)})">Registrar</button><button class="mini-btn" onclick="openHobbyDialog(${jsArg(hobby.id)})">Editar</button></div></article>`
 }
@@ -3128,11 +3588,15 @@ async function startHobbySessionById(id,minutes=0){
   }
   const duration=Math.max(1,Number(minutes)||Number(hobby.preferredMinutes)||30);
   const now=new Date().toISOString();
-  hobby.sessions=[...(hobby.sessions||[]),{id:crypto.randomUUID(),date:dayKey(),minutes:duration,createdAt:now}];
+  const sessionId=crypto.randomUUID();
+  hobby.sessions=[...(hobby.sessions||[]),{id:sessionId,date:dayKey(),minutes:duration,createdAt:now}];
   hobby.lastDoneAt=now;
+  upsertActivityLogEntry({type:hobby.id==="hobby-journaling"?"journaling":"hobby",subtype:`hobby.${activitySubtypeSlug(hobby.name)}`,title:hobby.name,startedAt:new Date(new Date(now).getTime()-duration*60000).toISOString(),endedAt:now,durationMinutes:duration,source:"hobby-session",sourceRecordId:sessionId,hobbyId:hobby.id,metadata:{icon:hobby.icon||"✧"}});
   await save(false,"hobby-session");
   renderHobbies();
   renderDailyPlan();
+  renderJournal();
+  renderWeeklyAnalytics();
   toast(`${hobby.name}: ${fmtMin(duration)} registrados.`,"ok")
 }
 function renderPlanningSettings(){
@@ -3268,7 +3732,7 @@ if(typeof window!=="undefined"){
   }
 }
 
-function renderAll(){renderHome();renderTracks();renderYoutube();renderLibrary();renderKnowledge();renderInbox();renderCalendar();renderRoutine();renderHobbies();renderSettings();renderGlobalSearchResults();$("sideDate").textContent=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});$("streakSide").textContent=`${state.streak} dias de sequência`}
+function renderAll(){renderHome();renderTracks();renderYoutube();renderLibrary();renderKnowledge();renderInbox();renderCalendar();renderJournal();renderWeeklyAnalytics();renderRoutine();renderHobbies();renderSettings();renderGlobalSearchResults();$("sideDate").textContent=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});$("streakSide").textContent=`${state.streak} dias de sequência`}
 
 async function migrateLocalVaultFromBackend(){
   if(!window.ArcanaStorage?.ready||!isLocalBackend()||localStorage.getItem("arcana-local-vault-migrated-v1")){return}
@@ -3360,6 +3824,19 @@ if($("newHobbyBtn")){$("newHobbyBtn").onclick=()=>openHobbyDialog()}
 if($("hobbyForm")){$("hobbyForm").onsubmit=saveHobby}
 if($("deleteHobbyBtn")){$("deleteHobbyBtn").onclick=deleteHobby}
 if($("planningSettingsForm")){$("planningSettingsForm").onsubmit=savePlanningSettings}
+if($("registerBtn")){$("registerBtn").onclick=openRegisterDialog}
+if($("registerForm")){$("registerForm").onsubmit=saveManualRegistration}
+if($("registerParseBtn")){$("registerParseBtn").onclick=()=>fillRegisterForm(parseQuickRegistration($("registerQuickInput").value))}
+if($("registerQuickInput")){$("registerQuickInput").oninput=e=>renderRegisterPreview(parseQuickRegistration(e.currentTarget.value))}
+if($("registerTypeSelect")){$("registerTypeSelect").onchange=()=>renderRegisterPreview()}
+if($("registerTrackSelect")){$("registerTrackSelect").onchange=renderRegisterCurriculumOptions}
+if($("registerCourseSelect")){$("registerCourseSelect").onchange=renderRegisterCurriculumOptions}
+if($("registerModuleSelect")){$("registerModuleSelect").onchange=renderRegisterCurriculumOptions}
+if($("timeNowBtn")){$("timeNowBtn").onclick=openTimeNowDialog}
+document.querySelectorAll("[data-time-now-minutes]").forEach(button=>button.onclick=()=>renderTimeNowSuggestion(Number(button.dataset.timeNowMinutes)||30));
+if($("journalDate")){$("journalDate").onchange=e=>{journalCursor=validDate(e.currentTarget.value);renderJournal();renderWeeklyAnalytics()}}
+if($("journalPrevBtn")){$("journalPrevBtn").onclick=()=>{journalCursor.setDate(journalCursor.getDate()-1);renderJournal();renderWeeklyAnalytics()}}
+if($("journalNextBtn")){$("journalNextBtn").onclick=()=>{journalCursor.setDate(journalCursor.getDate()+1);renderJournal();renderWeeklyAnalytics()}}
 $("refreshCatalogBtn").onclick=async()=>{try{await refreshPublishedCatalog(true);renderAll()}catch(err){youtubeCatalogMeta={...youtubeCatalogMeta,error:err.message||String(err)};renderAll();alert(err.message||String(err))}};
 $("backupNowBtn").onclick=()=>autoBackup("manual");
 $("exportFullBackupBtn").onclick=()=>ArcanaStorage.downloadFullBackup(state);

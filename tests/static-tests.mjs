@@ -170,7 +170,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v16/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v17/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -204,6 +204,13 @@ assert.match(app, /function renderHobbies/, "hobby screen renderer is present");
 assert.match(index, /id="routineView"/, "weekly routine view is present");
 assert.match(index, /id="hobbiesView"/, "hobbies view is present");
 assert.match(index, /id="planningSettingsForm"/, "planning preferences form is present");
+assert.match(app, /const ACTIVITY_LOG_VERSION=1/, "activity log schema is versioned");
+assert.match(app, /function upsertActivityLogEntry/, "activity log upsert is present");
+assert.match(app, /function parseQuickRegistration/, "universal registrar parser is present");
+assert.match(app, /activityMinutesForDate\(dayKey\(\)\)/, "Sanctuary daily progress derives from the activity log");
+assert.match(index, /id="registerDialog"/, "universal registrar dialog is present");
+assert.match(index, /id="journalTimeline"/, "daily journal timeline is present");
+assert.match(index, /id="weeklyAnalytics"/, "weekly analytics panel is present");
 
 function makeElement(id) {
   return {
@@ -251,7 +258,7 @@ function makeSelect(id, values = []) {
 }
 
 const elements = new Map();
-const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost", "registerBtn", "timeNowBtn", "timeNowDialog", "timeNowOptions", "timeNowSuggestion", "registerDialog", "registerForm", "registerQuickInput", "registerParseBtn", "registerPreview", "registerTypeSelect", "registerTrackSelect", "registerCourseSelect", "registerModuleSelect", "registerLessonSelect", "registerHobbySelect", "registerStatus", "journalDate", "journalPrevBtn", "journalNextBtn", "journalTimeline", "weeklyAnalytics"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }
@@ -327,6 +334,27 @@ elements.get("hobbyForm").elements = {
   tags: makeElement("hobbyTags"),
   active: makeElement("hobbyActive")
 };
+elements.set("registerTypeSelect", makeSelect("registerTypeSelect", ["study", "youtube", "review", "hobby", "sport", "journaling", "appointment", "routine", "other"]));
+elements.set("registerTrackSelect", makeSelect("registerTrackSelect"));
+elements.set("registerHobbySelect", makeSelect("registerHobbySelect"));
+elements.set("registerCourseSelect", makeSelect("registerCourseSelect"));
+elements.set("registerModuleSelect", makeSelect("registerModuleSelect"));
+elements.set("registerLessonSelect", makeSelect("registerLessonSelect"));
+elements.get("registerForm").elements = {
+  type: elements.get("registerTypeSelect"),
+  title: makeElement("registerTitle"),
+  date: makeElement("registerDate"),
+  time: makeElement("registerTime"),
+  durationMinutes: makeElement("registerDurationMinutes"),
+  trackId: elements.get("registerTrackSelect"),
+  hobbyId: elements.get("registerHobbySelect"),
+  courseId: elements.get("registerCourseSelect"),
+  moduleId: elements.get("registerModuleSelect"),
+  lessonId: elements.get("registerLessonSelect"),
+  studyResult: makeElement("registerStudyResult"),
+  notes: makeElement("registerNotes")
+};
+elements.get("registerForm").elements.studyResult.value = "session_only";
 
 const savedStates = [];
 const context = {
@@ -444,6 +472,17 @@ await vm.runInContext(`(async()=>{
   if(mergedProfile.tracks.map(t=>t.id).join(",")!=="frances,track-electronics,track-finance"){throw new Error("starter tracks should append after existing custom tracks")}
   if(mergedProfile.activeTrack!=="frances"){throw new Error("existing active track should be preserved")}
   if(mergedProfile.activePlaylist!=="playlist-custom"){throw new Error("existing active playlist should be preserved")}
+
+  const legacyLogState=normalize({...structuredClone(DEFAULT_STATE),activityLogVersion:0,sessions:[{id:"legacy-session",date:"2026-08-17",timestamp:"2026-08-17T10:00:00.000Z",minutes:25,title:"Legacy Study",type:"manual",track:"default"}]});
+  if(legacyLogState.activityLog.length!==1){throw new Error("legacy sessions should backfill the activity log once")}
+  const rerunLogState=normalize(legacyLogState);
+  if(rerunLogState.activityLog.length!==1){throw new Error("activity log migration should not duplicate entries")}
+  state=normalize({...structuredClone(DEFAULT_STATE),activityLog:[],activityLogVersion:ACTIVITY_LOG_VERSION});
+  upsertActivityLogEntry({type:"study",title:"Manual",startedAt:"2026-08-17T10:00:00.000Z",durationMinutes:10,source:"session",sourceRecordId:"dup"});
+  upsertActivityLogEntry({type:"study",title:"Manual Update",startedAt:"2026-08-17T10:00:00.000Z",durationMinutes:20,source:"session",sourceRecordId:"dup"});
+  if(state.activityLog.length!==1||state.activityLog[0].durationMinutes!==20){throw new Error("activity log upsert should replace duplicate source records")}
+  const parsed=parseQuickRegistration("estudei FPGA 45 min");
+  if(parsed.type!=="study"||parsed.durationMinutes!==45){throw new Error("registrar parser should infer study duration")}
 
   const preservedState=applyStarterContent(structuredClone(DEFAULT_STATE));
   const preservedCourse=preservedState.items.find(i=>i.id==="course-elec-01");

@@ -9,6 +9,7 @@ Arcana is a local-first personal learning grimoire. It can run as a static app o
 - `manifest.webmanifest` and `service-worker.js` make the app installable/offline-capable.
 - `server.py` is optional Arcana Local support for `yt-dlp` playlist sync and the older file-backed vault endpoints.
 - `.github/workflows/pages.yml` deploys the static files to GitHub Pages.
+- Activity history is centralized in `appState.activityLog`, the local ledger used by study, YouTube, review, hobby, routine, and journal surfaces.
 
 The app migrates old `localStorage` keys into IndexedDB once. Existing `localStorage` data is not deleted automatically.
 
@@ -21,6 +22,10 @@ Object stores:
 `settings`, `tracks`, `courses`, `modules`, `lessons`, `sources`, `notes`, `fichamentos`, `sessions`, `playlists`, `videos`, `inbox`, `reviews`, `flashcards`, `calendar`, `progress`, `metadata`, `appState`, `backupSnapshots`, `attachments`
 
 The complete app state is stored in `appState/main`. Notes, fichamentos, snapshots, and flashcards are stored separately so the vault can be exported/imported without a server.
+
+`appState.activityLog` is the source of truth for actual activity history. Legacy `sessions` are retained for compatibility and migrated/backfilled into `activityLog` exactly once by `activityLogVersion`. Entries are keyed by stable `source + sourceRecordId` so Focus Circle completions, YouTube completions, hobby sessions, reviews, and manual Registrar records can upsert without duplicates.
+
+Daily Journal and weekly analytics read from `activityLog`; Weekly Routine, free-time planning, hobbies, `weeklyGoals`, and `dailyCheckins` live in `appState` and remain local to the browser profile.
 
 ## Backups
 

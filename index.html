@@ -39,6 +39,7 @@
       <div><div class="kicker">GRIMÓRIO PESSOAL</div><h1 id="pageTitle">Santuário</h1></div>
       <div class="top-actions">
         <button id="globalSearchBtn" class="ghost-btn">⌕ Buscar</button>
+        <button id="registerBtn" class="ghost-btn">＋ Registrar</button>
         <button id="addBtn" class="gold-btn">＋ Capturar</button>
       </div>
     </header>
@@ -71,6 +72,7 @@
             <h2>Ritual de hoje</h2>
             <div class="section-rule"></div>
             <button id="regenPlanBtn" class="mini-btn icon-link" title="Recalcular plano" aria-label="Recalcular plano">↻</button>
+            <button id="timeNowBtn" class="mini-btn">Tenho tempo agora</button>
           </div>
           <div id="todayProgress" class="today-progress"></div>
           <div id="todayRows" class="today-rows"></div>
@@ -257,6 +259,21 @@
       <article class="card">
         <div class="calendar-nav"><button id="prevMonthBtn" class="ghost-btn">←</button><h2 id="calendarTitle"></h2><button id="nextMonthBtn" class="ghost-btn">→</button></div>
         <div id="calendarGrid" class="calendar-grid"></div>
+      </article>
+      <article class="card">
+        <div class="card-head">
+          <div><div class="kicker">DIÁRIO</div><h2>Journal do dia</h2></div>
+          <div class="journal-date-controls">
+            <button id="journalPrevBtn" class="mini-btn" aria-label="Dia anterior">←</button>
+            <label>Data<input id="journalDate" type="date"></label>
+            <button id="journalNextBtn" class="mini-btn" aria-label="Próximo dia">→</button>
+          </div>
+        </div>
+        <div id="journalTimeline" class="journal-timeline"></div>
+      </article>
+      <article class="card">
+        <div class="card-head"><div><div class="kicker">SEMANA</div><h2>Ritmo e metas</h2></div></div>
+        <div id="weeklyAnalytics" class="weekly-analytics"></div>
       </article>
       <article class="card">
         <div class="card-head"><div><div class="kicker">HISTÓRICO</div><h2>Sessões recentes</h2></div></div>
@@ -509,6 +526,50 @@
   <div class="modal-head"><div><div class="kicker">BUSCA GLOBAL</div><h2>Ir para qualquer ponto</h2></div><button type="button" class="x" data-close="globalSearchDialog">×</button></div>
   <input id="globalSearchInput" placeholder="Buscar trilhas, cursos, aulas, vídeos, notas...">
   <div id="globalSearchResults" class="global-search-results"></div>
+</div></dialog>
+
+<dialog id="registerDialog"><form id="registerForm" class="modal register-modal">
+  <div class="modal-head"><div><div class="kicker">REGISTRAR</div><h2>Atividade realizada</h2></div><button type="button" class="x" data-close="registerDialog">×</button></div>
+  <label>Frase rápida
+    <div class="register-quick">
+      <input id="registerQuickInput" placeholder="ex: estudei FPGA 45 min">
+      <button id="registerParseBtn" type="button" class="mini-btn">Interpretar</button>
+    </div>
+  </label>
+  <div id="registerPreview" class="register-preview" aria-live="polite"></div>
+  <div class="two-fields">
+    <label>Tipo<select id="registerTypeSelect" name="type"><option value="study">Estudo</option><option value="youtube">YouTube</option><option value="review">Revisão</option><option value="hobby">Hobby</option><option value="sport">Esporte</option><option value="journaling">Journaling</option><option value="appointment">Compromisso</option><option value="routine">Rotina</option><option value="other">Outro</option></select></label>
+    <label>Duração<input name="durationMinutes" type="number" min="0" step="5" value="30"></label>
+  </div>
+  <label>Título<input name="title" required></label>
+  <div class="two-fields">
+    <label>Data<input name="date" type="date" required></label>
+    <label>Hora<input name="time" type="time"></label>
+  </div>
+  <div class="two-fields">
+    <label>Trilha<select id="registerTrackSelect" name="trackId"></select></label>
+    <label>Hobby<select id="registerHobbySelect" name="hobbyId"></select></label>
+  </div>
+  <div class="three-fields">
+    <label>Curso<select id="registerCourseSelect" name="courseId"></select></label>
+    <label>Módulo<select id="registerModuleSelect" name="moduleId"></select></label>
+    <label>Aula<select id="registerLessonSelect" name="lessonId"></select></label>
+  </div>
+  <label>Resultado do estudo<select name="studyResult"><option value="session_only">Somente sessão</option><option value="lesson_completed">Aula concluída</option><option value="module_completed">Módulo concluído</option><option value="course_completed">Curso concluído</option></select></label>
+  <label>Notas<textarea name="notes" rows="3"></textarea></label>
+  <div id="registerStatus" class="hint" role="status"></div>
+  <div class="modal-actions"><button type="button" class="ghost-btn" data-close="registerDialog">Cancelar</button><button type="submit" class="gold-btn">Salvar registro</button></div>
+</form></dialog>
+
+<dialog id="timeNowDialog"><div class="modal time-now-modal">
+  <div class="modal-head"><div><div class="kicker">JANELA LIVRE</div><h2>Tenho tempo agora</h2></div><button type="button" class="x" data-close="timeNowDialog">×</button></div>
+  <div id="timeNowOptions" class="time-now-options">
+    <button type="button" class="mini-btn" data-time-now-minutes="15">15 min</button>
+    <button type="button" class="mini-btn" data-time-now-minutes="30">30 min</button>
+    <button type="button" class="mini-btn" data-time-now-minutes="45">45 min</button>
+    <button type="button" class="mini-btn" data-time-now-minutes="60">60 min</button>
+  </div>
+  <div id="timeNowSuggestion"></div>
 </div></dialog>
 
 <dialog id="captureDialog"><div class="modal capture-modal">
