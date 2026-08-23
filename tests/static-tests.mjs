@@ -170,7 +170,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v15/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v16/, "service worker cache version invalidates old app shell");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
 assert.match(worker, /function catalogCacheRequest/, "service worker normalizes catalog cache keys");
 assert.match(worker, /cache\.put\(catalogCacheRequest\(url\),copy\)/, "service worker stores the catalog without cache-busting query params");
@@ -196,6 +196,14 @@ assert.match(styles, /\.next-ritual-card\{[^}]*text-align:center/, "next ritual 
 assert.match(styles, /\.sanctuary-page\{[^}]*width:min\(1120px,100%\)/, "Sanctuary flow has a constrained reading width");
 assert.match(app, /function renderHomePriority\(\)\{[\s\S]*slice\(0,3\)[\s\S]*priority-preview-row/, "Sanctuary priority panel keeps a short clickable-row preview");
 assert.doesNotMatch(app, /function renderHomePriority\(\)\{[\s\S]*?<button class="mini-btn primary-action"[\s\S]*?function renderTracks/, "Sanctuary priority panel does not duplicate row actions with nested buttons");
+assert.match(app, /routineBlocks/, "weekly routine blocks are part of app state");
+assert.match(app, /function getFreeWindows/, "free-time window calculation is present");
+assert.match(app, /function planActivitiesIntoWindows/, "adaptive daily planning is present");
+assert.match(app, /function renderRoutine/, "routine screen renderer is present");
+assert.match(app, /function renderHobbies/, "hobby screen renderer is present");
+assert.match(index, /id="routineView"/, "weekly routine view is present");
+assert.match(index, /id="hobbiesView"/, "hobbies view is present");
+assert.match(index, /id="planningSettingsForm"/, "planning preferences form is present");
 
 function makeElement(id) {
   return {
@@ -231,8 +239,19 @@ function makeElement(id) {
   };
 }
 
+function makeSelect(id, values = []) {
+  const el = makeElement(id);
+  el.options = values.map(value => ({ value: String(value), selected: false }));
+  Object.defineProperty(el, "selectedOptions", {
+    get() {
+      return this.options.filter(option => option.selected);
+    }
+  });
+  return el;
+}
+
 const elements = new Map();
-const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "youtubeSettingsForm", "environmentStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }
@@ -267,6 +286,47 @@ elements.get("youtubeSettingsForm").mode = makeElement("youtubeMode");
 elements.get("youtubeSettingsForm").minutes = makeElement("youtubeMinutes");
 elements.get("youtubeSettingsForm").count = makeElement("youtubeCount");
 elements.get("youtubeSettingsForm").hideAfterLimit = makeElement("youtubeHideAfterLimit");
+elements.get("planningSettingsForm").elements = {
+  dayStart: makeElement("planningDayStart"),
+  dayEnd: makeElement("planningDayEnd"),
+  minimumSessionMinutes: makeElement("planningMinimumSessionMinutes"),
+  preferredSessionMinutes: makeElement("planningPreferredSessionMinutes"),
+  planningBufferMinutes: makeElement("planningBufferMinutes"),
+  useOnlyStudyBlocks: makeElement("planningUseOnlyStudyBlocks"),
+  allowHobbySuggestions: makeElement("planningAllowHobbySuggestions")
+};
+elements.get("routineForm").elements = {
+  id: makeElement("routineId"),
+  title: makeElement("routineTitle"),
+  category: makeElement("routineCategory"),
+  weekday: makeElement("routineWeekday"),
+  startTime: makeElement("routineStartTime"),
+  endTime: makeElement("routineEndTime"),
+  travelBeforeMinutes: makeElement("routineTravelBeforeMinutes"),
+  travelAfterMinutes: makeElement("routineTravelAfterMinutes"),
+  location: makeElement("routineLocation"),
+  address: makeElement("routineAddress"),
+  recurrence: makeElement("routineRecurrence"),
+  colorKey: makeElement("routineColorKey"),
+  notes: makeElement("routineNotes"),
+  fixed: makeElement("routineFixed"),
+  active: makeElement("routineActive")
+};
+elements.get("hobbyForm").elements = {
+  id: makeElement("hobbyId"),
+  name: makeElement("hobbyName"),
+  icon: makeElement("hobbyIcon"),
+  description: makeElement("hobbyDescription"),
+  preferredMinutes: makeElement("hobbyPreferredMinutes"),
+  minimumMinutes: makeElement("hobbyMinimumMinutes"),
+  frequencyPerWeek: makeElement("hobbyFrequencyPerWeek"),
+  preferredDays: makeSelect("hobbyPreferredDays", [1, 2, 3, 4, 5, 6, 7]),
+  preferredTimes: makeElement("hobbyPreferredTimes"),
+  location: makeElement("hobbyLocation"),
+  notes: makeElement("hobbyNotes"),
+  tags: makeElement("hobbyTags"),
+  active: makeElement("hobbyActive")
+};
 
 const savedStates = [];
 const context = {
@@ -446,6 +506,50 @@ await vm.runInContext(`(async()=>{
   if(state.dailyPlan.items.some(entry=>entry.trackId==="track-finance"&&entry.courseId==="course-fin-02")){throw new Error("urgent future finance progress should not override the active sequential course")}
   if(futureFinance.progress!==20){throw new Error("out-of-order progress should be preserved")}
   if(courseSequenceState(state.items.find(i=>i.id==="course-elec-02"))!=="locked"){throw new Error("later courses in a track should start locked")}
+  const planningDate=new Date();
+  planningDate.setDate(planningDate.getDate()+1);
+  planningDate.setHours(0,0,0,0);
+  const planningWeekday=weekdayKeyForDate(planningDate);
+  const planningNow=new Date(planningDate.getFullYear(),planningDate.getMonth(),planningDate.getDate(),0,0);
+  state=normalize({
+    ...structuredClone(DEFAULT_STATE),
+    tracks:[{id:"track-a",name:"A",sigil:"A",subtitle:"",description:"",weeklyGoal:60,progression:"sequential"}],
+    activeTrack:"track-a",
+    items:[{id:"course-a",kind:"course",track:"track-a",title:"Curso A",estimatedMinutes:50,progress:0,status:"nao_iniciado",important:true,urgent:false,modules:[],createdAt:new Date().toISOString()}],
+    routineBlocks:[
+      {id:"work",title:"Trabalho",weekday:planningWeekday,category:"work",startTime:"09:00",endTime:"17:00",travelBeforeMinutes:30,travelAfterMinutes:30,active:true,fixed:true},
+      {id:"study",title:"Estudo",weekday:planningWeekday,category:"study",startTime:"18:00",endTime:"19:00",travelBeforeMinutes:0,travelAfterMinutes:0,active:true,fixed:true}
+    ],
+    hobbies:[{id:"hobby-a",name:"Tarot",icon:"T",frequencyPerWeek:1,minimumMinutes:10,preferredMinutes:20,preferredDays:[planningWeekday],preferredTimes:["evening"],sessions:[],active:true}],
+    planningPreferences:{...DEFAULT_PLANNING_PREFERENCES,dayStart:"08:00",dayEnd:"20:00",minimumSessionMinutes:15,preferredSessionMinutes:30,planningBufferMinutes:0,useOnlyStudyBlocks:false,allowHobbySuggestions:true},
+    playlists:[{id:"p",name:"Playlist",url:"https://www.youtube.com/playlist?list=PL12345678",youtubePlaylistId:"PL12345678",lastSyncAt:null,lastSyncError:null}],
+    activePlaylist:"p",
+    youtubeQueue:[{id:"yt-a",videoId:"yt-a",playlistId:"p",youtubePlaylistId:"PL12345678",kind:"youtube",title:"Video A",url:"https://www.youtube.com/watch?v=yt-a",channel:"Canal",thumbnail:"",estimatedMinutes:15,progress:0,status:"nao_iniciado",notes:"",important:true,urgent:false,track:null,createdAt:new Date().toISOString(),position:0,catalogManaged:false,activeInCatalog:true,archivedAt:null}]
+  });
+  let windows=getFreeWindows(planningDate,{now:planningNow});
+  if(!windows.some(window=>window.start===480&&window.end===510)||!windows.some(window=>window.start===1050&&window.end===1200)){throw new Error("routine free windows should subtract fixed work and commute blocks")}
+  state.planningPreferences.useOnlyStudyBlocks=true;
+  windows=getFreeWindows(planningDate,{now:planningNow});
+  if(windows.length!==1||windows[0].start!==1080||windows[0].end!==1140){throw new Error("study-block planning should use only explicit study windows")}
+  const studyOnlyPlan=planActivitiesIntoWindows(planningDate,{minutes:60,now:planningNow});
+  if(studyOnlyPlan.items[0]?.type==="hobby"){throw new Error("study-only windows should reserve focus time before hobby suggestions")}
+  state.planningPreferences.useOnlyStudyBlocks=false;
+  state.planningPreferences.allowHobbySuggestions=false;
+  let adaptivePlan=planActivitiesIntoWindows(planningDate,{minutes:90,now:planningNow});
+  if(adaptivePlan.items.some(item=>item.type==="hobby")){throw new Error("disabled hobby suggestions should stay out of the daily plan")}
+  state.tracks=[];
+  state.items=[];
+  state.planningPreferences.allowHobbySuggestions=true;
+  adaptivePlan=planActivitiesIntoWindows(planningDate,{minutes:30,now:planningNow});
+  if(!adaptivePlan.items.some(item=>item.type==="hobby")){throw new Error("enabled hobby suggestions should fill suitable free windows")}
+  state.youtubeQueue=[
+    {...state.youtubeQueue[0],id:"yt-first",videoId:"yt-first",title:"Primeiro",progress:100,status:"concluido",position:0},
+    {...state.youtubeQueue[0],id:"yt-next",videoId:"yt-next",title:"Segundo",progress:0,status:"nao_iniciado",position:1},
+    {...state.youtubeQueue[0],id:"yt-later",videoId:"yt-later",title:"Terceiro",progress:0,status:"nao_iniciado",position:2}
+  ];
+  state.youtubeSettings={mode:"count",minutes:60,count:3,hideAfterLimit:false};
+  const youtubeCandidates=buildPlanningCandidates(planningDate).filter(item=>item.type==="youtube");
+  if(youtubeCandidates.length!==1||youtubeCandidates[0].id!=="yt-next"){throw new Error("adaptive planning should offer only the strict next YouTube video")}
   state=structuredClone(seededFresh);
   state.activeTrack="track-electronics";
   expandedCourseId="course-elec-08";

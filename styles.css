@@ -68,3 +68,22 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 .module-main{min-height:var(--control-height-md)}
 .journey-module:not([open]) .module-main{align-items:center}
 @media(max-width:720px){.course-row,.lesson-row,.module-main{gap:8px}.course-row>.primary-action,.lesson-row>.primary-action,.module-main>.primary-action{flex:0 0 auto}.row-menu summary{min-width:44px;min-height:44px}.module-input-row{grid-template-columns:1fr 80px var(--control-height-sm)}}
+.free-time-summary{margin:6px 0 0;color:var(--muted);font-size:.8125rem}
+.routine-controls{margin-bottom:12px}
+.routine-change-notice{border:1px solid rgba(199,169,107,.42);background:rgba(199,169,107,.08);border-radius:12px;padding:10px 12px;color:var(--gold2);font-size:.8125rem;margin-bottom:12px}
+.routine-week-grid,.hobby-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.routine-day-card,.routine-block-card,.hobby-card{border:1px solid var(--line);background:#15101c;border-radius:12px;padding:12px;min-width:0}
+.routine-day-head,.routine-block-head,.hobby-head{display:flex;align-items:center;gap:10px}
+.routine-day-head{justify-content:space-between;margin-bottom:10px}
+.routine-block-card{margin-top:8px}
+.routine-icon,.hobby-icon{width:32px;height:32px;display:grid;place-items:center;border:1px solid rgba(199,169,107,.35);border-radius:10px;color:var(--gold2);background:rgba(199,169,107,.08);flex:0 0 auto}
+.routine-block-head strong,.hobby-head strong{display:block;font-size:.95rem;overflow-wrap:anywhere}
+.routine-block-head span,.hobby-head span,.routine-meta{font-size:.8125rem;color:var(--muted)}
+.routine-meta{margin-top:8px}
+.routine-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.free-window{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px dashed rgba(199,169,107,.36);border-radius:10px;padding:10px 12px;margin:8px 0;background:rgba(199,169,107,.05);font-size:.875rem}
+.free-window span{color:var(--muted);font-size:.8125rem}
+.plan-notice{border:1px solid rgba(199,169,107,.32);background:rgba(199,169,107,.07);border-radius:10px;padding:9px 10px;margin-bottom:10px;color:var(--gold2);font-size:.8125rem}
+.plan-time{display:block;margin-top:3px;color:var(--muted)}
+.is-paused{opacity:.68}
+@media(max-width:720px){.routine-week-grid,.hobby-grid{grid-template-columns:1fr}.free-window{align-items:flex-start;flex-direction:column}}

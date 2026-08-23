@@ -22,6 +22,8 @@
       <button class="nav-btn" data-view="knowledge">🜁 <span>Conhecimento</span></button>
       <button class="nav-btn" data-view="calendar">◐ <span>Calendário</span></button>
       <div class="nav-support">
+        <button class="nav-btn" data-view="routine">◷ <span>Rotina</span></button>
+        <button class="nav-btn" data-view="hobbies">✧ <span>Hobbies</span></button>
         <button class="nav-btn" data-view="inbox">☽ <span>Inbox</span></button>
         <button class="nav-btn" data-view="settings">⚙ <span>Configurações</span></button>
       </div>
@@ -51,6 +53,7 @@
             </div>
             <h2 id="greeting"></h2>
             <p id="todaySummary"></p>
+            <p id="freeTimeSummary" class="free-time-summary"></p>
           </div>
           <div class="level-seal" aria-label="Nível atual">
             <span id="levelNumber">1</span>
@@ -261,6 +264,36 @@
       </article>
     </section>
 
+    <section id="routineView" class="view">
+      <div class="section-toolbar">
+        <div><div class="kicker">ROTINA SEMANAL</div><h2>Janelas livres</h2></div>
+        <button id="newRoutineBtn" class="gold-btn">＋ Bloco</button>
+      </div>
+      <div class="filters routine-controls">
+        <label>Visualização
+          <select id="routineViewMode">
+            <option value="week">Semana</option>
+            <option value="list">Lista</option>
+          </select>
+        </label>
+      </div>
+      <div id="routineChangeNotice" class="routine-change-notice hidden" role="status"></div>
+      <article class="card">
+        <div class="card-head"><div><div class="kicker">HOJE</div><h2>Mapa do dia</h2></div></div>
+        <div id="routineTodayTimeline"></div>
+      </article>
+      <div id="routineWeek" class="routine-week-grid"></div>
+      <article id="routineList" class="card"></article>
+    </section>
+
+    <section id="hobbiesView" class="view">
+      <div class="section-toolbar">
+        <div><div class="kicker">HOBBIES</div><h2>Tempo livre intencional</h2></div>
+        <button id="newHobbyBtn" class="gold-btn">＋ Hobby</button>
+      </div>
+      <div id="hobbyList" class="hobby-grid"></div>
+    </section>
+
     <section id="inboxView" class="view">
       <article class="card">
         <div class="card-head"><div><div class="kicker">INBOX INTELIGENTE</div><h2>Capture agora, organize depois</h2></div></div>
@@ -287,6 +320,24 @@
           <div id="youtubeCatalogStatus"></div>
           <div class="card-head settings-subhead"><div><div class="kicker">DIAGNÓSTICO</div><h2>Playlists e catálogo</h2></div><button id="refreshCatalogBtn" class="ghost-btn" type="button">Atualizar catálogo</button></div>
           <div id="youtubePlaylistDiagnostics" class="diagnostics-list"></div>
+        </article>
+        <article class="card">
+          <div class="card-head"><div><div class="kicker">PLANEJAMENTO</div><h2>Rotina e tempo livre</h2></div></div>
+          <form id="planningSettingsForm" class="settings-form">
+            <div class="two-fields">
+              <label>Dia começa<input name="dayStart" type="time"></label>
+              <label>Dia termina<input name="dayEnd" type="time"></label>
+            </div>
+            <div class="two-fields">
+              <label>Sessão mínima (min)<input name="minimumSessionMinutes" type="number" min="5" step="5"></label>
+              <label>Sessão preferida (min)<input name="preferredSessionMinutes" type="number" min="5" step="5"></label>
+            </div>
+            <label>Margem entre blocos (min)<input name="planningBufferMinutes" type="number" min="0" step="5"></label>
+            <label class="check"><input name="useOnlyStudyBlocks" type="checkbox"> Planejar estudos apenas em blocos de estudo</label>
+            <label class="check"><input name="allowHobbySuggestions" type="checkbox"> Sugerir hobbies em janelas livres</label>
+            <button class="gold-btn">Salvar planejamento</button>
+          </form>
+          <div id="planningStatus" class="hint"></div>
         </article>
 	        <article class="card">
 	          <div class="card-head"><div><div class="kicker">BACKUP</div><h2>Segurança local</h2></div></div>
@@ -350,6 +401,62 @@
   <div id="catalogRequestStatus" class="hint" role="status"></div>
   <div class="modal-actions"><button type="button" class="ghost-btn" data-close="catalogRequestDialog">Fechar</button><button id="copyCatalogRequestBtn" type="button" class="gold-btn">Copiar configuração</button></div>
 </div></dialog>
+
+<dialog id="routineDialog"><form id="routineForm" class="modal" novalidate>
+  <div class="modal-head"><div><div class="kicker">ROTINA</div><h2 id="routineDialogTitle">Novo bloco</h2></div><button type="button" class="x" data-close="routineDialog">×</button></div>
+  <input type="hidden" name="id">
+  <label>Título<input name="title" required></label>
+  <div class="two-fields">
+    <label>Categoria<select name="category"><option value="study">Estudo</option><option value="work">Trabalho</option><option value="class">Aula</option><option value="appointment">Compromisso</option><option value="commute">Deslocamento</option><option value="meal">Refeição</option><option value="sleep">Sono</option><option value="personal">Pessoal</option><option value="other">Outro</option></select></label>
+    <label>Dia<select name="weekday"><option value="1">Segunda</option><option value="2">Terça</option><option value="3">Quarta</option><option value="4">Quinta</option><option value="5">Sexta</option><option value="6">Sábado</option><option value="7">Domingo</option></select></label>
+  </div>
+  <div class="two-fields">
+    <label>Começa<input name="startTime" type="time" required></label>
+    <label>Termina<input name="endTime" type="time" required></label>
+  </div>
+  <div class="two-fields">
+    <label>Ida (min)<input name="travelBeforeMinutes" type="number" min="0" step="5"></label>
+    <label>Volta (min)<input name="travelAfterMinutes" type="number" min="0" step="5"></label>
+  </div>
+  <div class="two-fields">
+    <label>Local<input name="location"></label>
+    <label>Endereço<input name="address"></label>
+  </div>
+  <div class="two-fields">
+    <label>Recorrência<select name="recurrence"><option value="weekly">Semanal</option><option value="once">Pontual</option></select></label>
+    <label>Cor<select name="colorKey"><option value="gold">Ouro</option><option value="plum">Ameixa</option><option value="green">Verde</option><option value="red">Vermelho</option></select></label>
+  </div>
+  <label>Notas<textarea name="notes" rows="3"></textarea></label>
+  <label class="check"><input name="fixed" type="checkbox" checked> Bloco fixo</label>
+  <label class="check"><input name="active" type="checkbox" checked> Ativo</label>
+  <div id="routineFormError" class="form-error hidden" role="alert"></div>
+  <div class="modal-actions"><button id="deleteRoutineBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button id="duplicateRoutineBtn" type="button" class="ghost-btn hidden">Duplicar</button><button type="button" class="ghost-btn" data-close="routineDialog">Cancelar</button><button id="routineSaveBtn" type="submit" class="gold-btn">Salvar</button></div>
+</form></dialog>
+
+<dialog id="hobbyDialog"><form id="hobbyForm" class="modal" novalidate>
+  <div class="modal-head"><div><div class="kicker">HOBBY</div><h2 id="hobbyDialogTitle">Novo hobby</h2></div><button type="button" class="x" data-close="hobbyDialog">×</button></div>
+  <input type="hidden" name="id">
+  <div class="two-fields">
+    <label>Nome<input name="name" required></label>
+    <label>Ícone<input name="icon" maxlength="4" value="✧"></label>
+  </div>
+  <label>Descrição<textarea name="description" rows="2"></textarea></label>
+  <div class="two-fields">
+    <label>Frequência semanal<input name="frequencyPerWeek" type="number" min="0" step="1"></label>
+    <label>Tempo mínimo (min)<input name="minimumMinutes" type="number" min="5" step="5"></label>
+  </div>
+  <label>Tempo preferido (min)<input name="preferredMinutes" type="number" min="5" step="5"></label>
+  <label>Dias preferidos<select name="preferredDays" multiple size="4"><option value="1">Segunda</option><option value="2">Terça</option><option value="3">Quarta</option><option value="4">Quinta</option><option value="5">Sexta</option><option value="6">Sábado</option><option value="7">Domingo</option></select></label>
+  <div class="two-fields">
+    <label>Horários preferidos<input name="preferredTimes" placeholder="manhã, tarde, noite"></label>
+    <label>Local<input name="location"></label>
+  </div>
+  <label>Tags<input name="tags" placeholder="arte, corpo, descanso"></label>
+  <label>Notas<textarea name="notes" rows="3"></textarea></label>
+  <label class="check"><input name="active" type="checkbox" checked> Ativo para sugestões</label>
+  <div id="hobbyFormError" class="form-error hidden" role="alert"></div>
+  <div class="modal-actions"><button id="deleteHobbyBtn" type="button" class="ghost-btn danger hidden">Excluir</button><button type="button" class="ghost-btn" data-close="hobbyDialog">Cancelar</button><button id="hobbySaveBtn" type="submit" class="gold-btn">Salvar</button></div>
+</form></dialog>
 
 <dialog id="itemDialog"><form id="itemForm" class="modal">
   <div class="modal-head"><div><div class="kicker">NOVO REGISTRO</div><h2>Adicionar ao grimório</h2></div><button type="button" class="x" data-close="itemDialog">×</button></div>
