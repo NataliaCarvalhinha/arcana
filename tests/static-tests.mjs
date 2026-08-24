@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 
-for (const file of ["index.html", "app.js", "db.js", "data-safety.js", "routine-excel.js", "manifest.webmanifest", "service-worker.js", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", ".github/workflows/register-youtube-playlist.yml", ".github/ISSUE_TEMPLATE/arcana-playlist.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py", "tests/data-safety-tests.mjs", "tests/routine-excel-tests.mjs", "docs/data-safety.md", "docs/routine-excel.md"]) {
+for (const file of ["index.html", "app.js", "db.js", "data-safety.js", "routine-excel.js", "manifest.webmanifest", "service-worker.js", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", ".github/workflows/register-youtube-playlist.yml", ".github/ISSUE_TEMPLATE/arcana-playlist.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py", "tests/data-safety-tests.mjs", "tests/routine-excel-tests.mjs", "tests/knowledge-extraction-tests.mjs", "docs/data-safety.md", "docs/routine-excel.md", "docs/knowledge-extraction.md"]) {
   assert.ok(existsSync(file), `${file} exists`);
 }
 
@@ -82,7 +82,11 @@ assert.match(app, /openFocus\(\$\{jsArg\(lesson\.id\)\},'lesson'\)/, "lessons ca
 assert.match(index, /data-view="knowledge"/, "primary navigation exposes the Knowledge hub");
 assert.match(index, /id="knowledgeView"/, "Knowledge hub view is present");
 assert.match(index, /data-knowledge-tab="fichamentos"/, "Knowledge hub exposes fichamento tab");
+assert.match(index, /data-knowledge-tab="permanent"/, "Knowledge hub exposes permanent-note tab");
 assert.match(index, /data-knowledge-tab="reviews"/, "Knowledge hub exposes review tab");
+assert.match(index, /id="knowledgeExtractionDialog"/, "knowledge extraction review dialog is present");
+assert.match(index, /data-extraction-add="concept"/, "knowledge extraction can add concept candidates");
+assert.match(index, /data-extraction-add="next-action"/, "knowledge extraction can add next-action candidates");
 assert.match(index, /id="globalSearchDialog"/, "global search dialog is present");
 assert.match(index, /id="captureDialog"/, "universal capture dialog is present");
 assert.match(index, /class="mobile-nav"/, "mobile bottom navigation is present");
@@ -95,6 +99,11 @@ assert.match(index, /id="exportFullBackupBtn"/, "backup export remains available
 assert.match(index, /id="fullBackupImportInput"/, "backup import remains available in Settings");
 assert.match(app, /function renderKnowledge/, "Knowledge hub renderer is present");
 assert.match(app, /function openKnowledgeObject/, "Knowledge objects open through a unified action");
+assert.match(app, /class KnowledgeExtractionProvider/, "knowledge extraction uses a swappable provider boundary");
+assert.match(app, /local-semantic-blocks/, "knowledge extraction default provider is local");
+assert.match(app, /openKnowledgeExtractionReview\(savedSessionNote/, "focus completion opens extraction review after saving raw notes");
+assert.match(app, /knowledgeExtractionStatus/, "session notes track extraction review status");
+assert.match(app, /upsertManagedSection/, "fichamentos use managed extraction sections");
 assert.match(app, /function buildSearchResults/, "global search result builder is present");
 assert.match(app, /function openGlobalSearch/, "global search opener is present");
 assert.match(app, /function captureUniversal/, "universal capture handler is present");
@@ -159,6 +168,9 @@ assert.doesNotMatch(app, /\$\("trackForm"\)\.id\.value|const f=e\.currentTarget,
 assert.match(db, /async function list\(name\)/, "storage exposes a store inspection helper");
 assert.match(db, /tracks","courses","modules"/, "IndexedDB schema still contains domain stores");
 assert.match(db, /arcana_managed: true/, "obsidian vault export marks managed notes");
+assert.match(db, /function normalizeNoteTitle/, "notes dedupe normalized titles and aliases");
+assert.match(db, /sourceReferences/, "knowledge notes preserve source references");
+assert.match(db, /ARCANA:START/, "obsidian export writes Arcana-managed knowledge sections");
 assert.match(db, /Arcana-Obsidian-Vault/, "obsidian vault export uses the requested filename");
 assert.match(db, /README - Arcana\.md/, "obsidian vault export includes the Arcana readme");
 assert.match(db, /Courses\//, "obsidian vault export includes course notes");
@@ -194,7 +206,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v20/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v21/, "service worker cache version invalidates old app shell");
 assert.match(worker, /data-safety\.js/, "service worker caches the data safety module");
 assert.match(worker, /routine-excel\.js/, "service worker caches the routine Excel module");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");

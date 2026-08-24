@@ -250,15 +250,18 @@ const STARTER_PLAYLISTS=[
 ];
 const ARCANA_PLAYLIST_ISSUE_URL="https://github.com/NataliaCarvalhinha/arcana/issues/new";
 let state=structuredClone(DEFAULT_STATE),currentView="home",focusRef=null,timer=0,timerHandle=null,notesRef=null,calendarCursor=new Date(),journalCursor=new Date(),syncing=false,expandedCourseId=null,activeKnowledgeTab="all",globalSearchQuery="",routineViewMode="week",routineImportPreview=null;
-let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,focusBlocks=[],currentReviewNote=null;
+let vaultNotes=[],activeVaultNote=null,activeVaultMode="notes",vaultSaveTimer=null,focusNoteId=null,focusSaveTimer=null,focusBlocks=[],currentReviewNote=null,knowledgeExtractionDraft=null;
 let youtubeCatalogMeta={version:null,generatedAt:null,lastLoadedAt:null,playlistIds:[],playlistCount:0,videoCount:0,error:null};
 let youtubeCatalogPollHandle=null;
 let obsidianAutoSyncHandle=null,obsidianSyncInFlight=false;
 let calendarFilters={routine:true,external:true,plan:true,completed:true};
 let externalCalendarSyncing=false;
 let calendarRuntime={googleAccessToken:null,googleTokenExpiresAt:0,tokenClient:null,identityScript:null};
-const NOTE_TYPE_LABELS={literature:"Fichamento",permanent:"Permanente",concept:"Conceito",question:"Pergunta",insight:"Insight",quote:"Citação",reference:"Referência",next_action:"Ação",quick:"Rápida",session:"Sessão"};
-const FOCUS_BLOCK_TYPES={concept:{label:"Conceito",target:"permanent"},question:{label:"Pergunta",target:"question"},insight:{label:"Insight",target:"permanent"},quote:{label:"Citação"},example:{label:"Exemplo"},formula:{label:"Fórmula / comando"},next_action:{label:"Próximo passo"},free:{label:"Nota livre"}};
+const NOTE_TYPE_LABELS={literature:"Fichamento",permanent:"Permanente",concept:"Conceito",question:"Pergunta",insight:"Insight",quote:"Citação",example:"Exemplo",formula_command:"Fórmula / comando",reference:"Referência",next_action:"Ação",quick:"Rápida",session:"Sessão"};
+const FOCUS_BLOCK_TYPE_ALIASES={concept:"concept",question:"question",insight:"insight",quote:"quote",example:"example",formula:"formula-command",formula_command:"formula-command","formula-command":"formula-command",next_action:"next-action","next-action":"next-action",free:"free-note","free-note":"free-note"};
+const FOCUS_BLOCK_TYPES={concept:{label:"Conceito",target:"concept"},question:{label:"Pergunta",target:"question"},insight:{label:"Insight",target:"permanent"},quote:{label:"Citação"},example:{label:"Exemplo"},"formula-command":{label:"Fórmula / comando"},"next-action":{label:"Próximo passo"},"free-note":{label:"Nota livre"},formula:{label:"Fórmula / comando"},next_action:{label:"Próximo passo"},free:{label:"Nota livre"}};
+const KNOWLEDGE_CANDIDATE_TYPES={concept:{label:"Conceito",targetNoteType:"concept",section:"concepts"},"permanent-note":{label:"Nota permanente",targetNoteType:"permanent",section:"permanentNotes"},question:{label:"Pergunta",targetNoteType:"question",section:"questions"},quote:{label:"Citação",targetNoteType:"quote",section:"quotes"},example:{label:"Exemplo",targetNoteType:"example",section:"examples"},"formula-command":{label:"Fórmula / comando",targetNoteType:"formula_command",section:"formulas"},"next-action":{label:"Próximo passo",targetNoteType:"next_action",section:"nextActions"}};
+const KNOWLEDGE_EXTRACTION_SECTIONS=[["concepts","Conceitos"],["permanentNotes","Notas permanentes"],["questions","Perguntas"],["quotes","Citações"],["examples","Exemplos"],["formulas","Fórmulas e comandos"],["nextActions","Próximos passos"]];
 const $=id=>document.getElementById(id);
 const YOUTUBE_PLAYLIST_ID_RE=/^[A-Za-z0-9_-]{8,}$/;
 
@@ -3365,27 +3368,136 @@ function renderFocusContext(context){
 function firstMeaningfulLine(text=""){
   return String(text||"").split(/\r?\n/).map(line=>line.trim()).find(Boolean)||""
 }
+function canonicalFocusBlockType(type){
+  return FOCUS_BLOCK_TYPE_ALIASES[type]||"free-note"
+}
+function normalizeKnowledgeTitle(text=""){
+  return String(text||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim()
+}
+function noteKnowledgeKeys(note){
+  return [note?.title,...(Array.isArray(note?.aliases)?note.aliases:[])].map(normalizeKnowledgeTitle).filter(Boolean)
+}
+function findExistingKnowledgeMatch(candidate,targetType=null){
+  const title=normalizeKnowledgeTitle(candidate?.title);
+  if(!title){
+    return null
+  }
+  return vaultNotes.find(note=>{
+    if(note.status==="archived"){
+      return false
+    }
+    if(targetType&&note.type!==targetType){
+      return false
+    }
+    return noteKnowledgeKeys(note).includes(title)
+  })||null
+}
+function extractionSourceReference(sessionNote={},candidate={}){
+  return {
+    sourceSessionId:sessionNote.sessionId||sessionNote.id||null,
+    sourceNoteId:sessionNote.id||null,
+    sourceResourceId:sessionNote.resourceId||sessionNote.sourceId||sessionNote.source?.id||null,
+    sourceId:sessionNote.sourceId||sessionNote.resourceId||sessionNote.source?.id||null,
+    sourceTitle:sessionNote.sourceTitle||sessionNote.source?.title||sessionNote.title||"",
+    sourceType:sessionNote.sourceType||sessionNote.source?.kind||"",
+    sourceBlockId:candidate.sourceBlockId||null,
+    sourceTimestamp:candidate.sourceTimestamp||candidate.timestamp||"",
+    sourcePage:candidate.sourcePage||candidate.page||"",
+    sourceExcerpt:candidate.sourceExcerpt||candidate.content||"",
+    trackId:sessionNote.trackId||null,
+    courseId:sessionNote.courseId||null,
+    moduleId:sessionNote.moduleId||null,
+    lessonId:sessionNote.lessonId||null,
+    createdAt:new Date().toISOString()
+  }
+}
+function sourceReferenceKey(ref={}){
+  return [ref.sourceNoteId,ref.sourceBlockId,ref.sourceTimestamp,ref.sourcePage,normalizeKnowledgeTitle(ref.sourceExcerpt).slice(0,80)].join("|")
+}
+function mergeUniqueSourceReferences(existing=[],incoming=[]){
+  const map=new Map();
+  for(const ref of [...(Array.isArray(existing)?existing:[]),...(Array.isArray(incoming)?incoming:[])]){
+    const key=sourceReferenceKey(ref);
+    if(key.replace(/\|/g,"")){
+      map.set(key,{...ref})
+    }
+  }
+  return [...map.values()]
+}
+function extractionCandidateFromBlock(block,sessionNote){
+  const type=canonicalFocusBlockType(block.type);
+  const candidateType=type==="insight"?"permanent-note":type;
+  if(!KNOWLEDGE_CANDIDATE_TYPES[candidateType]||candidateType==="free-note"){
+    return null
+  }
+  const title=focusBlockTitle({...block,type}).slice(0,110);
+  const content=String(block.content||block.title||"").trim();
+  const match=findExistingKnowledgeMatch({title},KNOWLEDGE_CANDIDATE_TYPES[candidateType]?.targetNoteType);
+  return {id:crypto.randomUUID(),type:candidateType,title,content,selected:true,linkMode:match?"existing":"new",targetId:match?.id||"",route:candidateType==="next-action"?"inbox":"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:block.id||null,sourceTimestamp:block.timestamp||"",sourcePage:block.page||"",sourceExcerpt:content||title,createdAt:new Date().toISOString(),sessionNoteId:sessionNote?.id||null}
+}
+function extractionCandidateFromMarker(line,sessionNote,index){
+  const match=String(line||"").match(/^\s*(Conceito|Pergunta|Insight|Citacao|Citação|Exemplo|Formula|Fórmula|Comando|Proximo passo|Próximo passo|Acao|Ação|Nota permanente)\s*:\s*(.+?)\s*$/i);
+  if(!match){
+    return null
+  }
+  const labels={conceito:"concept",pergunta:"question",insight:"permanent-note",citacao:"quote","citação":"quote",exemplo:"example",formula:"formula-command","fórmula":"formula-command",comando:"formula-command","proximo passo":"next-action","próximo passo":"next-action",acao:"next-action","ação":"next-action","nota permanente":"permanent-note"};
+  const type=labels[normalizeKnowledgeTitle(match[1])];
+  const text=match[2].trim();
+  const title=firstMeaningfulLine(text).replace(/^[-*]\s*/,"").slice(0,110)||KNOWLEDGE_CANDIDATE_TYPES[type]?.label||"Nota";
+  const targetType=KNOWLEDGE_CANDIDATE_TYPES[type]?.targetNoteType;
+  const existing=findExistingKnowledgeMatch({title},targetType);
+  return {id:crypto.randomUUID(),type,title,content:text,selected:true,linkMode:existing?"existing":"new",targetId:existing?.id||"",route:type==="next-action"?"inbox":"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:`raw-line-${index+1}`,sourceTimestamp:"",sourcePage:"",sourceExcerpt:text,createdAt:new Date().toISOString(),sessionNoteId:sessionNote?.id||null}
+}
+class KnowledgeExtractionProvider{
+  constructor(config){
+    this.id=config.id;
+    this.label=config.label;
+    this.extract=config.extract
+  }
+}
+const LOCAL_KNOWLEDGE_EXTRACTION_PROVIDER=new KnowledgeExtractionProvider({id:"local-semantic-blocks",label:"Local semantic blocks",async extract(input){
+  const candidates=[];
+  for(const block of normalizeFocusBlocks(input.blocks||[])){
+    const candidate=extractionCandidateFromBlock(block,input.sessionNote);
+    if(candidate){
+      candidates.push(candidate)
+    }
+  }
+  String(input.rawNotes||"").split(/\r?\n/).forEach((line,index)=>{
+    const candidate=extractionCandidateFromMarker(line,input.sessionNote,index);
+    if(candidate){
+      candidates.push(candidate)
+    }
+  });
+  return {providerId:this.id,rawNoteSource:"session-note",candidates,connections:[],people:[],createdAt:new Date().toISOString()}
+}});
+const KnowledgeExtractionProviders={local:LOCAL_KNOWLEDGE_EXTRACTION_PROVIDER};
+async function extractKnowledge(input,provider=KnowledgeExtractionProviders.local){
+  return provider.extract(input)
+}
 function focusBlockTitle(block){
-  return String(block?.title||firstMeaningfulLine(block?.content)||FOCUS_BLOCK_TYPES[block?.type]?.label||"Bloco").trim()
+  const type=canonicalFocusBlockType(block?.type);
+  return String(block?.title||firstMeaningfulLine(block?.content)||FOCUS_BLOCK_TYPES[type]?.label||"Bloco").trim()
 }
 function normalizeFocusBlocks(blocks){
   if(!Array.isArray(blocks)){
     return []
   }
-  return blocks.map(block=>({id:block.id||crypto.randomUUID(),type:FOCUS_BLOCK_TYPES[block.type]?block.type:"free",title:block.title||"",content:block.content||"",timestamp:block.timestamp||"",noteId:block.noteId||null,promotedAs:block.promotedAs||null,createdAt:block.createdAt||new Date().toISOString(),updatedAt:block.updatedAt||block.createdAt||new Date().toISOString()}))
+  return blocks.map(block=>({id:block.id||crypto.randomUUID(),type:canonicalFocusBlockType(block.type),title:block.title||"",content:block.content||"",timestamp:block.timestamp||"",page:block.page||"",sessionId:block.sessionId||focusNoteId||null,resourceId:block.resourceId||focusRef?.id||null,sourceId:block.sourceId||block.resourceId||focusRef?.id||null,noteId:block.noteId||null,promotedAs:block.promotedAs||null,createdAt:block.createdAt||new Date().toISOString(),updatedAt:block.updatedAt||block.createdAt||new Date().toISOString()}))
 }
 function updateFocusBlock(id,patch){
   focusBlocks=focusBlocks.map(block=>block.id===id?{...block,...patch,updatedAt:new Date().toISOString()}:block);
   queueFocusSave()
 }
 function focusBlockPromoteButtons(block){
-  if(block.type==="concept"){
-    return `<button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'permanent')">Transformar em nota permanente</button>`
+  const type=canonicalFocusBlockType(block.type);
+  if(type==="concept"){
+    return `<button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'concept')">Transformar em conceito</button><button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'permanent')">Nota permanente</button>`
   }
-  if(block.type==="insight"){
+  if(type==="insight"){
     return `<button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'permanent')">Nota permanente</button><button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'concept')">Conceito</button>`
   }
-  if(block.type==="question"){
+  if(type==="question"){
     return `<button class="mini-btn" onclick="promoteFocusBlock(${jsArg(block.id)},'question')">Transformar em pergunta</button>`
   }
   return ""
@@ -3395,7 +3507,7 @@ function renderFocusBlocks(){
     return
   }
   $("focusBlockList").innerHTML=focusBlocks.length?focusBlocks.map(block=>{
-    const meta=FOCUS_BLOCK_TYPES[block.type]||FOCUS_BLOCK_TYPES.free;
+    const meta=FOCUS_BLOCK_TYPES[canonicalFocusBlockType(block.type)]||FOCUS_BLOCK_TYPES["free-note"];
     return `<article class="focus-block"><div class="focus-block-head"><span class="tag">${esc(meta.label)}</span>${block.noteId?`<span class="hint">Promovido: ${esc(block.promotedAs||"nota")}</span>`:""}</div><input data-focus-block-title="${esc(block.id)}" value="${esc(block.title)}" placeholder="Título opcional"><textarea data-focus-block-content="${esc(block.id)}" rows="3" placeholder="Conteúdo do bloco...">${esc(block.content)}</textarea><div class="focus-block-actions">${focusBlockPromoteButtons(block)}<button class="mini-btn danger" onclick="removeFocusBlock(${jsArg(block.id)})">Remover</button></div></article>`
   }).join(""):`<div class="hint">Use os atalhos para registrar conceitos, perguntas, insights, citações, exemplos, comandos, ações ou notas livres.</div>`;
   document.querySelectorAll("[data-focus-block-title]").forEach(input=>input.oninput=e=>updateFocusBlock(e.currentTarget.dataset.focusBlockTitle,{title:e.currentTarget.value}));
@@ -3429,7 +3541,7 @@ async function promoteFocusBlock(id,targetType="permanent"){
     renderVaultEditor("vaultEditorPane");
     return
   }
-  const payload={title,type:targetType,content:promotedBlockContent(block,targetType,title,source.sourceTitle),trackId:source.trackId,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,sourceTitle:source.sourceTitle,sessionId:focusNoteId||null,relatedNoteIds:focusNoteId?[focusNoteId]:[],tags:["focus",block.type],source,questionStatus:targetType==="question"?"open":null};
+  const payload={title,type:targetType,content:promotedBlockContent(block,targetType,title,source.sourceTitle),trackId:source.trackId,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,resourceId:i.id,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,sourceTitle:source.sourceTitle,sessionId:focusNoteId||null,relatedNoteIds:focusNoteId?[focusNoteId]:[],sourceReferences:[extractionSourceReference({id:focusNoteId,sessionId:focusNoteId,sourceId:i.id,resourceId:i.id,sourceTitle:source.sourceTitle,sourceType:sourceTypeForResource(i,focusRef.scope),trackId:source.trackId,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId},block)],tags:["focus",canonicalFocusBlockType(block.type)],source,questionStatus:targetType==="question"?"open":null,createdFrom:"focus-block"};
   const data=await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
   block.noteId=data.note.id;block.promotedAs=targetType;block.updatedAt=new Date().toISOString();
   await loadVaultNotes();
@@ -3463,13 +3575,21 @@ function updateTimer(){
 }
 async function closeFocus(saveDraft=true){clearTimeout(focusSaveTimer);if(saveDraft){await saveFocusDraft(false)}pauseTimer();$("focusDialog").close()}
 async function completeFocus(){
-  if(!focusRef)return;const i=findFocus(focusRef.id,focusRef.scope);if(!i)return;const mins=Math.max(1,Math.round(timer/60));
+  if(!focusRef){
+    return
+  }
+  const i=findFocus(focusRef.id,focusRef.scope);
+  if(!i){
+    return
+  }
+  const mins=Math.max(1,Math.round(timer/60));
   const source=sourcePayloadForResource(i,focusRef.scope,{minutes:mins});
   const session={id:crypto.randomUUID(),date:dayKey(),timestamp:new Date().toISOString(),minutes:mins,title:i.title,type:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,trackId:source.trackId,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,track:source.trackId};
   state.sessions.push(session);
   clearTimeout(focusSaveTimer);
+  let savedSessionNote=null;
   try{
-    await saveFocusDraft(true,session.id,mins,{throwOnError:true,skipStateSave:true})
+    savedSessionNote=await saveFocusDraft(true,session.id,mins,{throwOnError:true,skipStateSave:true})
   }catch(e){
     state.sessions=state.sessions.filter(item=>item.id!==session.id);
     alert(`Não consegui salvar a sessão no vault: ${e.message||String(e)}`);
@@ -3505,25 +3625,282 @@ async function completeFocus(){
   }else{
     i.progress=Math.min(100,Number(i.progress||0)+Math.max(5,Math.round(mins/Math.max(1,Number(i.estimatedMinutes||60))*100)));i.status=statusFromProgress(i.progress);if(i.track){state.weeklyProgress[i.track]=(state.weeklyProgress[i.track]||0)+mins}
   }
-  await save();await closeFocus(false);queueObsidianAutoSync("after_session")
+  await save();await closeFocus(false);queueObsidianAutoSync("after_session");
+  if(savedSessionNote){
+    await openKnowledgeExtractionReview(savedSessionNote,session,source).catch(e=>notice(`Sessão salva. Revisão de conhecimento indisponível: ${e.message||String(e)}`))
+  }
 }
 function updateStreak(){const today=dayKey(),y=new Date();y.setDate(y.getDate()-1);const yd=dayKey(y);if(state.lastStudyDate===today)return;if(state.lastStudyDate===yd)state.streak++;else state.streak=1;state.lastStudyDate=today}
 
 async function saveFocusDraft(done=false,sessionId=null,minutes=0,options={}){
-  if(!focusRef||!$("focusNotesText"))return;const i=findFocus(focusRef.id,focusRef.scope);if(!i)return;
+  if(!focusRef||!$("focusNotesText")){
+    return
+  }
+  const i=findFocus(focusRef.id,focusRef.scope);
+  if(!i){
+    return
+  }
   const source=sourcePayloadForResource(i,focusRef.scope,{timestamp:$("focusTimestamp").value||"",minutes});
-  const payload={title:`Sessão - ${i.title}`,type:"session",content:$("focusNotesText").value,blocks:focusBlocks,trackId:source.trackId,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,sourceTitle:source.sourceTitle,sessionId:sessionId||null,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,durationMinutes:minutes||Math.round(timer/60)||0,tags:done?["sessao","concluida"]:["sessao","rascunho"],source};
+  focusBlocks=normalizeFocusBlocks(focusBlocks).map(block=>({...block,sessionId:sessionId||block.sessionId||focusNoteId||null,resourceId:i.id,sourceId:i.id}));
+  const payload={title:`Sessão - ${i.title}`,type:"session",content:$("focusNotesText").value,blocks:focusBlocks,trackId:source.trackId,sourceType:sourceTypeForResource(i,focusRef.scope),sourceId:i.id,resourceId:i.id,sourceTitle:source.sourceTitle,sessionId:sessionId||null,courseId:source.courseId,moduleId:source.moduleId,lessonId:source.lessonId,durationMinutes:minutes||Math.round(timer/60)||0,tags:done?["sessao","concluida"]:["sessao","rascunho"],source,sessionKind:"study-session",knowledgeExtractionStatus:done?"pending":"draft"};
   try{
     const data=focusNoteId?await api(`/api/notes/${encodeURIComponent(focusNoteId)}`,{method:"PUT",body:JSON.stringify(payload)}):await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
-    focusNoteId=data.note.id;i.focusDraftNoteId=focusNoteId;$("focusSaveState").textContent=done?"Sessão salva no vault.":"Salvo ✓";if(!options.skipStateSave){save(false)}loadVaultNotes()
-  }catch(e){$("focusSaveState").textContent=`Erro ao salvar: ${e.message}`;if(options.throwOnError){throw e}}
+    focusNoteId=data.note.id;
+    i.focusDraftNoteId=focusNoteId;
+    $("focusSaveState").textContent=done?"Sessão salva no vault.":"Salvo ✓";
+    if(!options.skipStateSave){
+      save(false)
+    }
+    loadVaultNotes();
+    return data.note
+  }catch(e){
+    $("focusSaveState").textContent=`Erro ao salvar: ${e.message}`;
+    if(options.throwOnError){
+      throw e
+    }
+  }
 }
-function queueFocusSave(){clearTimeout(focusSaveTimer);if($("focusSaveState")){$("focusSaveState").textContent="Salvando..."}focusSaveTimer=setTimeout(()=>saveFocusDraft(false),900)}
+function queueFocusSave(){
+  clearTimeout(focusSaveTimer);
+  if($("focusSaveState")){
+    $("focusSaveState").textContent="Salvando..."
+  }
+  focusSaveTimer=setTimeout(()=>saveFocusDraft(false),900)
+}
 function insertFocusBlock(kind){
-  const type=FOCUS_BLOCK_TYPES[kind]?kind:"free";
-  focusBlocks.push({id:crypto.randomUUID(),type,title:"",content:"",timestamp:$("focusTimestamp").value||"",noteId:null,promotedAs:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+  const type=canonicalFocusBlockType(kind);
+  focusBlocks.push({id:crypto.randomUUID(),type,title:"",content:"",timestamp:$("focusTimestamp").value||"",page:$("focusTimestamp").value||"",sessionId:focusNoteId||null,resourceId:focusRef?.id||null,sourceId:focusRef?.id||null,noteId:null,promotedAs:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
   renderFocusBlocks();
   queueFocusSave()
+}
+
+function selectedExtractionText(){
+  const input=$("extractionRawNotes");
+  if(!input){
+    return ""
+  }
+  return input.value.slice(input.selectionStart||0,input.selectionEnd||0).trim()
+}
+function buildKnowledgeExtractionInput(sessionNote,session={},source={}){
+  return {sessionNote,session,source,rawNotes:sessionNote.content||"",blocks:normalizeFocusBlocks(sessionNote.blocks||[])}
+}
+async function openKnowledgeExtractionReview(sessionNote,session={},source={}){
+  await loadVaultNotes();
+  const input=buildKnowledgeExtractionInput(sessionNote,session,source);
+  const extraction=sessionNote.extractionDraft?.candidates?sessionNote.extractionDraft:await extractKnowledge(input);
+  knowledgeExtractionDraft={sessionNote,session,source,rawNotes:input.rawNotes,providerId:extraction.providerId||KnowledgeExtractionProviders.local.id,candidates:Array.isArray(extraction.candidates)?extraction.candidates:[],connections:Array.isArray(extraction.connections)?extraction.connections:[],status:"reviewing",createdAt:extraction.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};
+  renderKnowledgeExtractionDialog();
+  $("knowledgeExtractionDialog")?.showModal?.()
+}
+function extractionTypeOptions(value){
+  return Object.entries(KNOWLEDGE_CANDIDATE_TYPES).map(([key,meta])=>`<option value="${esc(key)}" ${key===value?"selected":""}>${esc(meta.label)}</option>`).join("")
+}
+function existingKnowledgeOptions(candidate){
+  const meta=KNOWLEDGE_CANDIDATE_TYPES[candidate.type]||{};
+  const notes=vaultNotes.filter(note=>note.status!=="archived"&&(!meta.targetNoteType||note.type===meta.targetNoteType));
+  return `<option value="">Criar nova</option>${notes.map(note=>`<option value="${esc(note.id)}" ${candidate.targetId===note.id?"selected":""}>${esc(note.title)}</option>`).join("")}`
+}
+function extractionCandidateCard(candidate){
+  const meta=KNOWLEDGE_CANDIDATE_TYPES[candidate.type]||KNOWLEDGE_CANDIDATE_TYPES["permanent-note"];
+  const existing=candidate.targetId?vaultNotes.find(note=>note.id===candidate.targetId):null;
+  return `<article class="extraction-candidate" data-extraction-id="${esc(candidate.id)}"><div class="extraction-candidate-head"><label class="check"><input type="checkbox" data-field="selected" ${candidate.selected?"checked":""}> Usar</label><span class="tag">${esc(meta.label)}</span>${existing?`<span class="hint">liga a ${esc(existing.title)}</span>`:""}</div><div class="two-fields"><label>Tipo<select data-field="type">${extractionTypeOptions(candidate.type)}</select></label><label>Destino<select data-field="targetId">${existingKnowledgeOptions(candidate)}</select></label></div><label>Título<input data-field="title" value="${esc(candidate.title||"")}"></label><label>Conteúdo<textarea data-field="content" rows="4">${esc(candidate.content||"")}</textarea></label><div class="two-fields"><label>Rota<select data-field="route"><option value="knowledge" ${candidate.route==="knowledge"?"selected":""}>Conhecimento</option><option value="inbox" ${candidate.route==="inbox"?"selected":""}>Inbox</option><option value="review" ${candidate.route==="review"?"selected":""}>Revisão</option><option value="next-session" ${candidate.route==="next-session"?"selected":""}>Próxima sessão</option><option value="ignore" ${candidate.route==="ignore"?"selected":""}>Ignorar</option></select></label><label>Revisar em dias<input data-field="reviewIntervalDays" type="number" min="1" value="${Number(candidate.reviewIntervalDays||7)}"></label></div><div class="hint">${esc([candidate.sourceTimestamp,candidate.sourcePage].filter(Boolean).join(" · ")||candidate.sourceBlockId||"marcado no texto")}</div></article>`
+}
+function renderKnowledgeExtractionDialog(){
+  if(!knowledgeExtractionDraft||!$("extractionCandidateList")){
+    return
+  }
+  const sessionNote=knowledgeExtractionDraft.sessionNote||{};
+  if($("extractionSessionMeta")){
+    $("extractionSessionMeta").textContent=`${sessionNote.title||"Sessão"} · ${knowledgeExtractionDraft.providerId} · ${knowledgeExtractionDraft.candidates.length} sugestão${knowledgeExtractionDraft.candidates.length===1?"":"ões"}`
+  }
+  if($("extractionRawNotes")){
+    $("extractionRawNotes").value=knowledgeExtractionDraft.rawNotes||""
+  }
+  $("extractionCandidateList").innerHTML=KNOWLEDGE_EXTRACTION_SECTIONS.map(([section,label])=>{
+    const entries=knowledgeExtractionDraft.candidates.filter(candidate=>KNOWLEDGE_CANDIDATE_TYPES[candidate.type]?.section===section);
+    return `<section class="extraction-section"><div class="card-head"><strong>${esc(label)}</strong><span class="tag">${entries.length}</span></div>${entries.length?entries.map(extractionCandidateCard).join(""):`<div class="hint">Sem sugestões nesta seção.</div>`}</section>`
+  }).join("")
+}
+function updateExtractionCandidate(id,patch){
+  if(!knowledgeExtractionDraft){
+    return
+  }
+  knowledgeExtractionDraft.candidates=knowledgeExtractionDraft.candidates.map(candidate=>candidate.id===id?{...candidate,...patch,updatedAt:new Date().toISOString()}:candidate);
+  knowledgeExtractionDraft.updatedAt=new Date().toISOString()
+}
+function handleExtractionCandidateEvent(e){
+  const card=e.target.closest("[data-extraction-id]");
+  if(!card||!knowledgeExtractionDraft){
+    return
+  }
+  const field=e.target.dataset.field;
+  if(!field){
+    return
+  }
+  const value=e.target.type==="checkbox"?e.target.checked:e.target.type==="number"?Number(e.target.value)||0:e.target.value;
+  const patch={[field]:value};
+  if(field==="type"){
+    const targetType=KNOWLEDGE_CANDIDATE_TYPES[value]?.targetNoteType;
+    const match=findExistingKnowledgeMatch({title:knowledgeExtractionDraft.candidates.find(candidate=>candidate.id===card.dataset.extractionId)?.title||""},targetType);
+    patch.targetId=match?.id||"";
+    patch.linkMode=match?"existing":"new";
+    patch.route=value==="next-action"?"inbox":"knowledge"
+  }
+  if(field==="targetId"){
+    patch.linkMode=value?"existing":"new"
+  }
+  updateExtractionCandidate(card.dataset.extractionId,patch);
+  if(field==="type"){
+    renderKnowledgeExtractionDialog()
+  }
+}
+function addExtractionCandidate(type="permanent-note"){
+  if(!knowledgeExtractionDraft){
+    return
+  }
+  const raw=selectedExtractionText();
+  const title=firstMeaningfulLine(raw).slice(0,110)||KNOWLEDGE_CANDIDATE_TYPES[type]?.label||"Nota";
+  const targetType=KNOWLEDGE_CANDIDATE_TYPES[type]?.targetNoteType;
+  const match=findExistingKnowledgeMatch({title},targetType);
+  knowledgeExtractionDraft.candidates.push({id:crypto.randomUUID(),type,title,content:raw,selected:true,linkMode:match?"existing":"new",targetId:match?.id||"",route:type==="next-action"?"inbox":"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:"manual-selection",sourceTimestamp:"",sourcePage:"",sourceExcerpt:raw||title,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sessionNoteId:knowledgeExtractionDraft.sessionNote?.id||null});
+  renderKnowledgeExtractionDialog()
+}
+function mergeSelectedExtractionCandidates(){
+  if(!knowledgeExtractionDraft){
+    return
+  }
+  const selected=knowledgeExtractionDraft.candidates.filter(candidate=>candidate.selected);
+  if(selected.length<2){
+    notice("Selecione ao menos duas sugestões para unir.");
+    return
+  }
+  const [first,...rest]=selected;
+  first.title=first.title||rest.find(candidate=>candidate.title)?.title||"Nota";
+  first.content=[first.content,...rest.map(candidate=>candidate.content)].filter(Boolean).join("\n\n");
+  first.sourceExcerpt=[first.sourceExcerpt,...rest.map(candidate=>candidate.sourceExcerpt)].filter(Boolean).join("\n\n");
+  first.updatedAt=new Date().toISOString();
+  const removeIds=new Set(rest.map(candidate=>candidate.id));
+  knowledgeExtractionDraft.candidates=knowledgeExtractionDraft.candidates.filter(candidate=>!removeIds.has(candidate.id));
+  renderKnowledgeExtractionDialog()
+}
+function sourceRefsForCandidate(candidate,sessionNote){
+  return [extractionSourceReference(sessionNote,candidate)]
+}
+function candidateMarkdown(candidate,sessionNote){
+  const sourceTitle=sessionNote.sourceTitle||sessionNote.source?.title||sessionNote.title||"Sessão";
+  const body=String(candidate.content||candidate.title||"").trim();
+  const link=sourceTitle?`[[${sourceTitle.replace(/[\[\]]/g,"")}]]`:"";
+  if(candidate.type==="concept"){
+    return `# ${candidate.title}\n\n## Conceito\n\n${body}\n\n## Definição em uma frase\n\n\n## Exemplos\n\n\n## Fontes\n\n- ${link}`.trim()
+  }
+  if(candidate.type==="question"){
+    return `# ${candidate.title}\n\n## Pergunta\n\n${body}\n\n## Evidências\n\n\n## Próxima investigação\n\n- [ ] \n\n## Fontes\n\n- ${link}`.trim()
+  }
+  return `# ${candidate.title}\n\n## Ideia atômica\n\n${body}\n\n## Por que importa\n\n\n## Conexões\n\n\n## Fontes\n\n- ${link}`.trim()
+}
+function upsertManagedSection(content,id,title,body){
+  const start=`<!-- ARCANA:START ${id} -->`,end=`<!-- ARCANA:END ${id} -->`;
+  const section=`${start}\n## ${title}\n\n${String(body||"").trim()}\n${end}`;
+  const pattern=new RegExp(`\\n?<!-- ARCANA:START ${id} -->[\\s\\S]*?<!-- ARCANA:END ${id} -->`);
+  const current=String(content||"").trimEnd();
+  if(pattern.test(current)){
+    return current.replace(pattern,`\n\n${section}`)
+  }
+  return `${current}\n\n${section}`.trim()
+}
+async function persistKnowledgeCandidate(candidate,sessionNote){
+  const meta=KNOWLEDGE_CANDIDATE_TYPES[candidate.type]||{};
+  const targetType=meta.targetNoteType||"permanent";
+  const refs=sourceRefsForCandidate(candidate,sessionNote);
+  const existingId=candidate.targetId||findExistingKnowledgeMatch(candidate,targetType)?.id||"";
+  if(existingId){
+    const data=await api(`/api/notes/${encodeURIComponent(existingId)}`);
+    const existing=data.note;
+    const related=[...(existing.relatedNoteIds||[]),sessionNote.id].filter(Boolean);
+    const sourceReferences=mergeUniqueSourceReferences(existing.sourceReferences,refs);
+    const content=upsertManagedSection(existing.content||"",`arcana-sources-${sessionNote.id}`,"Fontes Arcana",refs.map(ref=>`- ${ref.sourceTitle||"Fonte"}${ref.sourceTimestamp?` @ ${ref.sourceTimestamp}`:""}${ref.sourceExcerpt?` - ${ref.sourceExcerpt}`:""}`).join("\n"));
+    const saved=await api(`/api/notes/${encodeURIComponent(existingId)}`,{method:"PUT",body:JSON.stringify({...existing,content,relatedNoteIds:[...new Set(related)],sourceReferences,tags:[...new Set([...(existing.tags||[]),"extraido"])]})});
+    return saved.note
+  }
+  const reviewAt=candidate.route==="review"?isoDate(candidate.reviewIntervalDays||7):null;
+  const payload={title:candidate.title||"Nota extraída",type:targetType,content:candidateMarkdown(candidate,sessionNote),trackId:sessionNote.trackId||state.activeTrack,sourceType:sessionNote.sourceType||null,sourceId:sessionNote.sourceId||null,resourceId:sessionNote.resourceId||sessionNote.sourceId||null,sourceTitle:sessionNote.sourceTitle||"",sessionId:sessionNote.sessionId||sessionNote.id||null,courseId:sessionNote.courseId||null,moduleId:sessionNote.moduleId||null,lessonId:sessionNote.lessonId||null,relatedNoteIds:[sessionNote.id].filter(Boolean),sourceReferences:refs,tags:["extraido",candidate.type],questionStatus:targetType==="question"?"open":null,reviewAt,createdFrom:"knowledge-extraction"};
+  const saved=await api("/api/notes",{method:"POST",body:JSON.stringify(payload)});
+  return saved.note
+}
+async function persistNextActionCandidate(candidate,sessionNote){
+  const route=candidate.route||"inbox";
+  if(route==="ignore"){
+    return null
+  }
+  if(route==="inbox"||route==="next-session"){
+    state.inbox.unshift({id:crypto.randomUUID(),raw:candidate.content||candidate.title,title:candidate.title||"Próximo passo",type:route==="next-session"?"study-action":"action",createdAt:new Date().toISOString(),sourceNoteId:sessionNote.id,sourceId:sessionNote.sourceId||sessionNote.resourceId||null});
+    return null
+  }
+  return persistKnowledgeCandidate({...candidate,type:"next-action"},sessionNote)
+}
+function fichamentoExtractionBody(sessionNote,savedNotes,candidates){
+  const links=savedNotes.filter(Boolean).map(note=>`- [[${note.title}]]`).join("\n");
+  const next=candidates.filter(candidate=>candidate.type==="next-action"&&candidate.selected).map(candidate=>`- [ ] ${candidate.title}`).join("\n");
+  return [`- Sessão: [[${sessionNote.title}]]`,links?`\n### Conhecimento extraído\n${links}`:"",next?`\n### Próximas ações\n${next}`:""].filter(Boolean).join("\n")
+}
+async function upsertFichamentoFromExtraction(sessionNote,savedNotes,candidates){
+  const sourceId=sessionNote.sourceId||sessionNote.resourceId||sessionNote.source?.id;
+  if(!sourceId){
+    return null
+  }
+  const existing=vaultNotes.find(note=>note.type==="literature"&&note.status!=="archived"&&(note.sourceId===sourceId||note.resourceId===sourceId));
+  const body=fichamentoExtractionBody(sessionNote,savedNotes,candidates);
+  if(existing){
+    const data=await api(`/api/notes/${encodeURIComponent(existing.id)}`);
+    const note=data.note;
+    return (await api(`/api/notes/${encodeURIComponent(existing.id)}`,{method:"PUT",body:JSON.stringify({...note,content:upsertManagedSection(note.content||"",`arcana-extraction-${sessionNote.id}`,"Sessão extraída",body),relatedNoteIds:[...new Set([...(note.relatedNoteIds||[]),sessionNote.id,...savedNotes.map(item=>item?.id).filter(Boolean)])]})})).note
+  }
+  return (await api("/api/notes",{method:"POST",body:JSON.stringify({title:`Fichamento - ${sessionNote.sourceTitle||sessionNote.title||"Fonte"}`,type:"literature",content:upsertManagedSection(literatureTemplate(sessionNote.sourceTitle||sessionNote.title||"Fonte",sessionNote.sourceType||"other"),`arcana-extraction-${sessionNote.id}`,"Sessão extraída",body),trackId:sessionNote.trackId||state.activeTrack,sourceType:sessionNote.sourceType||"other",sourceId,resourceId:sourceId,sourceTitle:sessionNote.sourceTitle||"",courseId:sessionNote.courseId||null,moduleId:sessionNote.moduleId||null,lessonId:sessionNote.lessonId||null,relatedNoteIds:[sessionNote.id,...savedNotes.map(item=>item?.id).filter(Boolean)],tags:["fichamento","extraido"],createdFrom:"knowledge-extraction"})})).note
+}
+async function saveKnowledgeExtractionDraft(status="draft"){
+  if(!knowledgeExtractionDraft?.sessionNote?.id){
+    return
+  }
+  knowledgeExtractionDraft.status=status;
+  knowledgeExtractionDraft.updatedAt=new Date().toISOString();
+  const sessionNote=knowledgeExtractionDraft.sessionNote;
+  await api(`/api/notes/${encodeURIComponent(sessionNote.id)}`,{method:"PUT",body:JSON.stringify({...sessionNote,knowledgeExtractionStatus:status,extractionDraft:{providerId:knowledgeExtractionDraft.providerId,status,candidates:knowledgeExtractionDraft.candidates,connections:knowledgeExtractionDraft.connections,createdAt:knowledgeExtractionDraft.createdAt,updatedAt:knowledgeExtractionDraft.updatedAt}})});
+  await loadVaultNotes()
+}
+async function confirmKnowledgeExtraction(){
+  if(!knowledgeExtractionDraft){
+    return
+  }
+  const sessionNote=knowledgeExtractionDraft.sessionNote;
+  const selected=knowledgeExtractionDraft.candidates.filter(candidate=>candidate.selected&&candidate.route!=="ignore");
+  const savedNotes=[];
+  for(const candidate of selected){
+    if(candidate.type==="next-action"){
+      const saved=await persistNextActionCandidate(candidate,sessionNote);
+      if(saved){
+        savedNotes.push(saved)
+      }
+    }else{
+      savedNotes.push(await persistKnowledgeCandidate(candidate,sessionNote))
+    }
+  }
+  await upsertFichamentoFromExtraction(sessionNote,savedNotes,selected);
+  await api(`/api/notes/${encodeURIComponent(sessionNote.id)}`,{method:"PUT",body:JSON.stringify({...sessionNote,knowledgeExtractionStatus:"completed",promotedNoteIds:[...new Set([...(sessionNote.promotedNoteIds||[]),...savedNotes.map(note=>note?.id).filter(Boolean)])],extractionDraft:{providerId:knowledgeExtractionDraft.providerId,status:"completed",candidates:knowledgeExtractionDraft.candidates,connections:knowledgeExtractionDraft.connections,createdAt:knowledgeExtractionDraft.createdAt,updatedAt:new Date().toISOString()}})});
+  if(selected.some(candidate=>candidate.type==="next-action"&&(candidate.route==="inbox"||candidate.route==="next-session"))){
+    await save(false,"knowledge-extraction")
+  }
+  knowledgeExtractionDraft=null;
+  $("knowledgeExtractionDialog")?.close?.();
+  await loadVaultNotes();
+  renderAll();
+  notice("Conhecimento organizado.")
+}
+async function closeKnowledgeExtractionReview(status="draft"){
+  if(knowledgeExtractionDraft){
+    await saveKnowledgeExtractionDraft(status)
+  }
+  knowledgeExtractionDraft=null;
+  $("knowledgeExtractionDialog")?.close?.()
 }
 
 function renderVaultHome(){
@@ -3563,8 +3940,11 @@ function knowledgeType(n){
   if(n.type==="question"){
     return "questions"
   }
-  if(n.type==="concept"||n.type==="permanent"){
+  if(n.type==="concept"){
     return "concepts"
+  }
+  if(n.type==="permanent"){
+    return "permanent"
   }
   if(n.type==="session"){
     return "sessions"
@@ -3584,10 +3964,10 @@ function knowledgeMatchesTab(n,tab){
   return knowledgeType(n)===tab
 }
 function knowledgeTabLabel(tab){
-  return {all:"Tudo",fichamentos:"Fichamento",notes:"Nota",concepts:"Conceito",questions:"Pergunta",reviews:"Revisão",sessions:"Sessão"}[tab]||"Nota"
+  return {all:"Tudo",fichamentos:"Fichamento",notes:"Nota",concepts:"Conceito",permanent:"Permanente",questions:"Pergunta",reviews:"Revisão",sessions:"Sessão"}[tab]||"Nota"
 }
 function knowledgeTabName(tab){
-  return {all:"Tudo",fichamentos:"Fichamentos",notes:"Notas",concepts:"Conceitos",questions:"Perguntas",reviews:"Revisões",sessions:"Sessões"}[tab]||knowledgeTabLabel(tab)
+  return {all:"Tudo",fichamentos:"Fichamentos",notes:"Notas",concepts:"Conceitos",permanent:"Permanentes",questions:"Perguntas",reviews:"Revisões",sessions:"Sessões"}[tab]||knowledgeTabLabel(tab)
 }
 async function openKnowledgeObject(id){
   const note=vaultNotes.find(n=>n.id===id);
@@ -5016,6 +5396,26 @@ $("newNoteBtn").onclick=()=>newVaultNote("permanent");$("newFichamentoBtn").oncl
 $("prevMonthBtn").onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};$("nextMonthBtn").onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);renderCalendar()};
 $("addBtn").onclick=openCaptureDialog;$("itemForm").onsubmit=saveItem;$("itemForm").kind.onchange=()=>renderModuleEditor();$("addModuleBtn").onclick=()=>$("moduleRows").insertAdjacentHTML("beforeend",moduleInput());
 $("saveNotesBtn").onclick=saveNotes;$("promoteDialogNoteBtn").onclick=promoteDialogNote;$("focusNotesText").oninput=queueFocusSave;document.querySelectorAll("[data-focus-block]").forEach(b=>b.onclick=()=>insertFocusBlock(b.dataset.focusBlock));$("timerStartBtn").onclick=startTimer;$("timerPauseBtn").onclick=pauseTimer;$("timerResetBtn").onclick=resetTimer;$("closeFocusBtn").onclick=closeFocus;$("focusDoneBtn").onclick=completeFocus;
+if($("extractionCandidateList")){
+  $("extractionCandidateList").oninput=handleExtractionCandidateEvent;
+  $("extractionCandidateList").onchange=handleExtractionCandidateEvent
+}
+document.querySelectorAll("[data-extraction-add]").forEach(button=>button.onclick=()=>addExtractionCandidate(button.dataset.extractionAdd));
+if($("extractionMergeBtn")){
+  $("extractionMergeBtn").onclick=mergeSelectedExtractionCandidates
+}
+if($("extractionSkipBtn")){
+  $("extractionSkipBtn").onclick=()=>closeKnowledgeExtractionReview("skipped").catch(err=>alert(err.message||String(err)))
+}
+if($("extractionSaveDraftBtn")){
+  $("extractionSaveDraftBtn").onclick=()=>saveKnowledgeExtractionDraft("draft").then(()=>notice("Rascunho de extração salvo.")).catch(err=>alert(err.message||String(err)))
+}
+if($("extractionSaveKnowledgeBtn")){
+  $("extractionSaveKnowledgeBtn").onclick=()=>confirmKnowledgeExtraction().catch(err=>alert(err.message||String(err)))
+}
+if($("extractionCloseBtn")){
+  $("extractionCloseBtn").onclick=()=>closeKnowledgeExtractionReview("draft").catch(err=>alert(err.message||String(err)))
+}
 if($("exportBtn")){$("exportBtn").onclick=()=>ArcanaStorage.downloadFullBackup(state)}
 if($("importInput")){$("importInput").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await importFullBackupFile(f)}catch(err){alert(err.message||"Backup inválido")}e.target.value=""}}
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).close());

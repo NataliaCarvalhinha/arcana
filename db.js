@@ -148,6 +148,16 @@ const ArcanaStorage=(()=>{
   function excerpt(content=""){
     return String(content).replace(/^---[\s\S]*?---/,"").replace(/\s+/g," ").trim().slice(0,220)
   }
+  function normalizeNoteTitle(text=""){
+    return String(text||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim()
+  }
+  function noteMatchKeys(note){
+    return [note?.title,...(Array.isArray(note?.aliases)?note.aliases:[])].map(normalizeNoteTitle).filter(Boolean)
+  }
+  function canonicalBlockType(type){
+    const aliases={formula:"formula-command",formula_command:"formula-command","formula-command":"formula-command",next_action:"next-action","next-action":"next-action",free:"free-note","free-note":"free-note"};
+    return aliases[type]||type
+  }
   function noteDefaults(data={}){
     const ts=now();
     return {
@@ -160,16 +170,28 @@ const ArcanaStorage=(()=>{
       lessonId:data.lessonId||null,
       sourceType:data.sourceType||null,
       sourceId:data.sourceId||null,
+      resourceId:data.resourceId||null,
+      areaId:data.areaId||null,
+      fichamentoId:data.fichamentoId||null,
       sourceTitle:data.sourceTitle||data.source?.title||"",
       sessionId:data.sessionId||null,
+      sessionKind:data.sessionKind||null,
+      createdFrom:data.createdFrom||null,
+      knowledgeExtractionStatus:data.knowledgeExtractionStatus||null,
+      extractionDraft:data.extractionDraft||null,
       durationMinutes:Number(data.durationMinutes||0)||0,
       tags:Array.isArray(data.tags)?data.tags:[],
+      aliases:Array.isArray(data.aliases)?data.aliases:[],
       createdAt:data.createdAt||ts,
       updatedAt:data.updatedAt||ts,
       favorite:!!data.favorite,
       reviewAt:data.reviewAt||null,
       status:data.status||"active",
       relatedNoteIds:Array.isArray(data.relatedNoteIds)?data.relatedNoteIds:[],
+      sourceReferences:Array.isArray(data.sourceReferences)?data.sourceReferences:[],
+      conceptIds:Array.isArray(data.conceptIds)?data.conceptIds:[],
+      relatedKnowledgeIds:Array.isArray(data.relatedKnowledgeIds)?data.relatedKnowledgeIds:[],
+      answerKnowledgeIds:Array.isArray(data.answerKnowledgeIds)?data.answerKnowledgeIds:[],
       source:data.source||{},
       blocks:Array.isArray(data.blocks)?data.blocks:[],
       questionStatus:data.questionStatus||data.question_status||null,
@@ -231,7 +253,8 @@ const ArcanaStorage=(()=>{
       note.createdAt=existing.createdAt
     }
     await req(tx("notes","readwrite").put(note));
-    const dupes=(await listNotes()).filter(n=>n.id!==note.id&&n.title.trim().toLowerCase()===note.title.trim().toLowerCase());
+    const keys=noteMatchKeys(note);
+    const dupes=(await listNotes()).filter(n=>n.id!==note.id&&noteMatchKeys(n).some(key=>keys.includes(key)));
     return {note:await getNote(note.id),duplicateCandidates:dupes}
   }
   async function archiveNote(id){
@@ -394,7 +417,8 @@ const ArcanaStorage=(()=>{
     "90 Arquivo/",
     "Attachments/",
     "Tracks/",
-    "Courses/"
+    "Courses/",
+    "Areas/"
   ];
   function yamlScalar(value){
     if(value===null||value===undefined){
@@ -447,6 +471,9 @@ const ArcanaStorage=(()=>{
     if(note.status==="archived"){
       return "90 Arquivo"
     }
+    if(note.areaId){
+      return `Areas/${slug(note.areaId)}`
+    }
     if(note.type==="quick"){
       return "00 Inbox"
     }
@@ -479,9 +506,21 @@ const ArcanaStorage=(()=>{
   }
   function arcanaFrontmatter(meta){
     const lines=["---","arcana_managed: true",`arcana_id: ${yamlScalar(meta.arcana_id)}`];
-    for(const key of ["type","title","track","track_id","course","course_id","module","module_id","lesson","lesson_id","source","source_type","source_id","session_id","date","duration_minutes","question_status","created","updated","review_at","status","favorite"]){
+    for(const key of ["type","title","aliases","track","track_id","course","course_id","module","module_id","lesson","lesson_id","source","source_type","source_id","resource_id","area_id","fichamento_id","session_id","created_from","knowledge_extraction_status","date","duration_minutes","question_status","created","updated","review_at","status","favorite"]){
       if(Object.prototype.hasOwnProperty.call(meta,key)){
-        lines.push(`${key}: ${yamlScalar(meta[key])}`)
+        const value=meta[key];
+        if(Array.isArray(value)){
+          lines.push(`${key}:`);
+          if(value.length){
+            for(const item of value){
+              lines.push(`  - ${yamlScalar(item)}`)
+            }
+          }else{
+            lines.push("  []")
+          }
+          continue
+        }
+        lines.push(`${key}: ${yamlScalar(value)}`)
       }
     }
     const tags=Array.isArray(meta.tags)?meta.tags:[];
@@ -550,6 +589,7 @@ const ArcanaStorage=(()=>{
       arcana_id:note.id,
       type:note.type||"permanent",
       title:note.title||"Nota",
+      aliases:Array.isArray(note.aliases)?note.aliases:[],
       track:note._track?.name||"",
       track_id:note.trackId||note._track?.id||"",
       course:note._course?.title||"",
@@ -561,7 +601,12 @@ const ArcanaStorage=(()=>{
       source:note.sourceTitle||note.source?.title||"",
       source_type:note.sourceType||"",
       source_id:note.sourceId||"",
+      resource_id:note.resourceId||"",
+      area_id:note.areaId||"",
+      fichamento_id:note.fichamentoId||"",
       session_id:note.sessionId||"",
+      created_from:note.createdFrom||"",
+      knowledge_extraction_status:note.knowledgeExtractionStatus||"",
       date:note.createdAt?String(note.createdAt).slice(0,10):"",
       duration_minutes:Number(note.durationMinutes||note.source?.minutes||0)||0,
       question_status:note.questionStatus||"",
@@ -574,7 +619,8 @@ const ArcanaStorage=(()=>{
     })
   }
   function noteBlocks(note,type){
-    return (Array.isArray(note.blocks)?note.blocks:[]).filter(block=>block?.type===type&&String([block.title,block.content].join("")).trim())
+    const wanted=canonicalBlockType(type);
+    return (Array.isArray(note.blocks)?note.blocks:[]).filter(block=>canonicalBlockType(block?.type)===wanted&&String([block.title,block.content].join("")).trim())
   }
   function blockTitle(block){
     return String(block.title||String(block.content||"").split(/\r?\n/).map(line=>line.trim()).find(Boolean)||"Nota").trim()
@@ -596,6 +642,30 @@ const ArcanaStorage=(()=>{
     if(note._lesson){lines.push(`- Aula: ${note._lesson.title||""}`)}
     return lines
   }
+  function managedSectionMarkdown(id,title,body){
+    const text=String(body||"").trim();
+    if(!text){
+      return ""
+    }
+    return `<!-- ARCANA:START ${id} -->\n## ${title}\n\n${text}\n<!-- ARCANA:END ${id} -->`
+  }
+  function sourceReferencesMarkdown(refs){
+    return (Array.isArray(refs)?refs:[]).map(ref=>`- ${ref.sourceTitle||"Fonte"}${ref.sourceTimestamp?` @ ${ref.sourceTimestamp}`:""}${ref.sourcePage?` p. ${ref.sourcePage}`:""}${ref.sourceExcerpt?`\n  > ${String(ref.sourceExcerpt).replace(/\n/g,"\n  > ")}`:""}`).join("\n")
+  }
+  function relatedKnowledgeMarkdown(note){
+    const ids=[...(Array.isArray(note.relatedKnowledgeIds)?note.relatedKnowledgeIds:[]),...(Array.isArray(note.conceptIds)?note.conceptIds:[]),...(Array.isArray(note.answerKnowledgeIds)?note.answerKnowledgeIds:[])];
+    return [...new Set(ids)].filter(Boolean).map(id=>`- ${id}`).join("\n")
+  }
+  function appendManagedKnowledgeSections(lines,note){
+    const sources=managedSectionMarkdown("arcana-sources","Fontes Arcana",sourceReferencesMarkdown(note.sourceReferences));
+    const related=managedSectionMarkdown("arcana-related","Conhecimento relacionado",relatedKnowledgeMarkdown(note));
+    if(sources){
+      lines.push("",sources)
+    }
+    if(related){
+      lines.push("",related)
+    }
+  }
   function markdownForSession(note){
     const lines=[`# ${note.title||"Sessão"}`];
     section(lines,"Contexto",contextLines(note));
@@ -607,9 +677,10 @@ const ArcanaStorage=(()=>{
     section(lines,"Insights",noteBlocks(note,"insight").map(block=>`- ${obsidianLink(blockTitle(block))}${block.content?`\n${indented(block.content)}`:""}`));
     section(lines,"Citações",noteBlocks(note,"quote").map(block=>`${block.title?`- ${block.title}\n`:""}> ${String(block.content||"").trim().replace(/\n/g,"\n> ")}`));
     section(lines,"Exemplos",noteBlocks(note,"example").map(block=>`- ${blockTitle(block)}${block.content?`\n${indented(block.content)}`:""}`));
-    section(lines,"Fórmulas e comandos",noteBlocks(note,"formula").map(block=>`- ${blockTitle(block)}${block.content?`\n\n\`\`\`\n${String(block.content).trim()}\n\`\`\``:""}`));
-    section(lines,"Próximos passos",noteBlocks(note,"next_action").map(block=>`- [ ] ${blockTitle(block)}${block.content?`\n${indented(block.content)}`:""}`));
-    section(lines,"Notas livres",noteBlocks(note,"free").map(block=>`- ${blockTitle(block)}${block.content?`\n${indented(block.content)}`:""}`));
+    section(lines,"Fórmulas e comandos",noteBlocks(note,"formula-command").map(block=>`- ${blockTitle(block)}${block.content?`\n\n\`\`\`\n${String(block.content).trim()}\n\`\`\``:""}`));
+    section(lines,"Próximos passos",noteBlocks(note,"next-action").map(block=>`- [ ] ${blockTitle(block)}${block.content?`\n${indented(block.content)}`:""}`));
+    section(lines,"Notas livres",noteBlocks(note,"free-note").map(block=>`- ${blockTitle(block)}${block.content?`\n${indented(block.content)}`:""}`));
+    appendManagedKnowledgeSections(lines,note);
     return `${obsidianFrontmatterForNote(note)}\n\n${lines.join("\n").trimEnd()}\n`
   }
   function markdownForQuestion(note){
@@ -619,6 +690,7 @@ const ArcanaStorage=(()=>{
       section(lines,"Pergunta",String(note.content||"").trim())
     }
     section(lines,"Status",`- ${note.questionStatus||"open"}`);
+    appendManagedKnowledgeSections(lines,note);
     return `${obsidianFrontmatterForNote(note)}\n\n${lines.join("\n").trimEnd()}\n`
   }
   function markdownFor(note){
@@ -641,6 +713,7 @@ const ArcanaStorage=(()=>{
     if(String(note.content||"").trim()){
       body.push("","## Nota","",String(note.content||"").trim())
     }
+    appendManagedKnowledgeSections(body,note);
     return `${obsidianFrontmatterForNote(note)}\n\n${body.join("\n").trimEnd()}\n`
   }
   function parseMarkdown(text){

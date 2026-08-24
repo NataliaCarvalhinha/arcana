@@ -47,6 +47,12 @@ Arcana also creates local IndexedDB snapshots and keeps the latest 10. Snapshots
 
 Use `Exportar Vault para Obsidian` to download `Arcana-Obsidian-Vault-YYYY-MM-DD.zip` with Markdown notes, YAML frontmatter, wiki links, course/module/lesson context, source notes, indexes, and flashcards.
 
+After a Focus Circle session, Arcana saves the raw session note first, then opens a local Knowledge Extraction review. The review suggests concepts, permanent notes, questions, quotes, examples, formulas/commands, and next actions from the saved notes and structured focus blocks. Nothing is sent to a remote AI provider; the user approves, edits, merges, drafts, skips, or saves every candidate.
+
+Approved candidates keep source references back to the session/resource and dedupe against existing notes by normalized title or alias. Next actions can route to Inbox, while extracted knowledge is also written back into Arcana-managed fichamento sections for Obsidian export.
+
+See `docs/knowledge-extraction.md` for the extraction pipeline contract, provenance fields, and test coverage.
+
 Use `Importar Vault` to restore a ZIP produced by Arcana or to import generic Markdown. The static importer rejects unsafe paths. Direct Obsidian -> Arcana reverse sync is not part of Phase 1.
 
 When running through `server.py`, Settings -> Integracoes -> Obsidian exposes the Obsidian Bridge Phase 1:
