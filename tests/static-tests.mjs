@@ -85,6 +85,10 @@ assert.match(index, /data-knowledge-tab="fichamentos"/, "Knowledge hub exposes f
 assert.match(index, /data-knowledge-tab="permanent"/, "Knowledge hub exposes permanent-note tab");
 assert.match(index, /data-knowledge-tab="reviews"/, "Knowledge hub exposes review tab");
 assert.match(index, /id="knowledgeExtractionDialog"/, "knowledge extraction review dialog is present");
+assert.match(index, /id="knowledgeExtractionSettingsForm"/, "settings expose knowledge extraction configuration");
+assert.match(index, /id="knowledgeExtractionAiStatus"/, "settings expose AI readiness");
+assert.match(index, /id="extractionRetryBtn"/, "knowledge extraction review can retry provider output");
+assert.match(index, /id="extractionCategoryTabs"/, "knowledge extraction review groups candidates");
 assert.match(index, /data-extraction-add="concept"/, "knowledge extraction can add concept candidates");
 assert.match(index, /data-extraction-add="next-action"/, "knowledge extraction can add next-action candidates");
 assert.match(index, /id="globalSearchDialog"/, "global search dialog is present");
@@ -101,8 +105,14 @@ assert.match(app, /function renderKnowledge/, "Knowledge hub renderer is present
 assert.match(app, /function openKnowledgeObject/, "Knowledge objects open through a unified action");
 assert.match(app, /class KnowledgeExtractionProvider/, "knowledge extraction uses a swappable provider boundary");
 assert.match(app, /local-semantic-blocks/, "knowledge extraction default provider is local");
+assert.match(app, /class AIKnowledgeExtractionProvider/, "knowledge extraction has a structured AI provider boundary");
+assert.match(app, /class MockAIKnowledgeExtractionProvider/, "knowledge extraction has a mockable AI provider for tests");
+assert.match(app, /function sanitizeKnowledgeExtractionPayload/, "knowledge extraction minimizes AI payloads");
+assert.match(app, /KNOWLEDGE_EXTRACTION_SCHEMA_VERSION=2/, "knowledge extraction schema version is explicit");
+assert.match(app, /async function runKnowledgeExtraction/, "knowledge extraction combines semantic fallback and provider output");
 assert.match(app, /openKnowledgeExtractionReview\(savedSessionNote/, "focus completion opens extraction review after saving raw notes");
 assert.match(app, /knowledgeExtractionStatus/, "session notes track extraction review status");
+assert.match(app, /sourceNotesUpdatedAt/, "session notes track extraction source freshness");
 assert.match(app, /upsertManagedSection/, "fichamentos use managed extraction sections");
 assert.match(app, /function buildSearchResults/, "global search result builder is present");
 assert.match(app, /function openGlobalSearch/, "global search opener is present");
@@ -143,6 +153,7 @@ assert.match(index, /Toki com Arcana via sincroniza/, "settings explains the Tok
 assert.match(index, /data-calendar-filter="external"/, "calendar view exposes external source filters");
 assert.match(index, /id="calendarConflictNotice"/, "Sanctuary exposes calendar conflict warning surface");
 assert.match(db, /function sanitizeStateForPortableExport/, "portable exports sanitize OAuth-shaped calendar fields");
+assert.match(db, /sanitizeSecretContainer\(copy\.knowledgeExtraction\)/, "portable exports sanitize knowledge extraction credentials");
 assert.match(index, /id="requestCatalogBtn"/, "YouTube view exposes the catalog request action");
 assert.match(index, /id="requestCatalogBtn" class="mini-btn" href="#" target="_blank" rel="noopener noreferrer"/, "catalog request action opens a safe new tab");
 assert.match(index, /id="catalogOptionsBtn"/, "YouTube view exposes manual catalog fallback options");
@@ -206,7 +217,7 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v21/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v22/, "service worker cache version invalidates old app shell");
 assert.match(worker, /data-safety\.js/, "service worker caches the data safety module");
 assert.match(worker, /routine-excel\.js/, "service worker caches the routine Excel module");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");

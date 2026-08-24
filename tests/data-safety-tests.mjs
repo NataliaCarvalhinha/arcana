@@ -93,4 +93,13 @@ assert.match(db, /Explicit user-confirmed replace import/, "destructive import p
 assert.match(app, /showStartupRecovery/, "startup failures show recovery UI");
 assert.match(app, /downloadRawState/, "raw state export is available");
 assert.doesNotMatch(app, /falling back to localStorage/, "startup must not silently fall back to fresh localStorage");
+assert.match(app, /setKnowledgeExtractionSessionSecret/, "AI extraction credentials are session-scoped only");
+assert.match(app, /sessionStorage\.setItem\(KNOWLEDGE_EXTRACTION_SESSION_SECRET_KEY/, "AI extraction credentials use sessionStorage");
+assert.doesNotMatch(app, /DEFAULT_KNOWLEDGE_EXTRACTION_SETTINGS=[^;]*(apiKey|access_token|refresh_token|Authorization|Bearer)/i, "knowledge extraction defaults do not persist AI credentials");
+assert.match(db, /sanitizeSecretContainer\(copy\.knowledgeExtraction\)/, "portable exports strip knowledge extraction credentials");
+assert.doesNotMatch(
+  JSON.stringify({ knowledgeExtraction: { provider: "ai", ai: { endpoint: "/api/knowledge-extraction", model: "mock", allowBrowserDevSecret: true } } }),
+  /apiKey|access_token|refresh_token|Authorization|Bearer/i,
+  "knowledge extraction backup shape excludes AI credentials"
+);
 assert.match(pages, /node tests\/data-safety-tests\.mjs/, "Pages deployment runs data safety tests");

@@ -10,6 +10,8 @@ const DEFAULT_OBSIDIAN_STATE={available:false,connected:false,vaultName:"",vault
 const ROUTINE_WEEKDAYS=[{key:1,label:"Segunda",short:"Seg"},{key:2,label:"Terça",short:"Ter"},{key:3,label:"Quarta",short:"Qua"},{key:4,label:"Quinta",short:"Qui"},{key:5,label:"Sexta",short:"Sex"},{key:6,label:"Sábado",short:"Sáb"},{key:7,label:"Domingo",short:"Dom"}];
 const ROUTINE_CATEGORIES={work:{label:"Trabalho",icon:"▦"},class:{label:"Aula",icon:"◐"},study:{label:"Estudo",icon:"☿"},sport:{label:"Esporte",icon:"◇"},meal:{label:"Refeição",icon:"◒"},personal:{label:"Pessoal",icon:"☽"},appointment:{label:"Compromisso",icon:"◎"},hobby:{label:"Hobby",icon:"✧"},travel:{label:"Deslocamento",icon:"→"},sleep:{label:"Sono/descanso",icon:"☾"},other:{label:"Outro",icon:"•"}};
 const DEFAULT_PLANNING_PREFERENCES={dayStart:"07:00",dayEnd:"23:00",minimumSessionMinutes:15,preferredSessionMinutes:30,planningBufferMinutes:5,useOnlyStudyBlocks:false,allowHobbySuggestions:false};
+const KNOWLEDGE_EXTRACTION_SCHEMA_VERSION=2;
+const DEFAULT_KNOWLEDGE_EXTRACTION_SETTINGS={provider:"local",ai:{endpoint:"",model:"",allowBrowserDevSecret:false,lastStatus:"not_configured"}};
 const ROUTINE_EXCEL_FORMAT_VERSION=1;
 const ROUTINE_EXCEL_HEADERS={
   routine:["ID","Atividade","Categoria","Dias","Início","Fim","Local","Endereço","Ida (min)","Volta (min)","Repetição","Ativo","Observações"],
@@ -38,7 +40,7 @@ const STARTER_HOBBIES=[
   {id:"hobby-journaling",name:"Journaling",icon:"✎",description:"Escrita livre ou revisão do dia.",preferredMinutes:15,minimumMinutes:10,frequencyPerWeek:2,preferredDays:[],preferredTimes:["morning","evening"],lastDoneAt:null,sessions:[],active:true,location:"",notes:"",tags:["escrita"]},
   {id:"hobby-games",name:"Jogos",icon:"◇",description:"Tempo de jogo consciente.",preferredMinutes:45,minimumMinutes:20,frequencyPerWeek:1,preferredDays:[6,7],preferredTimes:["evening"],lastDoneAt:null,sessions:[],active:true,location:"",notes:"",tags:["lazer"]}
 ];
-const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120,progression:"sequential"}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),externalCalendars:structuredClone(DEFAULT_EXTERNAL_CALENDAR_STATE),inbox:[],sessions:[],activityLog:[],activityLogVersion:ACTIVITY_LOG_VERSION,weeklyGoals:[],dailyCheckins:{},xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[],freeWindows:[],availableMinutes:0,notices:[]},routineBlocks:[],routineExceptions:[],hobbies:structuredClone(STARTER_HOBBIES),planningPreferences:structuredClone(DEFAULT_PLANNING_PREFERENCES),starterContentVersion:0,starterCurriculumVersion:0};
+const DEFAULT_STATE={activeTrack:"default",tracks:[{id:"default",name:"Principal",sigil:"☽",subtitle:"Seu caminho inicial",description:"Uma trilha vazia para começar sem publicar dados pessoais.",weeklyGoal:120,progression:"sequential"}],items:[],playlists:[{id:"main-playlist",youtubePlaylistId:"",name:"Playlist de foco",url:"",enabled:true,createdAt:null,updatedAt:null,lastSyncAt:null,lastSyncError:null,catalogGeneratedAt:null,catalogTitle:null}],activePlaylist:"main-playlist",youtubeQueue:[],youtubeDaily:{},youtubeSettings:{mode:"either",minutes:45,count:3,hideAfterLimit:true},knowledgeExtraction:structuredClone(DEFAULT_KNOWLEDGE_EXTRACTION_SETTINGS),obsidian:structuredClone(DEFAULT_OBSIDIAN_STATE),externalCalendars:structuredClone(DEFAULT_EXTERNAL_CALENDAR_STATE),inbox:[],sessions:[],activityLog:[],activityLogVersion:ACTIVITY_LOG_VERSION,weeklyGoals:[],dailyCheckins:{},xp:0,streak:0,lastStudyDate:null,weeklyProgress:{default:0},shortcuts:[{label:"YouTube",url:"https://www.youtube.com/",glyph:"▶"},{label:"GitHub",url:"https://github.com/",glyph:"⌘"},{label:"ChatGPT",url:"https://chatgpt.com/",glyph:"✧"}],lastAutoBackup:null,dailyPlan:{date:null,minutes:60,items:[],freeWindows:[],availableMinutes:0,notices:[]},routineBlocks:[],routineExceptions:[],hobbies:structuredClone(STARTER_HOBBIES),planningPreferences:structuredClone(DEFAULT_PLANNING_PREFERENCES),starterContentVersion:0,starterCurriculumVersion:0};
 const STARTER_TRACKS=[
   {id:"track-electronics",name:"Eletrônica",sigil:"☿",subtitle:"Circuitos · FPGA · RISC-V · Verificação",description:"Trilha técnica de sistemas embarcados, lógica digital, FPGA, arquitetura de computadores, RISC-V, SystemVerilog, UVM e VLSI.",weeklyGoal:240,progression:"sequential"},
   {id:"track-finance",name:"Finanças",sigil:"♃",subtitle:"Planejamento · Mercados · Investimentos · Portfólio",description:"Trilha para construir uma base sólida de finanças pessoais, mercados financeiros, investimentos, portfólio e finanças corporativas.",weeklyGoal:120,progression:"sequential"}
@@ -319,6 +321,7 @@ function normalize(s){
   s.dailyCheckins=s.dailyCheckins&&typeof s.dailyCheckins==="object"?s.dailyCheckins:{};
   s.inbox=Array.isArray(s.inbox)?s.inbox:[];
   s.youtubeSettings={...d.youtubeSettings,...(s.youtubeSettings||{})};
+  s.knowledgeExtraction=normalizeKnowledgeExtractionSettings(s.knowledgeExtraction||d.knowledgeExtraction);
   s.obsidian={...structuredClone(DEFAULT_OBSIDIAN_STATE),...(s.obsidian||{})};
   s.externalCalendars=normalizeExternalCalendars(s.externalCalendars||d.externalCalendars);
   s.dailyPlan={...structuredClone(d.dailyPlan),...(s.dailyPlan||{})};
@@ -1057,6 +1060,20 @@ function normalizePlanningPreferences(input={}){
     planningBufferMinutes:clampNumber(input.planningBufferMinutes,0,60,DEFAULT_PLANNING_PREFERENCES.planningBufferMinutes),
     useOnlyStudyBlocks:!!input.useOnlyStudyBlocks,
     allowHobbySuggestions:!!input.allowHobbySuggestions
+  }
+}
+function normalizeKnowledgeExtractionSettings(input={}){
+  const defaults=structuredClone(DEFAULT_KNOWLEDGE_EXTRACTION_SETTINGS);
+  const provider=input.provider==="ai"?"ai":"local";
+  const ai={...defaults.ai,...(input.ai||{})};
+  return {
+    provider,
+    ai:{
+      endpoint:String(ai.endpoint||"").trim(),
+      model:String(ai.model||"").trim(),
+      allowBrowserDevSecret:!!ai.allowBrowserDevSecret,
+      lastStatus:ai.lastStatus==="configured"?"configured":"not_configured"
+    }
   }
 }
 function safeDate(value){
@@ -3433,7 +3450,7 @@ function extractionCandidateFromBlock(block,sessionNote){
   const title=focusBlockTitle({...block,type}).slice(0,110);
   const content=String(block.content||block.title||"").trim();
   const match=findExistingKnowledgeMatch({title},KNOWLEDGE_CANDIDATE_TYPES[candidateType]?.targetNoteType);
-  return {id:crypto.randomUUID(),type:candidateType,title,content,selected:true,linkMode:match?"existing":"new",targetId:match?.id||"",route:candidateType==="next-action"?"inbox":"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:block.id||null,sourceTimestamp:block.timestamp||"",sourcePage:block.page||"",sourceExcerpt:content||title,createdAt:new Date().toISOString(),sessionNoteId:sessionNote?.id||null}
+  return {id:crypto.randomUUID(),type:candidateType,title,content,selected:true,linkMode:match?"existing":"new",targetId:match?.id||"",route:candidateType==="next-action"?"inbox":"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:block.id||null,sourceTimestamp:block.timestamp||"",sourcePage:block.page||"",sourceExcerpt:content||title,origin:"semantic",createdAt:new Date().toISOString(),sessionNoteId:sessionNote?.id||null}
 }
 function extractionCandidateFromMarker(line,sessionNote,index){
   const match=String(line||"").match(/^\s*(Conceito|Pergunta|Insight|Citacao|Citação|Exemplo|Formula|Fórmula|Comando|Proximo passo|Próximo passo|Acao|Ação|Nota permanente)\s*:\s*(.+?)\s*$/i);
@@ -3446,15 +3463,27 @@ function extractionCandidateFromMarker(line,sessionNote,index){
   const title=firstMeaningfulLine(text).replace(/^[-*]\s*/,"").slice(0,110)||KNOWLEDGE_CANDIDATE_TYPES[type]?.label||"Nota";
   const targetType=KNOWLEDGE_CANDIDATE_TYPES[type]?.targetNoteType;
   const existing=findExistingKnowledgeMatch({title},targetType);
-  return {id:crypto.randomUUID(),type,title,content:text,selected:true,linkMode:existing?"existing":"new",targetId:existing?.id||"",route:type==="next-action"?"inbox":"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:`raw-line-${index+1}`,sourceTimestamp:"",sourcePage:"",sourceExcerpt:text,createdAt:new Date().toISOString(),sessionNoteId:sessionNote?.id||null}
+  return {id:crypto.randomUUID(),type,title,content:text,selected:true,linkMode:existing?"existing":"new",targetId:existing?.id||"",route:type==="next-action"?"inbox":"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:`raw-line-${index+1}`,sourceTimestamp:"",sourcePage:"",sourceExcerpt:text,origin:"semantic",createdAt:new Date().toISOString(),sessionNoteId:sessionNote?.id||null}
 }
 class KnowledgeExtractionProvider{
   constructor(config){
     this.id=config.id;
     this.label=config.label;
-    this.extract=config.extract
+    if(config.extract){
+      this.extract=config.extract
+    }
+  }
+  async extract(){
+    throw new Error("Provider de extração não implementado.")
   }
 }
+const KNOWLEDGE_EXTRACTION_PROMPT=[
+  "Organize notas brutas de estudo em sugestões estruturadas para revisão humana.",
+  "Extraia apenas conhecimento explicitamente apoiado pelas notas enviadas; não use fatos externos, correções ou expansões.",
+  "A nota original é a fonte de verdade. Gere unidades reutilizáveis e úteis, não uma sugestão para cada frase.",
+  "Respeite marcações semânticas explícitas quando existirem e preserve trechos de origem curtos.",
+  "Pessoas não devem virar conceitos por padrão. Retorne JSON no schema solicitado."
+].join(" ");
 const LOCAL_KNOWLEDGE_EXTRACTION_PROVIDER=new KnowledgeExtractionProvider({id:"local-semantic-blocks",label:"Local semantic blocks",async extract(input){
   const candidates=[];
   for(const block of normalizeFocusBlocks(input.blocks||[])){
@@ -3469,11 +3498,190 @@ const LOCAL_KNOWLEDGE_EXTRACTION_PROVIDER=new KnowledgeExtractionProvider({id:"l
       candidates.push(candidate)
     }
   });
-  return {providerId:this.id,rawNoteSource:"session-note",candidates,connections:[],people:[],createdAt:new Date().toISOString()}
+  return {providerId:this.id,providerLabel:"Marcações manuais",rawNoteSource:"session-note",candidates,connections:[],people:[],createdAt:new Date().toISOString(),extractionSchemaVersion:KNOWLEDGE_EXTRACTION_SCHEMA_VERSION}
 }});
-const KnowledgeExtractionProviders={local:LOCAL_KNOWLEDGE_EXTRACTION_PROVIDER};
-async function extractKnowledge(input,provider=KnowledgeExtractionProviders.local){
+const KNOWLEDGE_EXTRACTION_SESSION_SECRET_KEY="arcana-knowledge-extraction-session-secret";
+function knowledgeExtractionSettings(){
+  return normalizeKnowledgeExtractionSettings(state.knowledgeExtraction||{})
+}
+function knowledgeExtractionSessionSecret(){
+  try{
+    return sessionStorage.getItem(KNOWLEDGE_EXTRACTION_SESSION_SECRET_KEY)||""
+  }catch(err){
+    return ""
+  }
+}
+function setKnowledgeExtractionSessionSecret(value){
+  try{
+    if(value){
+      sessionStorage.setItem(KNOWLEDGE_EXTRACTION_SESSION_SECRET_KEY,value)
+    }else{
+      sessionStorage.removeItem(KNOWLEDGE_EXTRACTION_SESSION_SECRET_KEY)
+    }
+  }catch(err){
+    console.warn("[Arcana] session credential unavailable",err)
+  }
+}
+function sameOriginEndpoint(endpoint){
+  try{
+    return new URL(endpoint,location.href).origin===location.origin
+  }catch(err){
+    return false
+  }
+}
+function runtimeAllowsBrowserExtraction(settings){
+  const env=runtimeEnvironment();
+  if(!settings.ai.endpoint){
+    return false
+  }
+  if(sameOriginEndpoint(settings.ai.endpoint)){
+    return true
+  }
+  return !env.production&&settings.ai.allowBrowserDevSecret&&!!knowledgeExtractionSessionSecret()
+}
+function knowledgeExtractionAiStatus(settings=knowledgeExtractionSettings()){
+  if(settings.provider!=="ai"){
+    return {configured:false,label:"Não configurado"}
+  }
+  return runtimeAllowsBrowserExtraction(settings)?{configured:true,label:"Configurado"}:{configured:false,label:"Não configurado"}
+}
+function resourceContextForExtraction(sessionNote={},source={}){
+  const item=itemById(sessionNote.courseId||source.courseId||source.id);
+  const track=trackById(sessionNote.trackId||source.trackId||item?.track);
+  const module=(item?.modules||[]).find(module=>module.id===(sessionNote.moduleId||source.moduleId));
+  const lesson=(module?.lessons||[]).find(lesson=>lesson.id===(sessionNote.lessonId||source.lessonId));
+  return {
+    track:track?{id:track.id,title:track.name}:null,
+    course:item?{id:item.id,title:item.title,type:item.kind||"course"}:null,
+    module:module?{id:module.id,title:module.title}:null,
+    lesson:lesson?{id:lesson.id,title:lesson.title}:null
+  }
+}
+function sanitizeKnowledgeExtractionPayload(input={}){
+  const sessionNote=input.sessionNote||{};
+  const session=input.session||{};
+  const source=input.source||{};
+  const blocks=normalizeFocusBlocks(input.blocks||sessionNote.blocks||[]).map(block=>({
+    id:block.id,
+    type:block.type,
+    title:block.title,
+    content:block.content,
+    timestamp:block.timestamp,
+    page:block.page
+  }));
+  return {
+    schemaVersion:KNOWLEDGE_EXTRACTION_SCHEMA_VERSION,
+    session:{id:session.id||sessionNote.sessionId||sessionNote.id||null,title:session.title||sessionNote.title||"",durationMinutes:Number(session.minutes||session.durationMinutes||sessionNote.durationMinutes||0)||0},
+    resource:{id:sessionNote.resourceId||sessionNote.sourceId||source.id||null,title:sessionNote.sourceTitle||source.title||"",type:sessionNote.sourceType||source.kind||source.type||"",url:source.url||sessionNote.source?.url||"",courseContext:resourceContextForExtraction(sessionNote,source)},
+    rawNotes:String(input.rawNotes||sessionNote.content||""),
+    semanticBlocks:blocks
+  }
+}
+function assertAiExtractionObject(raw){
+  if(!raw||typeof raw!=="object"||Array.isArray(raw)){
+    throw new Error("Resposta da IA não tem o formato esperado.")
+  }
+  for(const key of ["concepts","permanentNotes","questions","nextActions","quotes","examples","formulasCommands","people","connections"]){
+    if(raw[key]!==undefined&&!Array.isArray(raw[key])){
+      throw new Error(`Campo inválido na extração: ${key}.`)
+    }
+  }
+}
+function aiCandidate(input,type,title,content,extra={}){
+  const targetType=KNOWLEDGE_CANDIDATE_TYPES[type]?.targetNoteType;
+  const match=findExistingKnowledgeMatch({title},targetType);
+  return {id:crypto.randomUUID(),type,title:String(title||"").slice(0,110)||KNOWLEDGE_CANDIDATE_TYPES[type]?.label||"Sugestão",content:String(content||title||"").trim(),selected:true,linkMode:match?"existing":"new",targetId:match?.id||"",route:type==="next-action"?(extra.suggestedDestination||"inbox"):"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:extra.sourceBlockId||"ai-extraction",sourceTimestamp:extra.sourceTimestamp||"",sourcePage:extra.sourcePage||"",sourceExcerpt:String(extra.sourceExcerpt||content||title||"").trim(),origin:"ai",createdAt:new Date().toISOString(),sessionNoteId:input.sessionNote?.id||null}
+}
+function normalizeAIKnowledgeExtractionResult(raw,input={}){
+  const extraction=raw?.extraction&&typeof raw.extraction==="object"?raw.extraction:raw;
+  assertAiExtractionObject(extraction);
+  const candidates=[];
+  for(const item of extraction.concepts||[]){
+    candidates.push(aiCandidate(input,"concept",item.title,item.description,{sourceExcerpt:item.sourceExcerpt,sourceTimestamp:item.sourceTimestamp}))
+  }
+  for(const item of extraction.permanentNotes||[]){
+    candidates.push(aiCandidate(input,"permanent-note",item.title,item.content,{sourceExcerpt:item.sourceExcerpt}))
+  }
+  for(const item of extraction.questions||[]){
+    candidates.push(aiCandidate(input,"question",item.question,item.context||item.question,{sourceExcerpt:item.sourceExcerpt}))
+  }
+  for(const item of extraction.nextActions||[]){
+    candidates.push(aiCandidate(input,"next-action",item.title,item.context||item.title,{sourceExcerpt:item.sourceExcerpt,suggestedDestination:item.suggestedDestination||"inbox"}))
+  }
+  for(const item of extraction.quotes||[]){
+    candidates.push(aiCandidate(input,"quote",item.title||firstMeaningfulLine(item.content||item.quote),item.content||item.quote,{sourceExcerpt:item.sourceExcerpt||item.content||item.quote}))
+  }
+  for(const item of extraction.examples||[]){
+    candidates.push(aiCandidate(input,"example",item.title,item.content||item.example,{sourceExcerpt:item.sourceExcerpt}))
+  }
+  for(const item of extraction.formulasCommands||[]){
+    candidates.push(aiCandidate(input,"formula-command",item.title,item.content||item.command||item.formula,{sourceExcerpt:item.sourceExcerpt}))
+  }
+  return {candidates:candidates.filter(candidate=>candidate.title&&candidate.content),people:Array.isArray(extraction.people)?extraction.people:[],connections:Array.isArray(extraction.connections)?extraction.connections:[]}
+}
+class AIKnowledgeExtractionProvider extends KnowledgeExtractionProvider{
+  constructor(config={}){
+    super({id:"ai-structured",label:"AI"});
+    this.responder=config.responder||null
+  }
+  async extract(input){
+    const settings=knowledgeExtractionSettings();
+    if(settings.provider!=="ai"||!runtimeAllowsBrowserExtraction(settings)){
+      throw new Error("Extração por IA não configurada.")
+    }
+    const payload={instruction:KNOWLEDGE_EXTRACTION_PROMPT,input:sanitizeKnowledgeExtractionPayload(input)};
+    const response=this.responder?await this.responder(payload):await fetch(settings.ai.endpoint,{method:"POST",headers:{"Content-Type":"application/json",...(knowledgeExtractionSessionSecret()?{"Authorization":`Bearer ${knowledgeExtractionSessionSecret()}`}:{})},body:JSON.stringify(payload)});
+    const json=this.responder?response:await response.json();
+    if(!this.responder&&!response.ok){
+      throw new Error(json?.error||"Não foi possível gerar sugestões automáticas.")
+    }
+    const normalized=normalizeAIKnowledgeExtractionResult(json,input);
+    return {providerId:this.id,providerLabel:"Extração por IA",providerKind:"ai",model:settings.ai.model||"",rawNoteSource:"session-note",createdAt:new Date().toISOString(),extractionSchemaVersion:KNOWLEDGE_EXTRACTION_SCHEMA_VERSION,...normalized}
+  }
+}
+class MockAIKnowledgeExtractionProvider extends AIKnowledgeExtractionProvider{
+  constructor(result){
+    super({responder:async()=>result});
+    this.id="mock-ai-structured";
+    this.label="Mock AI"
+  }
+}
+const AI_KNOWLEDGE_EXTRACTION_PROVIDER=new AIKnowledgeExtractionProvider();
+const KnowledgeExtractionProviders={local:LOCAL_KNOWLEDGE_EXTRACTION_PROVIDER,ai:AI_KNOWLEDGE_EXTRACTION_PROVIDER};
+function selectedKnowledgeExtractionProvider(){
+  return knowledgeExtractionSettings().provider==="ai"?KnowledgeExtractionProviders.ai:KnowledgeExtractionProviders.local
+}
+function extractionCandidateKey(candidate){
+  return [candidate.type,normalizeKnowledgeTitle(candidate.title),normalizeKnowledgeTitle(candidate.sourceExcerpt||candidate.content).slice(0,90)].join("|")
+}
+function dedupeExtractionCandidates(candidates=[]){
+  const map=new Map();
+  for(const candidate of candidates){
+    const key=extractionCandidateKey(candidate);
+    if(!key.replace(/\|/g,"")){
+      continue
+    }
+    if(!map.has(key)||map.get(key).origin==="ai"&&candidate.origin==="semantic"){
+      map.set(key,candidate)
+    }
+  }
+  return [...map.values()]
+}
+async function extractKnowledge(input,provider=selectedKnowledgeExtractionProvider()){
   return provider.extract(input)
+}
+async function runKnowledgeExtraction(input,provider=selectedKnowledgeExtractionProvider()){
+  const semantic=await KnowledgeExtractionProviders.local.extract(input);
+  if(provider.id===KnowledgeExtractionProviders.local.id){
+    return {...semantic,candidates:dedupeExtractionCandidates(semantic.candidates)}
+  }
+  try{
+    const ai=await provider.extract(input);
+    const candidates=dedupeExtractionCandidates([...(semantic.candidates||[]),...(ai.candidates||[])]);
+    return {...ai,candidates,semanticCount:(semantic.candidates||[]).length,automaticCount:(ai.candidates||[]).length}
+  }catch(error){
+    return {...semantic,status:"failed",error:error.message||"Não foi possível gerar sugestões automáticas.",providerId:provider.id,providerLabel:"Extração por IA",semanticCount:(semantic.candidates||[]).length,automaticCount:0,candidates:dedupeExtractionCandidates(semantic.candidates||[])}
+  }
 }
 function focusBlockTitle(block){
   const type=canonicalFocusBlockType(block?.type);
@@ -3682,15 +3890,40 @@ function selectedExtractionText(){
   return input.value.slice(input.selectionStart||0,input.selectionEnd||0).trim()
 }
 function buildKnowledgeExtractionInput(sessionNote,session={},source={}){
-  return {sessionNote,session,source,rawNotes:sessionNote.content||"",blocks:normalizeFocusBlocks(sessionNote.blocks||[])}
+  const rawNotes=sessionNote.content||"";
+  return {sessionNote,session,source,rawNotes,blocks:normalizeFocusBlocks(sessionNote.blocks||[]),payload:sanitizeKnowledgeExtractionPayload({sessionNote,session,source,rawNotes,blocks:sessionNote.blocks||[]})}
 }
 async function openKnowledgeExtractionReview(sessionNote,session={},source={}){
   await loadVaultNotes();
   const input=buildKnowledgeExtractionInput(sessionNote,session,source);
-  const extraction=sessionNote.extractionDraft?.candidates?sessionNote.extractionDraft:await extractKnowledge(input);
-  knowledgeExtractionDraft={sessionNote,session,source,rawNotes:input.rawNotes,providerId:extraction.providerId||KnowledgeExtractionProviders.local.id,candidates:Array.isArray(extraction.candidates)?extraction.candidates:[],connections:Array.isArray(extraction.connections)?extraction.connections:[],status:"reviewing",createdAt:extraction.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const sourceNotesUpdatedAt=sessionNote.updatedAt||sessionNote.createdAt||new Date().toISOString();
+  if(sessionNote.extractionDraft?.candidates){
+    const extraction=sessionNote.extractionDraft;
+    knowledgeExtractionDraft={sessionNote,session,source,rawNotes:input.rawNotes,providerId:extraction.providerId||extraction.extractionProvider||KnowledgeExtractionProviders.local.id,providerLabel:extraction.providerLabel||"",extractionProvider:extraction.extractionProvider||extraction.providerId||KnowledgeExtractionProviders.local.id,extractionModel:extraction.extractionModel||"",extractionSchemaVersion:extraction.extractionSchemaVersion||1,sourceNotesUpdatedAt:extraction.sourceNotesUpdatedAt||sourceNotesUpdatedAt,sourceChangedAfterExtraction:(extraction.sourceNotesUpdatedAt||sourceNotesUpdatedAt)!==sourceNotesUpdatedAt,candidates:Array.isArray(extraction.candidates)?extraction.candidates:[],connections:Array.isArray(extraction.connections)?extraction.connections:[],people:Array.isArray(extraction.people)?extraction.people:[],status:"reviewing",activeSection:"concepts",createdAt:extraction.createdAt||extraction.extractionCreatedAt||new Date().toISOString(),updatedAt:new Date().toISOString()};
+    renderKnowledgeExtractionDialog();
+    $("knowledgeExtractionDialog")?.showModal?.();
+    return
+  }
+  knowledgeExtractionDraft={sessionNote,session,source,rawNotes:input.rawNotes,providerId:selectedKnowledgeExtractionProvider().id,providerLabel:selectedKnowledgeExtractionProvider().label,extractionProvider:selectedKnowledgeExtractionProvider().id,extractionModel:knowledgeExtractionSettings().ai.model||"",extractionSchemaVersion:KNOWLEDGE_EXTRACTION_SCHEMA_VERSION,sourceNotesUpdatedAt,candidates:[],connections:[],people:[],status:"loading",activeSection:"concepts",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
   renderKnowledgeExtractionDialog();
-  $("knowledgeExtractionDialog")?.showModal?.()
+  $("knowledgeExtractionDialog")?.showModal?.();
+  await generateKnowledgeSuggestions(false)
+}
+async function generateKnowledgeSuggestions(force=false){
+  if(!knowledgeExtractionDraft?.sessionNote){
+    return
+  }
+  const manual=force?knowledgeExtractionDraft.candidates.filter(candidate=>candidate.origin==="manual"):[];
+  knowledgeExtractionDraft.status="loading";
+  knowledgeExtractionDraft.error="";
+  knowledgeExtractionDraft.updatedAt=new Date().toISOString();
+  renderKnowledgeExtractionDialog();
+  const input=buildKnowledgeExtractionInput(knowledgeExtractionDraft.sessionNote,knowledgeExtractionDraft.session,knowledgeExtractionDraft.source);
+  const extraction=await runKnowledgeExtraction(input);
+  const acceptedIds=new Set(knowledgeExtractionDraft.sessionNote.promotedNoteIds||[]);
+  const candidates=dedupeExtractionCandidates([...(force?manual:[]),...(Array.isArray(extraction.candidates)?extraction.candidates:[])]).filter(candidate=>!candidate.targetId||!acceptedIds.has(candidate.targetId));
+  knowledgeExtractionDraft={...knowledgeExtractionDraft,providerId:extraction.providerId||selectedKnowledgeExtractionProvider().id,providerLabel:extraction.providerLabel||selectedKnowledgeExtractionProvider().label,extractionProvider:extraction.providerId||selectedKnowledgeExtractionProvider().id,extractionModel:extraction.model||knowledgeExtractionSettings().ai.model||"",extractionSchemaVersion:extraction.extractionSchemaVersion||KNOWLEDGE_EXTRACTION_SCHEMA_VERSION,sourceNotesUpdatedAt:knowledgeExtractionDraft.sessionNote.updatedAt||knowledgeExtractionDraft.sessionNote.createdAt||new Date().toISOString(),candidates,connections:Array.isArray(extraction.connections)?extraction.connections:[],people:Array.isArray(extraction.people)?extraction.people:[],semanticCount:Number(extraction.semanticCount||candidates.filter(candidate=>candidate.origin==="semantic").length)||0,automaticCount:Number(extraction.automaticCount||candidates.filter(candidate=>candidate.origin==="ai").length)||0,status:extraction.status==="failed"?"failed":"reviewing",error:extraction.error||"",createdAt:extraction.createdAt||knowledgeExtractionDraft.createdAt,updatedAt:new Date().toISOString()};
+  renderKnowledgeExtractionDialog()
 }
 function extractionTypeOptions(value){
   return Object.entries(KNOWLEDGE_CANDIDATE_TYPES).map(([key,meta])=>`<option value="${esc(key)}" ${key===value?"selected":""}>${esc(meta.label)}</option>`).join("")
@@ -3703,23 +3936,47 @@ function existingKnowledgeOptions(candidate){
 function extractionCandidateCard(candidate){
   const meta=KNOWLEDGE_CANDIDATE_TYPES[candidate.type]||KNOWLEDGE_CANDIDATE_TYPES["permanent-note"];
   const existing=candidate.targetId?vaultNotes.find(note=>note.id===candidate.targetId):null;
-  return `<article class="extraction-candidate" data-extraction-id="${esc(candidate.id)}"><div class="extraction-candidate-head"><label class="check"><input type="checkbox" data-field="selected" ${candidate.selected?"checked":""}> Usar</label><span class="tag">${esc(meta.label)}</span>${existing?`<span class="hint">liga a ${esc(existing.title)}</span>`:""}</div><div class="two-fields"><label>Tipo<select data-field="type">${extractionTypeOptions(candidate.type)}</select></label><label>Destino<select data-field="targetId">${existingKnowledgeOptions(candidate)}</select></label></div><label>Título<input data-field="title" value="${esc(candidate.title||"")}"></label><label>Conteúdo<textarea data-field="content" rows="4">${esc(candidate.content||"")}</textarea></label><div class="two-fields"><label>Rota<select data-field="route"><option value="knowledge" ${candidate.route==="knowledge"?"selected":""}>Conhecimento</option><option value="inbox" ${candidate.route==="inbox"?"selected":""}>Inbox</option><option value="review" ${candidate.route==="review"?"selected":""}>Revisão</option><option value="next-session" ${candidate.route==="next-session"?"selected":""}>Próxima sessão</option><option value="ignore" ${candidate.route==="ignore"?"selected":""}>Ignorar</option></select></label><label>Revisar em dias<input data-field="reviewIntervalDays" type="number" min="1" value="${Number(candidate.reviewIntervalDays||7)}"></label></div><div class="hint">${esc([candidate.sourceTimestamp,candidate.sourcePage].filter(Boolean).join(" · ")||candidate.sourceBlockId||"marcado no texto")}</div></article>`
+  const origin=candidate.origin==="ai"?"automática":candidate.origin==="manual"?"manual":"marcação manual";
+  return `<article class="extraction-candidate" data-extraction-id="${esc(candidate.id)}"><div class="extraction-candidate-head"><label class="check"><input type="checkbox" data-field="selected" ${candidate.selected?"checked":""}> Usar</label><span class="tag">${esc(meta.label)}</span><span class="tag soft">${esc(origin)}</span>${existing?`<span class="hint">já existe: ${esc(existing.title)}</span>`:""}<button type="button" class="mini-btn ghost-mini" data-extraction-action="discard">Descartar</button></div><div class="two-fields"><label>Tipo<select data-field="type">${extractionTypeOptions(candidate.type)}</select></label><label>Destino<select data-field="targetId">${existingKnowledgeOptions(candidate)}</select></label></div><label>Título<input data-field="title" value="${esc(candidate.title||"")}"></label><label>Conteúdo<textarea data-field="content" rows="4">${esc(candidate.content||"")}</textarea></label><div class="two-fields"><label>Rota<select data-field="route"><option value="knowledge" ${candidate.route==="knowledge"?"selected":""}>Conhecimento</option><option value="inbox" ${candidate.route==="inbox"?"selected":""}>Inbox</option><option value="review" ${candidate.route==="review"?"selected":""}>Revisão</option><option value="next-session" ${candidate.route==="next-session"?"selected":""}>Próxima sessão</option><option value="ignore" ${candidate.route==="ignore"?"selected":""}>Ignorar</option></select></label><label>Revisar em dias<input data-field="reviewIntervalDays" type="number" min="1" value="${Number(candidate.reviewIntervalDays||7)}"></label></div>${candidate.sourceExcerpt?`<blockquote class="source-excerpt">${esc(candidate.sourceExcerpt)}</blockquote>`:""}<div class="hint">${esc([candidate.sourceTimestamp,candidate.sourcePage].filter(Boolean).join(" · ")||candidate.sourceBlockId||"notas da sessão")}</div></article>`
 }
 function renderKnowledgeExtractionDialog(){
   if(!knowledgeExtractionDraft||!$("extractionCandidateList")){
     return
   }
   const sessionNote=knowledgeExtractionDraft.sessionNote||{};
+  const candidates=knowledgeExtractionDraft.candidates||[];
+  const semanticCount=candidates.filter(candidate=>candidate.origin==="semantic").length;
+  const automaticCount=candidates.filter(candidate=>candidate.origin==="ai").length;
+  const providerLabel=knowledgeExtractionDraft.status==="failed"?"Não foi possível gerar sugestões automáticas.":automaticCount?`Extração por IA ${automaticCount} sugestões`:semanticCount?`${semanticCount} marcaç${semanticCount===1?"ão":"ões"} manua${semanticCount===1?"l":"is"}`:"Extração local";
   if($("extractionSessionMeta")){
-    $("extractionSessionMeta").textContent=`${sessionNote.title||"Sessão"} · ${knowledgeExtractionDraft.providerId} · ${knowledgeExtractionDraft.candidates.length} sugestão${knowledgeExtractionDraft.candidates.length===1?"":"ões"}`
+    $("extractionSessionMeta").textContent=`${sessionNote.title||"Sessão"} · ${providerLabel} · ${candidates.length} sugestão${candidates.length===1?"":"ões"}`
+  }
+  if($("extractionStatusBanner")){
+    const changed=knowledgeExtractionDraft.sourceChangedAfterExtraction?`<p class="hint warn">Notas alteradas após a última extração.</p>`:"";
+    const failed=knowledgeExtractionDraft.status==="failed"?`<p class="hint warn">Não foi possível gerar sugestões automáticas. As marcações manuais continuam disponíveis.</p>`:"";
+    const empty=knowledgeExtractionDraft.status==="reviewing"&&!candidates.length?`<p class="hint">Nenhuma sugestão automática encontrada. Você ainda pode organizar manualmente.</p>`:"";
+    const loading=knowledgeExtractionDraft.status==="loading"?`<p class="hint">Organizando suas notas...</p>`:"";
+    $("extractionStatusBanner").innerHTML=[loading,failed,empty,changed].filter(Boolean).join("")
   }
   if($("extractionRawNotes")){
     $("extractionRawNotes").value=knowledgeExtractionDraft.rawNotes||""
   }
-  $("extractionCandidateList").innerHTML=KNOWLEDGE_EXTRACTION_SECTIONS.map(([section,label])=>{
-    const entries=knowledgeExtractionDraft.candidates.filter(candidate=>KNOWLEDGE_CANDIDATE_TYPES[candidate.type]?.section===section);
-    return `<section class="extraction-section"><div class="card-head"><strong>${esc(label)}</strong><span class="tag">${entries.length}</span></div>${entries.length?entries.map(extractionCandidateCard).join(""):`<div class="hint">Sem sugestões nesta seção.</div>`}</section>`
-  }).join("")
+  if($("extractionCategoryTabs")){
+    $("extractionCategoryTabs").innerHTML=KNOWLEDGE_EXTRACTION_SECTIONS.map(([section,label])=>{
+      const count=candidates.filter(candidate=>KNOWLEDGE_CANDIDATE_TYPES[candidate.type]?.section===section).length;
+      const active=(knowledgeExtractionDraft.activeSection||"concepts")===section;
+      return `<button type="button" class="chip-btn ${active?"active":""}" data-extraction-section="${esc(section)}">${esc(label)} <span>${count}</span></button>`
+    }).join("")
+  }
+  const activeSection=knowledgeExtractionDraft.activeSection||"concepts";
+  const entries=candidates.filter(candidate=>KNOWLEDGE_CANDIDATE_TYPES[candidate.type]?.section===activeSection);
+  $("extractionCandidateList").innerHTML=knowledgeExtractionDraft.status==="loading"?`<div class="extraction-section"><div class="hint">Organizando suas notas...</div></div>`:entries.length?entries.map(extractionCandidateCard).join(""):`<div class="extraction-section"><div class="hint">Sem sugestões nesta categoria.</div></div>`;
+  if($("extractionMergeBtn")){
+    $("extractionMergeBtn").disabled=!mergeSelectionAllowed()
+  }
+  if($("extractionSaveKnowledgeBtn")){
+    $("extractionSaveKnowledgeBtn").disabled=knowledgeExtractionDraft.status==="loading"
+  }
 }
 function updateExtractionCandidate(id,patch){
   if(!knowledgeExtractionDraft){
@@ -3754,6 +4011,22 @@ function handleExtractionCandidateEvent(e){
     renderKnowledgeExtractionDialog()
   }
 }
+function handleExtractionCandidateClick(e){
+  const section=e.target.closest("[data-extraction-section]");
+  if(section&&knowledgeExtractionDraft){
+    knowledgeExtractionDraft.activeSection=section.dataset.extractionSection;
+    renderKnowledgeExtractionDialog();
+    return
+  }
+  const action=e.target.dataset.extractionAction;
+  if(action==="discard"){
+    const card=e.target.closest("[data-extraction-id]");
+    if(card&&knowledgeExtractionDraft){
+      knowledgeExtractionDraft.candidates=knowledgeExtractionDraft.candidates.filter(candidate=>candidate.id!==card.dataset.extractionId);
+      renderKnowledgeExtractionDialog()
+    }
+  }
+}
 function addExtractionCandidate(type="permanent-note"){
   if(!knowledgeExtractionDraft){
     return
@@ -3762,16 +4035,28 @@ function addExtractionCandidate(type="permanent-note"){
   const title=firstMeaningfulLine(raw).slice(0,110)||KNOWLEDGE_CANDIDATE_TYPES[type]?.label||"Nota";
   const targetType=KNOWLEDGE_CANDIDATE_TYPES[type]?.targetNoteType;
   const match=findExistingKnowledgeMatch({title},targetType);
-  knowledgeExtractionDraft.candidates.push({id:crypto.randomUUID(),type,title,content:raw,selected:true,linkMode:match?"existing":"new",targetId:match?.id||"",route:type==="next-action"?"inbox":"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:"manual-selection",sourceTimestamp:"",sourcePage:"",sourceExcerpt:raw||title,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sessionNoteId:knowledgeExtractionDraft.sessionNote?.id||null});
+  knowledgeExtractionDraft.candidates.push({id:crypto.randomUUID(),type,title,content:raw,selected:true,linkMode:match?"existing":"new",targetId:match?.id||"",route:type==="next-action"?"inbox":"knowledge",reviewIntervalDays:7,relatedKnowledgeIds:[],sourceBlockId:"manual-selection",sourceTimestamp:"",sourcePage:"",sourceExcerpt:raw||title,origin:"manual",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sessionNoteId:knowledgeExtractionDraft.sessionNote?.id||null});
+  knowledgeExtractionDraft.activeSection=KNOWLEDGE_CANDIDATE_TYPES[type]?.section||"ideas";
   renderKnowledgeExtractionDialog()
+}
+function mergeSelectionAllowed(){
+  if(!knowledgeExtractionDraft){
+    return false
+  }
+  const selected=knowledgeExtractionDraft.candidates.filter(candidate=>candidate.selected);
+  if(selected.length<2){
+    return false
+  }
+  const type=selected[0].type;
+  return selected.every(candidate=>candidate.type===type)&&type!=="next-action"
 }
 function mergeSelectedExtractionCandidates(){
   if(!knowledgeExtractionDraft){
     return
   }
   const selected=knowledgeExtractionDraft.candidates.filter(candidate=>candidate.selected);
-  if(selected.length<2){
-    notice("Selecione ao menos duas sugestões para unir.");
+  if(!mergeSelectionAllowed()){
+    notice("Selecione sugestões do mesmo tipo para unir.");
     return
   }
   const [first,...rest]=selected;
@@ -3864,7 +4149,8 @@ async function saveKnowledgeExtractionDraft(status="draft"){
   knowledgeExtractionDraft.status=status;
   knowledgeExtractionDraft.updatedAt=new Date().toISOString();
   const sessionNote=knowledgeExtractionDraft.sessionNote;
-  await api(`/api/notes/${encodeURIComponent(sessionNote.id)}`,{method:"PUT",body:JSON.stringify({...sessionNote,knowledgeExtractionStatus:status,extractionDraft:{providerId:knowledgeExtractionDraft.providerId,status,candidates:knowledgeExtractionDraft.candidates,connections:knowledgeExtractionDraft.connections,createdAt:knowledgeExtractionDraft.createdAt,updatedAt:knowledgeExtractionDraft.updatedAt}})});
+  const extractionDraft={providerId:knowledgeExtractionDraft.providerId,providerLabel:knowledgeExtractionDraft.providerLabel||"",extractionProvider:knowledgeExtractionDraft.extractionProvider||knowledgeExtractionDraft.providerId,extractionModel:knowledgeExtractionDraft.extractionModel||"",extractionCreatedAt:knowledgeExtractionDraft.createdAt,sourceNotesUpdatedAt:knowledgeExtractionDraft.sourceNotesUpdatedAt||sessionNote.updatedAt||sessionNote.createdAt||null,extractionSchemaVersion:knowledgeExtractionDraft.extractionSchemaVersion||KNOWLEDGE_EXTRACTION_SCHEMA_VERSION,status,candidates:knowledgeExtractionDraft.candidates,connections:knowledgeExtractionDraft.connections,people:knowledgeExtractionDraft.people||[],createdAt:knowledgeExtractionDraft.createdAt,updatedAt:knowledgeExtractionDraft.updatedAt};
+  await api(`/api/notes/${encodeURIComponent(sessionNote.id)}`,{method:"PUT",body:JSON.stringify({...sessionNote,knowledgeExtractionStatus:status,extractionProvider:extractionDraft.extractionProvider,extractionModel:extractionDraft.extractionModel,extractionCreatedAt:extractionDraft.extractionCreatedAt,sourceNotesUpdatedAt:extractionDraft.sourceNotesUpdatedAt,extractionSchemaVersion:extractionDraft.extractionSchemaVersion,extractionDraft})});
   await loadVaultNotes()
 }
 async function confirmKnowledgeExtraction(){
@@ -3885,7 +4171,9 @@ async function confirmKnowledgeExtraction(){
     }
   }
   await upsertFichamentoFromExtraction(sessionNote,savedNotes,selected);
-  await api(`/api/notes/${encodeURIComponent(sessionNote.id)}`,{method:"PUT",body:JSON.stringify({...sessionNote,knowledgeExtractionStatus:"completed",promotedNoteIds:[...new Set([...(sessionNote.promotedNoteIds||[]),...savedNotes.map(note=>note?.id).filter(Boolean)])],extractionDraft:{providerId:knowledgeExtractionDraft.providerId,status:"completed",candidates:knowledgeExtractionDraft.candidates,connections:knowledgeExtractionDraft.connections,createdAt:knowledgeExtractionDraft.createdAt,updatedAt:new Date().toISOString()}})});
+  const completedAt=new Date().toISOString();
+  const extractionDraft={providerId:knowledgeExtractionDraft.providerId,providerLabel:knowledgeExtractionDraft.providerLabel||"",extractionProvider:knowledgeExtractionDraft.extractionProvider||knowledgeExtractionDraft.providerId,extractionModel:knowledgeExtractionDraft.extractionModel||"",extractionCreatedAt:knowledgeExtractionDraft.createdAt,sourceNotesUpdatedAt:knowledgeExtractionDraft.sourceNotesUpdatedAt||sessionNote.updatedAt||sessionNote.createdAt||null,extractionSchemaVersion:knowledgeExtractionDraft.extractionSchemaVersion||KNOWLEDGE_EXTRACTION_SCHEMA_VERSION,status:"completed",candidates:knowledgeExtractionDraft.candidates,connections:knowledgeExtractionDraft.connections,people:knowledgeExtractionDraft.people||[],createdAt:knowledgeExtractionDraft.createdAt,updatedAt:completedAt};
+  await api(`/api/notes/${encodeURIComponent(sessionNote.id)}`,{method:"PUT",body:JSON.stringify({...sessionNote,knowledgeExtractionStatus:"completed",extractionProvider:extractionDraft.extractionProvider,extractionModel:extractionDraft.extractionModel,extractionCreatedAt:extractionDraft.extractionCreatedAt,sourceNotesUpdatedAt:extractionDraft.sourceNotesUpdatedAt,extractionSchemaVersion:extractionDraft.extractionSchemaVersion,promotedNoteIds:[...new Set([...(sessionNote.promotedNoteIds||[]),...savedNotes.map(note=>note?.id).filter(Boolean)])],extractionDraft})});
   if(selected.some(candidate=>candidate.type==="next-action"&&(candidate.route==="inbox"||candidate.route==="next-session"))){
     await save(false,"knowledge-extraction")
   }
@@ -5075,6 +5363,42 @@ async function savePlanningSettings(e){
   renderDailyPlan();
   toast("Preferências de planejamento salvas.","ok")
 }
+function renderKnowledgeExtractionSettings(){
+  const form=$("knowledgeExtractionSettingsForm");
+  if(!form){
+    return
+  }
+  const settings=knowledgeExtractionSettings();
+  const status=knowledgeExtractionAiStatus(settings);
+  form.elements.provider.value=settings.provider;
+  form.elements.endpoint.value=settings.ai.endpoint;
+  form.elements.model.value=settings.ai.model;
+  form.elements.allowBrowserDevSecret.checked=!!settings.ai.allowBrowserDevSecret;
+  form.elements.allowBrowserDevSecret.disabled=runtimeEnvironment().production;
+  if($("knowledgeExtractionAiStatus")){
+    $("knowledgeExtractionAiStatus").innerHTML=`<span class="safety-pill ${status.configured?"ok":"warn"}">${status.label}</span><span>${settings.provider==="ai"?"Notas serão enviadas ao provedor de IA habilitado.":"Somente marcações locais."}</span><span>${knowledgeExtractionSessionSecret()?"Credencial temporária nesta aba":"Sem credencial temporária"}</span>`
+  }
+}
+async function saveKnowledgeExtractionSettings(e){
+  e.preventDefault();
+  const fields=e.currentTarget.elements;
+  state.knowledgeExtraction=normalizeKnowledgeExtractionSettings({provider:fields.provider.value,ai:{endpoint:fields.endpoint.value,model:fields.model.value,allowBrowserDevSecret:fields.allowBrowserDevSecret.checked,lastStatus:knowledgeExtractionAiStatus({provider:fields.provider.value,ai:{endpoint:fields.endpoint.value,model:fields.model.value,allowBrowserDevSecret:fields.allowBrowserDevSecret.checked}}).configured?"configured":"not_configured"}});
+  await save(false,"knowledge-extraction-settings");
+  renderSettings();
+  toast("Configuração de extração salva.","ok")
+}
+function saveKnowledgeExtractionDevSecret(){
+  const input=$("knowledgeExtractionDevSecret");
+  setKnowledgeExtractionSessionSecret(input?.value||"");
+  if(input){
+    input.value=""
+  }
+  renderKnowledgeExtractionSettings()
+}
+function clearKnowledgeExtractionDevSecret(){
+  setKnowledgeExtractionSessionSecret("");
+  renderKnowledgeExtractionSettings()
+}
 
 function renderCatalogRequestDialog(){
   const dialogTitle=$("catalogRequestTitle"),help=$("catalogRequestHelp"),json=$("catalogRequestJson"),status=$("catalogRequestStatus");
@@ -5170,6 +5494,7 @@ function renderSettings(){
   if($("obsidianDisconnectBtn")){$("obsidianDisconnectBtn").disabled=!local||!connected;}
   if($("obsidianOpenBtn")){$("obsidianOpenBtn").disabled=!local||!state.obsidian.openUrl;}
   renderPlanningSettings();
+  renderKnowledgeExtractionSettings();
   renderExternalCalendarSettings();
   renderSnapshots()
 }
@@ -5347,6 +5672,9 @@ if($("newHobbyBtn")){$("newHobbyBtn").onclick=()=>openHobbyDialog()}
 if($("hobbyForm")){$("hobbyForm").onsubmit=saveHobby}
 if($("deleteHobbyBtn")){$("deleteHobbyBtn").onclick=deleteHobby}
 if($("planningSettingsForm")){$("planningSettingsForm").onsubmit=savePlanningSettings}
+if($("knowledgeExtractionSettingsForm")){$("knowledgeExtractionSettingsForm").onsubmit=saveKnowledgeExtractionSettings}
+if($("knowledgeExtractionSaveSecretBtn")){$("knowledgeExtractionSaveSecretBtn").onclick=saveKnowledgeExtractionDevSecret}
+if($("knowledgeExtractionClearSecretBtn")){$("knowledgeExtractionClearSecretBtn").onclick=clearKnowledgeExtractionDevSecret}
 if($("calendarIntegrationForm")){$("calendarIntegrationForm").onsubmit=saveCalendarSettings}
 if($("googleCalendarConnectBtn")){$("googleCalendarConnectBtn").onclick=()=>connectGoogleCalendar().catch(err=>alert(err.message||String(err)))}
 if($("googleCalendarSyncBtn")){$("googleCalendarSyncBtn").onclick=()=>syncExternalCalendars({force:true}).then(result=>{if(result?.error){toast(result.error,"error")}else if(!result?.throttled){toast("Calendário sincronizado.","ok")}}).catch(err=>alert(err.message||String(err)))}
@@ -5398,9 +5726,19 @@ $("addBtn").onclick=openCaptureDialog;$("itemForm").onsubmit=saveItem;$("itemFor
 $("saveNotesBtn").onclick=saveNotes;$("promoteDialogNoteBtn").onclick=promoteDialogNote;$("focusNotesText").oninput=queueFocusSave;document.querySelectorAll("[data-focus-block]").forEach(b=>b.onclick=()=>insertFocusBlock(b.dataset.focusBlock));$("timerStartBtn").onclick=startTimer;$("timerPauseBtn").onclick=pauseTimer;$("timerResetBtn").onclick=resetTimer;$("closeFocusBtn").onclick=closeFocus;$("focusDoneBtn").onclick=completeFocus;
 if($("extractionCandidateList")){
   $("extractionCandidateList").oninput=handleExtractionCandidateEvent;
-  $("extractionCandidateList").onchange=handleExtractionCandidateEvent
+  $("extractionCandidateList").onchange=handleExtractionCandidateEvent;
+  $("extractionCandidateList").onclick=handleExtractionCandidateClick
+}
+if($("extractionCategoryTabs")){
+  $("extractionCategoryTabs").onclick=handleExtractionCandidateClick
 }
 document.querySelectorAll("[data-extraction-add]").forEach(button=>button.onclick=()=>addExtractionCandidate(button.dataset.extractionAdd));
+if($("extractionRetryBtn")){
+  $("extractionRetryBtn").onclick=()=>generateKnowledgeSuggestions(true).catch(err=>alert(err.message||String(err)))
+}
+if($("extractionManualBtn")){
+  $("extractionManualBtn").onclick=()=>addExtractionCandidate("permanent-note")
+}
 if($("extractionMergeBtn")){
   $("extractionMergeBtn").onclick=mergeSelectedExtractionCandidates
 }

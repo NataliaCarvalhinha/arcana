@@ -408,6 +408,25 @@
             <p class="hint">Arcana não verifica sua conta Toki e não pede credenciais do Toki.</p>
           </div>
         </article>
+        <article class="card">
+          <div class="card-head"><div><div class="kicker">EXTRAÇÃO DE CONHECIMENTO</div><h2>Organização das notas</h2></div></div>
+          <form id="knowledgeExtractionSettingsForm" class="settings-form">
+            <label>Provider<select name="provider"><option value="local">Local only</option><option value="ai">AI</option></select></label>
+            <label>Endpoint seguro ou proxy<input name="endpoint" type="url" autocomplete="off" placeholder="/api/knowledge-extraction"></label>
+            <label>Modelo / provedor<input name="model" type="text" autocomplete="off" placeholder="definido pelo seu proxy"></label>
+            <label class="check"><input name="allowBrowserDevSecret" type="checkbox"> Permitir credencial temporária nesta aba em desenvolvimento local</label>
+            <button class="gold-btn">Salvar extração</button>
+          </form>
+          <div id="knowledgeExtractionAiStatus" class="data-safety-status"></div>
+          <div class="settings-form">
+            <label>Credencial temporária local<input id="knowledgeExtractionDevSecret" type="password" autocomplete="off" placeholder="não é salva em backup, IndexedDB ou vault"></label>
+            <div class="item-actions">
+              <button id="knowledgeExtractionSaveSecretBtn" class="ghost-btn" type="button">Usar nesta aba</button>
+              <button id="knowledgeExtractionClearSecretBtn" class="ghost-btn danger" type="button">Limpar</button>
+            </div>
+          </div>
+          <p class="hint">Quando AI estiver habilitado, apenas título/duração da sessão, contexto do recurso, notas brutas e blocos semânticos são enviados. Em produção estática, use um proxy seguro; segredos não ficam no IndexedDB, backup, Obsidian, Git ou assets.</p>
+        </article>
 	        <article class="card">
 	          <div class="card-head"><div><div class="kicker">BACKUP</div><h2>Segurança local</h2></div></div>
 	          <div id="environmentStatus" class="hint"></div>
@@ -596,6 +615,7 @@
 
 <dialog id="knowledgeExtractionDialog"><div class="modal extraction-modal">
   <div class="modal-head"><div><div class="kicker">ORGANIZAR CONHECIMENTO</div><h2>Revisar extração da sessão</h2><p id="extractionSessionMeta" class="hint"></p></div><button id="extractionCloseBtn" type="button" class="x">×</button></div>
+  <div id="extractionStatusBanner" class="extraction-status" role="status"></div>
   <div class="extraction-review-actions">
     <button type="button" class="mini-btn" data-extraction-add="concept">Conceito</button>
     <button type="button" class="mini-btn" data-extraction-add="permanent-note">Permanente</button>
@@ -604,7 +624,10 @@
     <button type="button" class="mini-btn" data-extraction-add="example">Exemplo</button>
     <button type="button" class="mini-btn" data-extraction-add="formula-command">Fórmula / comando</button>
     <button type="button" class="mini-btn" data-extraction-add="next-action">Próximo passo</button>
+    <button id="extractionRetryBtn" type="button" class="mini-btn">Gerar sugestões novamente</button>
+    <button id="extractionManualBtn" type="button" class="mini-btn">Organizar manualmente</button>
   </div>
+  <div id="extractionCategoryTabs" class="extraction-category-tabs"></div>
   <div class="extraction-layout">
     <label class="extraction-raw">Notas originais<textarea id="extractionRawNotes" rows="18"></textarea></label>
     <div id="extractionCandidateList" class="extraction-candidate-list"></div>

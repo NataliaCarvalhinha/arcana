@@ -1,4 +1,4 @@
-const CACHE_NAME="arcana-shell-v21";
+const CACHE_NAME="arcana-shell-v22";
 const APP_SHELL=["./","./index.html","./styles.css","./data-safety.js","./db.js","./routine-excel.js","./app.js","./manifest.webmanifest","./assets/icons/arcana.svg"];
 const YOUTUBE_CATALOG_RE=/\/data\/youtube\/catalog\.json$/;
 

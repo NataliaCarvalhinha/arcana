@@ -41,6 +41,7 @@ jobs:
           node tests/static-tests.mjs
           node tests/data-safety-tests.mjs
           node tests/routine-excel-tests.mjs
+          node tests/knowledge-extraction-tests.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -178,6 +178,11 @@ const ArcanaStorage=(()=>{
       sessionKind:data.sessionKind||null,
       createdFrom:data.createdFrom||null,
       knowledgeExtractionStatus:data.knowledgeExtractionStatus||null,
+      extractionProvider:data.extractionProvider||null,
+      extractionModel:data.extractionModel||null,
+      extractionCreatedAt:data.extractionCreatedAt||null,
+      sourceNotesUpdatedAt:data.sourceNotesUpdatedAt||null,
+      extractionSchemaVersion:Number(data.extractionSchemaVersion||0)||null,
       extractionDraft:data.extractionDraft||null,
       durationMinutes:Number(data.durationMinutes||0)||0,
       tags:Array.isArray(data.tags)?data.tags:[],
@@ -275,17 +280,24 @@ const ArcanaStorage=(()=>{
   }
   function sanitizeStateForPortableExport(value){
     const copy=structuredClone(value||{});
+    const sanitizeSecretContainer=container=>{
+      if(!container||typeof container!=="object"){
+        return
+      }
+      for(const key of ["accessToken","token","idToken","expiresAt","clientSecret","secret","refreshToken","access_token","refresh_token","apiKey","api_key","authorization","Authorization","bearerToken","Bearer"]){
+        delete container[key]
+      }
+    };
     const google=copy.externalCalendars?.google;
     if(google){
-      for(const key of ["accessToken","token","idToken","expiresAt","clientSecret","secret","refreshToken"]){
-        delete google[key]
-      }
+      sanitizeSecretContainer(google);
       if(google.oauth&&typeof google.oauth==="object"){
-        for(const key of ["accessToken","token","idToken","expiresAt","clientSecret","secret","refreshToken"]){
-          delete google.oauth[key]
-        }
+        sanitizeSecretContainer(google.oauth)
       }
     }
+    sanitizeSecretContainer(copy.knowledgeExtraction);
+    sanitizeSecretContainer(copy.knowledgeExtraction?.ai);
+    sanitizeSecretContainer(copy.knowledgeExtraction?.ai?.headers);
     return copy
   }
   function protectedSnapshot(reason){
