@@ -1,5 +1,9 @@
+import json
 import tempfile
+import threading
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 import sys
 
@@ -8,6 +12,10 @@ import server
 
 
 FIXED = "2026-08-18T00:00:00Z"
+PAIRING_TOKEN = "test-pairing-token"
+PAGES_ORIGIN = "https://nataliacarvalhinha.github.io"
+LOCAL_ORIGIN = "http://127.0.0.1:8765"
+EVIL_ORIGIN = "https://evil.example"
 
 
 def sample_payload(status="active"):
@@ -74,6 +82,66 @@ def sample_payload(status="active"):
 
 
 class ObsidianBridgeTests(unittest.TestCase):
+    def setUp(self):
+        self._original_local_config_path = server.LOCAL_CONFIG_PATH
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp_path = Path(self._tmp.name)
+        server.LOCAL_CONFIG_PATH = self.tmp_path / ".arcana-local.json"
+
+    def tearDown(self):
+        server.LOCAL_CONFIG_PATH = self._original_local_config_path
+        self._tmp.cleanup()
+
+    def configure_bridge(self, vault=None, connected=True, token=PAIRING_TOKEN):
+        obsidian = {
+            "connected": bool(connected and vault),
+            "vaultPath": str(vault) if connected and vault else "",
+            "vaultName": vault.name if connected and vault else "",
+            "lastSyncAt": None,
+            "autoSync": "manual",
+            "tracked": {},
+            "conflicts": [],
+            "lastPush": {},
+        }
+        server.save_local_config({
+            "obsidian": obsidian,
+            "bridge": {
+                "name": server.BRIDGE_NAME,
+                "version": server.BRIDGE_VERSION,
+                "apiVersion": server.BRIDGE_API_VERSION,
+                "token": token,
+                "createdAt": FIXED,
+            },
+        })
+
+    def start_bridge_server(self):
+        httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(httpd.shutdown)
+        self.addCleanup(httpd.server_close)
+        return f"http://127.0.0.1:{httpd.server_address[1]}"
+
+    def bridge_request(self, base, path, method="GET", origin=PAGES_ORIGIN, token=None, payload=None, extra_headers=None):
+        data = None
+        headers = {"Origin": origin}
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        if token:
+            headers[server.BRIDGE_TOKEN_HEADER] = token
+        headers.update(extra_headers or {})
+        req = urllib.request.Request(f"{base}{path}", data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                raw = resp.read().decode("utf-8")
+                body = json.loads(raw) if raw else {}
+                return resp.status, dict(resp.headers), body
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8")
+            body = json.loads(raw) if raw else {}
+            return exc.code, dict(exc.headers), body
+
     def test_render_uses_phase_one_vault_shape(self):
         files = server.render_obsidian_export(sample_payload())
         paths = {item["path"] for item in files}
@@ -156,44 +224,168 @@ class ObsidianBridgeTests(unittest.TestCase):
         self.assertIn("## Pergunta", question["text"])
 
     def test_write_preserves_unmanaged_files_and_stable_arcana_id(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            vault = Path(tmp)
-            welcome = vault / "Welcome.md"
-            welcome.write_text("hello obsidian\n", encoding="utf-8")
-            obsidian = vault / ".obsidian"
-            obsidian.mkdir()
-            settings = obsidian / "app.json"
-            settings.write_text('{"theme":"moon"}\n', encoding="utf-8")
-            collision = vault / "20 Notas Permanentes" / "Ideia Unica.md"
-            collision.parent.mkdir(parents=True)
-            collision.write_text("# Minha nota manual\n", encoding="utf-8")
+        vault = self.tmp_path / "vault"
+        vault.mkdir()
+        welcome = vault / "Welcome.md"
+        welcome.write_text("hello obsidian\n", encoding="utf-8")
+        obsidian = vault / ".obsidian"
+        obsidian.mkdir()
+        settings = obsidian / "app.json"
+        settings.write_text('{"theme":"moon"}\n', encoding="utf-8")
+        collision = vault / "20 Notas Permanentes" / "Ideia Unica.md"
+        collision.parent.mkdir(parents=True)
+        collision.write_text("# Minha nota manual\n", encoding="utf-8")
 
-            files = server.render_obsidian_export(sample_payload())
-            result, tracked = server.write_obsidian_export(vault, files)
-            self.assertTrue(result["ok"], result)
-            self.assertEqual(welcome.read_text(encoding="utf-8"), "hello obsidian\n")
-            self.assertEqual(settings.read_text(encoding="utf-8"), '{"theme":"moon"}\n')
-            self.assertIn("note-1", tracked)
-            self.assertEqual(tracked["note-1"]["vaultRelativePath"], "20 Notas Permanentes/Ideia Unica - Arcana 2.md")
+        files = server.render_obsidian_export(sample_payload())
+        result, tracked = server.write_obsidian_export(vault, files)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(welcome.read_text(encoding="utf-8"), "hello obsidian\n")
+        self.assertEqual(settings.read_text(encoding="utf-8"), '{"theme":"moon"}\n')
+        self.assertIn("note-1", tracked)
+        self.assertEqual(tracked["note-1"]["vaultRelativePath"], "20 Notas Permanentes/Ideia Unica - Arcana 2.md")
 
-            managed_note = vault / tracked["note-1"]["vaultRelativePath"]
-            text = managed_note.read_text(encoding="utf-8")
-            self.assertIn("arcana_managed: true", text)
-            self.assertIn("arcana_id: note-1", text)
-            self.assertEqual(collision.read_text(encoding="utf-8"), "# Minha nota manual\n")
+        managed_note = vault / tracked["note-1"]["vaultRelativePath"]
+        text = managed_note.read_text(encoding="utf-8")
+        self.assertIn("arcana_managed: true", text)
+        self.assertIn("arcana_id: note-1", text)
+        self.assertEqual(collision.read_text(encoding="utf-8"), "# Minha nota manual\n")
 
-            second, second_tracked = server.write_obsidian_export(vault, files)
-            self.assertTrue(second["ok"], second)
-            self.assertEqual(second_tracked["note-1"]["vaultRelativePath"], tracked["note-1"]["vaultRelativePath"])
-            self.assertGreater(second["unchanged"], 0)
+        second, second_tracked = server.write_obsidian_export(vault, files)
+        self.assertTrue(second["ok"], second)
+        self.assertEqual(second_tracked["note-1"]["vaultRelativePath"], tracked["note-1"]["vaultRelativePath"])
+        self.assertGreater(second["unchanged"], 0)
 
-            archived = server.render_obsidian_export(sample_payload(status="archived"))
-            archived_result, archived_tracked = server.write_obsidian_export(vault, archived)
-            self.assertTrue(archived_result["ok"], archived_result)
-            self.assertEqual(archived_tracked["note-1"]["vaultRelativePath"], "90 Arquivo/Ideia Unica.md")
-            self.assertTrue((vault / "90 Arquivo" / "Ideia Unica.md").exists())
-            self.assertEqual(welcome.read_text(encoding="utf-8"), "hello obsidian\n")
-            self.assertEqual(settings.read_text(encoding="utf-8"), '{"theme":"moon"}\n')
+        archived = server.render_obsidian_export(sample_payload(status="archived"))
+        archived_result, archived_tracked = server.write_obsidian_export(vault, archived)
+        self.assertTrue(archived_result["ok"], archived_result)
+        self.assertEqual(archived_tracked["note-1"]["vaultRelativePath"], "90 Arquivo/Ideia Unica.md")
+        self.assertTrue((vault / "90 Arquivo" / "Ideia Unica.md").exists())
+        self.assertEqual(welcome.read_text(encoding="utf-8"), "hello obsidian\n")
+        self.assertEqual(settings.read_text(encoding="utf-8"), '{"theme":"moon"}\n')
+
+    def test_bridge_status_cors_identity_allowed_and_rejected(self):
+        vault = self.tmp_path / "vault"
+        vault.mkdir()
+        self.configure_bridge(vault)
+        base = self.start_bridge_server()
+
+        status, headers, body = self.bridge_request(base, "/api/bridge/status", token=PAIRING_TOKEN)
+        self.assertEqual(status, 200)
+        self.assertEqual(headers.get("Access-Control-Allow-Origin"), PAGES_ORIGIN)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["bridge"], "arcana-obsidian")
+        self.assertEqual(body["bridgeApiVersion"], 1)
+        self.assertTrue(body["vaultConnected"])
+        self.assertTrue(body["paired"])
+        self.assertIn("obsidian-push", body["capabilities"])
+        self.assertEqual(body["obsidian"]["vaultPath"], "")
+
+        denied_status, denied_headers, denied_body = self.bridge_request(
+            base,
+            "/api/bridge/status",
+            method="OPTIONS",
+            origin=EVIL_ORIGIN,
+            extra_headers={"Access-Control-Request-Method": "POST"},
+        )
+        self.assertEqual(denied_status, 403)
+        self.assertNotEqual(denied_headers.get("Access-Control-Allow-Origin"), "*")
+        self.assertEqual(denied_body, {})
+
+    def test_bridge_rejects_missing_and_invalid_token_without_write(self):
+        vault = self.tmp_path / "vault"
+        vault.mkdir()
+        self.configure_bridge(vault)
+        base = self.start_bridge_server()
+        body = {"payload": sample_payload()}
+
+        missing_status, _, missing_body = self.bridge_request(base, "/api/obsidian/push", method="POST", payload=body)
+        invalid_status, _, invalid_body = self.bridge_request(base, "/api/obsidian/push", method="POST", token="wrong", payload=body)
+
+        self.assertEqual(missing_status, 401)
+        self.assertEqual(invalid_status, 401)
+        self.assertIn("Pairing code", missing_body["error"])
+        self.assertIn("Pairing code", invalid_body["error"])
+        self.assertFalse((vault / "20 Notas Permanentes" / "Ideia Unica.md").exists())
+
+    def test_bridge_valid_pairing_push_writes_existing_data(self):
+        vault = self.tmp_path / "vault"
+        vault.mkdir()
+        self.configure_bridge(vault)
+        base = self.start_bridge_server()
+
+        status, headers, body = self.bridge_request(
+            base,
+            "/api/obsidian/push",
+            method="POST",
+            token=PAIRING_TOKEN,
+            payload={"payload": sample_payload()},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers.get("Access-Control-Allow-Origin"), PAGES_ORIGIN)
+        self.assertTrue(body["ok"], body)
+        target = vault / "20 Notas Permanentes" / "Ideia Unica.md"
+        self.assertTrue(target.exists())
+        text = target.read_text(encoding="utf-8")
+        self.assertIn(server.ARCANA_GENERATED_START, text)
+        self.assertIn("arcana_id: note-1", text)
+        self.assertEqual(body["obsidian"]["vaultPath"], "")
+
+    def test_bridge_blocks_github_pages_vault_connect(self):
+        vault = self.tmp_path / "vault"
+        vault.mkdir()
+        self.configure_bridge(connected=False)
+        base = self.start_bridge_server()
+
+        status, _, body = self.bridge_request(
+            base,
+            "/api/obsidian/connect",
+            method="POST",
+            payload={"vaultPath": str(vault)},
+        )
+
+        self.assertEqual(status, 403)
+        self.assertIn("Arcana Local", body["error"])
+        self.assertFalse(server.obsidian_config().get("connected"))
+
+    def test_bridge_allows_local_vault_connect(self):
+        vault = self.tmp_path / "vault"
+        vault.mkdir()
+        self.configure_bridge(connected=False)
+        base = self.start_bridge_server()
+
+        status, _, body = self.bridge_request(
+            base,
+            "/api/obsidian/connect",
+            method="POST",
+            origin=LOCAL_ORIGIN,
+            token=PAIRING_TOKEN,
+            payload={"vaultPath": str(vault)},
+        )
+
+        self.assertEqual(status, 201)
+        self.assertTrue(body["obsidian"]["connected"])
+        self.assertEqual(body["obsidian"]["vaultName"], vault.name)
+
+    def test_manual_obsidian_text_outside_arcana_region_is_preserved(self):
+        vault = self.tmp_path / "vault"
+        vault.mkdir()
+        files = server.render_obsidian_export(sample_payload())
+        result, tracked = server.write_obsidian_export(vault, files)
+        self.assertTrue(result["ok"], result)
+        target = vault / tracked["note-1"]["vaultRelativePath"]
+        original = target.read_text(encoding="utf-8")
+        target.write_text(original + "\n## Minha nota manual\n\nNao apagar.\n", encoding="utf-8")
+
+        payload = sample_payload()
+        payload["notes"][0]["content"] = "# Ideia Unica\n\nCorpo atualizado\n"
+        updated = server.render_obsidian_export(payload)
+        second, _ = server.write_obsidian_export(vault, updated)
+        self.assertTrue(second["ok"], second)
+        text = target.read_text(encoding="utf-8")
+        self.assertIn("Corpo atualizado", text)
+        self.assertIn("## Minha nota manual", text)
+        self.assertIn("Nao apagar.", text)
 
     def test_filename_and_path_safety(self):
         safe = server.obsidian_safe_filename("../A/B\x00C:*?")

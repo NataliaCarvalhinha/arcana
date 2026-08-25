@@ -97,6 +97,14 @@ assert.match(app, /setKnowledgeExtractionSessionSecret/, "AI extraction credenti
 assert.match(app, /sessionStorage\.setItem\(KNOWLEDGE_EXTRACTION_SESSION_SECRET_KEY/, "AI extraction credentials use sessionStorage");
 assert.doesNotMatch(app, /DEFAULT_KNOWLEDGE_EXTRACTION_SETTINGS=[^;]*(apiKey|access_token|refresh_token|Authorization|Bearer)/i, "knowledge extraction defaults do not persist AI credentials");
 assert.match(db, /sanitizeSecretContainer\(copy\.knowledgeExtraction\)/, "portable exports strip knowledge extraction credentials");
+assert.match(db, /delete copy\.obsidian\.vaultPath/, "portable exports strip local Obsidian vault paths");
+assert.match(db, /delete copy\.obsidian\.bridgeToken/, "portable exports strip bridge tokens");
+assert.match(db, /sanitizeSecretContainer\(copy\.obsidian\)/, "portable exports sanitize Obsidian secrets");
+assert.match(app, /OBSIDIAN_BRIDGE_TOKEN_KEY="arcana-obsidian-bridge-token"/, "bridge pairing token is stored outside Arcana state");
+assert.match(app, /localStorage\.setItem\(OBSIDIAN_BRIDGE_TOKEN_KEY/, "bridge pairing token uses browser-local storage only");
+assert.doesNotMatch(app, /bridgeToken\s*:/, "default Arcana state does not persist bridge tokens");
+assert.doesNotMatch(worker, /api\/bridge|api\/obsidian/, "service worker does not explicitly cache bridge APIs");
+assert.match(worker, /url\.pathname\.startsWith\("\/api\/"\)/, "service worker bypasses API requests, including bridge calls");
 assert.doesNotMatch(
   JSON.stringify({ knowledgeExtraction: { provider: "ai", ai: { endpoint: "/api/knowledge-extraction", model: "mock", allowBrowserDevSecret: true } } }),
   /apiKey|access_token|refresh_token|Authorization|Bearer/i,

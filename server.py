@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import io, json, os, re, subprocess, sys, unicodedata, uuid, zipfile
+import hashlib, hmac, io, json, os, re, secrets, subprocess, sys, unicodedata, uuid, zipfile
 from datetime import datetime
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
@@ -25,6 +25,16 @@ NOTE_DIRS=("literature","permanent","sessions","quick","archive")
 IDEA_TYPES={"permanent","concept","question","insight","quote","reference","next_action"}
 NOTE_TYPES=IDEA_TYPES|{"literature","session","quick"}
 OBSIDIAN_AUTO_SYNC={"manual","after_session"}
+BRIDGE_NAME="arcana-obsidian"
+BRIDGE_VERSION=1
+BRIDGE_API_VERSION=1
+BRIDGE_TOKEN_HEADER="X-Arcana-Bridge-Token"
+BRIDGE_ALLOWED_ORIGINS={"https://nataliacarvalhinha.github.io","http://127.0.0.1:8765","http://localhost:8765"}
+BRIDGE_LOCAL_ORIGINS={"http://127.0.0.1:8765","http://localhost:8765"}
+BRIDGE_WRITE_PATHS={"/api/obsidian/connect","/api/obsidian/push","/api/obsidian/sync","/api/obsidian/reindex-preview","/api/obsidian/disconnect"}
+MAX_JSON_BODY_BYTES=int(os.environ.get("ARCANA_MAX_JSON_BYTES","5242880"))
+ARCANA_GENERATED_START="<!-- ARCANA:START generated -->"
+ARCANA_GENERATED_END="<!-- ARCANA:END generated -->"
 OBSIDIAN_DIRS=(
     "00 Inbox",
     "10 Fichamentos/Cursos",
@@ -358,7 +368,7 @@ def read_note_file(path):
     return note
 
 def load_local_config():
-    default={"obsidian":{"connected":False,"vaultPath":"","vaultName":"","lastSyncAt":None,"autoSync":"manual","tracked":{},"conflicts":[],"lastPush":{}}}
+    default={"obsidian":{"connected":False,"vaultPath":"","vaultName":"","lastSyncAt":None,"autoSync":"manual","tracked":{},"conflicts":[],"lastPush":{}},"bridge":{"name":BRIDGE_NAME,"version":BRIDGE_VERSION,"token":"","createdAt":None}}
     if not LOCAL_CONFIG_PATH.exists():
         return default
     try:
@@ -366,6 +376,7 @@ def load_local_config():
     except Exception:
         return default
     obs={**default["obsidian"],**(data.get("obsidian") if isinstance(data.get("obsidian"),dict) else {})}
+    bridge={**default["bridge"],**(data.get("bridge") if isinstance(data.get("bridge"),dict) else {})}
     if obs.get("autoSync") not in OBSIDIAN_AUTO_SYNC:
         obs["autoSync"]="manual"
     if not isinstance(obs.get("tracked"),dict):
@@ -374,13 +385,40 @@ def load_local_config():
         obs["conflicts"]=[]
     if not isinstance(obs.get("lastPush"),dict):
         obs["lastPush"]={}
-    return {"obsidian":obs}
+    if not isinstance(bridge.get("token"),str):
+        bridge["token"]=""
+    bridge["name"]=BRIDGE_NAME
+    bridge["version"]=BRIDGE_VERSION
+    return {"obsidian":obs,"bridge":bridge}
 
 def save_local_config(config):
     atomic_write(LOCAL_CONFIG_PATH,json.dumps(config,ensure_ascii=False,indent=2))
 
 def obsidian_config():
     return load_local_config()["obsidian"]
+
+def bridge_config():
+    return load_local_config()["bridge"]
+
+def ensure_bridge_token():
+    config=load_local_config()
+    bridge=config["bridge"]
+    if not bridge.get("token"):
+        bridge["token"]=secrets.token_urlsafe(32)
+        bridge["createdAt"]=now_iso()
+        config["bridge"]=bridge
+        save_local_config(config)
+    return bridge["token"]
+
+def bridge_token_valid(token):
+    expected=ensure_bridge_token()
+    return bool(token) and hmac.compare_digest(str(token), expected)
+
+def bridge_origin_allowed(origin):
+    return not origin or origin in BRIDGE_ALLOWED_ORIGINS
+
+def bridge_origin_local(origin):
+    return not origin or origin in BRIDGE_LOCAL_ORIGINS
 
 def update_obsidian_config(**updates):
     config=load_local_config()
@@ -488,10 +526,55 @@ def arcana_frontmatter(meta):
     lines.append("---")
     return "\n".join(lines)
 
+def split_markdown_frontmatter(text):
+    if text.startswith("---\n"):
+        end=text.find("\n---",4)
+        if end>=0:
+            tail_start=end+4
+            if tail_start<len(text) and text[tail_start:tail_start+1]=="\n":
+                tail_start+=1
+            return text[:end+4].rstrip(), text[tail_start:].lstrip("\n")
+    return "", text
+
+def wrap_generated_region(text):
+    frontmatter, body=split_markdown_frontmatter(text.rstrip()+"\n")
+    generated=f"{ARCANA_GENERATED_START}\n{body.rstrip()}\n{ARCANA_GENERATED_END}\n"
+    if frontmatter:
+        return f"{frontmatter}\n\n{generated}"
+    return generated
+
+def replace_frontmatter(existing_text, generated_text):
+    generated_frontmatter, generated_body=split_markdown_frontmatter(generated_text)
+    if not generated_frontmatter:
+        return generated_text
+    existing_frontmatter, existing_body=split_markdown_frontmatter(existing_text)
+    if existing_frontmatter:
+        return f"{generated_frontmatter}\n\n{existing_body.lstrip()}"
+    return f"{generated_frontmatter}\n\n{existing_text.lstrip()}"
+
+def merge_arcana_managed_text(existing_text, generated_text):
+    if existing_text is None:
+        return generated_text
+    existing_with_fm=replace_frontmatter(existing_text, generated_text)
+    start=existing_with_fm.find(ARCANA_GENERATED_START)
+    end=existing_with_fm.find(ARCANA_GENERATED_END)
+    if start<0 or end<start:
+        return generated_text
+    end+=len(ARCANA_GENERATED_END)
+    generated_start=generated_text.find(ARCANA_GENERATED_START)
+    generated_end=generated_text.find(ARCANA_GENERATED_END)
+    if generated_start<0 or generated_end<generated_start:
+        return generated_text
+    generated_end+=len(ARCANA_GENERATED_END)
+    return (existing_with_fm[:start]+generated_text[generated_start:generated_end]+existing_with_fm[end:]).rstrip()+"\n"
+
+def obsidian_content_hash(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
 def obsidian_file(rel_path, text, arcana_id, kind, updated=""):
     if unsafe_obsidian_relpath(rel_path):
         raise ValueError(f"Caminho Obsidian inseguro: {rel_path}")
-    return {"path":rel_path,"text":text.rstrip()+"\n","arcana_id":arcana_id,"type":kind,"updated":updated}
+    return {"path":rel_path,"text":wrap_generated_region(text),"arcana_id":arcana_id,"type":kind,"updated":updated}
 
 def unsafe_obsidian_relpath(rel_path):
     parts=Path(str(rel_path)).parts
@@ -888,11 +971,12 @@ def write_obsidian_export(vault_root, files):
                     target=ensure_within(vault_root, vault_root/desired_rel)
                     stats["warnings"].append({"file":rel_path,"writtenAs":desired_rel,"reason":"collision_with_unmanaged_or_other_arcana_id"})
             previous_text=target.read_text(encoding="utf-8") if target.exists() else None
-            if previous_text==file["text"]:
+            next_text=merge_arcana_managed_text(previous_text,file["text"]) if previous_text is not None else file["text"]
+            if previous_text==next_text:
                 stats["unchanged"]+=1
             else:
                 existed=target.exists()
-                atomic_write(target, file["text"])
+                atomic_write(target, next_text)
                 if existed:
                     stats["updated"]+=1
                 else:
@@ -901,7 +985,7 @@ def write_obsidian_export(vault_root, files):
                 meta,_=parse_frontmatter(existing.read_text(encoding="utf-8"))
                 if (meta.get("arcana_managed") is True or str(meta.get("arcana_managed") or "").lower()=="true") and str(meta.get("arcana_id") or "")==arcana_id:
                     existing.unlink()
-            tracked[arcana_id]={"vaultRelativePath":desired_rel,"lastArcanaUpdated":file.get("updated") or "","lastVaultMtime":target.stat().st_mtime_ns}
+            tracked[arcana_id]={"vaultRelativePath":desired_rel,"lastArcanaUpdated":file.get("updated") or "","lastVaultMtime":target.stat().st_mtime_ns,"contentHash":obsidian_content_hash(next_text)}
             stats["files"].append(desired_rel)
             by_path[desired_rel]={"path":target,"meta":{"arcana_id":arcana_id,"arcana_managed":True},"managed":True,"arcana_id":arcana_id}
             managed[arcana_id]=target
@@ -947,6 +1031,49 @@ def obsidian_status_payload(obs=None):
         payload["attachmentCount"]=len([path for path in (vault_root/"Attachments").rglob("*") if path.is_file()])
         payload["flashcardCount"]=len([path for path,meta in notes if meta.get("type")=="flashcard" or "80 Flashcards" in path.as_posix()])
     return payload
+
+def obsidian_status_for_origin(origin, obs=None):
+    payload=obsidian_status_payload(obs)
+    if not bridge_origin_local(origin):
+        payload["vaultPath"]=""
+    return payload
+
+def bridge_status_payload(token=""):
+    obs=obsidian_config()
+    connected=bool(obs.get("connected") and obs.get("vaultPath"))
+    vault_name=obs.get("vaultName") or ""
+    open_url=""
+    if connected:
+        try:
+            vault_root=resolve_vault_path(obs["vaultPath"])
+            connected=vault_root.exists() and vault_root.is_dir()
+            vault_name=vault_root.name
+            open_url=f"obsidian://open?vault={quote(vault_name)}&file={quote('Arcana Index')}"
+        except Exception:
+            connected=False
+    paired=bridge_token_valid(token)
+    return {
+        "ok":True,
+        "bridge":BRIDGE_NAME,
+        "version":BRIDGE_VERSION,
+        "bridgeApiVersion":BRIDGE_API_VERSION,
+        "vaultConnected":connected,
+        "vaultName":vault_name if connected else "",
+        "capabilities":["obsidian-push","obsidian-open"],
+        "pairingRequired":True,
+        "paired":paired,
+        "obsidian":{
+            "available":True,
+            "connected":connected,
+            "vaultName":vault_name if connected else "",
+            "vaultPath":"",
+            "lastSyncAt":obs.get("lastSyncAt"),
+            "autoSync":obs.get("autoSync") or "manual",
+            "conflicts":len(obs.get("conflicts") or []),
+            "lastPush":obs.get("lastPush") or {},
+            "openUrl":open_url,
+        },
+    }
 
 def obsidian_reindex_preview():
     obs=obsidian_config()
@@ -1171,6 +1298,8 @@ def save_flashcard(data, card_id=None):
 
 def read_json_body(handler):
     length=int(handler.headers.get("Content-Length","0"))
+    if length>MAX_JSON_BODY_BYTES:
+        raise ValueError("Payload muito grande.")
     raw=handler.rfile.read(length) if length else b"{}"
     return json.loads(raw or b"{}")
 
@@ -1186,9 +1315,57 @@ def vault_zip_bytes():
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*a,**kw): super().__init__(*a,directory=str(ROOT),**kw)
+    def bridge_api_path(self, path):
+        return path.startswith("/api/bridge") or path.startswith("/api/obsidian")
+    def bridge_origin(self):
+        return self.headers.get("Origin","")
+    def send_bridge_cors(self):
+        origin=self.bridge_origin()
+        if origin and bridge_origin_allowed(origin):
+            self.send_header("Access-Control-Allow-Origin",origin)
+            self.send_header("Vary","Origin")
+            self.send_header("Access-Control-Allow-Credentials","false")
+    def require_bridge_origin(self):
+        origin=self.bridge_origin()
+        if bridge_origin_allowed(origin):
+            return True
+        return self.json({"error":"Origem não autorizada pelo Arcana Bridge."},403)
+    def require_local_origin(self):
+        origin=self.bridge_origin()
+        if bridge_origin_local(origin):
+            return True
+        return self.json({"error":"Esta ação só pode ser feita no Arcana Local."},403)
+    def require_bridge_token(self):
+        token=self.headers.get(BRIDGE_TOKEN_HEADER,"")
+        if bridge_token_valid(token):
+            return True
+        return self.json({"error":"Pairing code inválido ou ausente."},401)
+    def do_OPTIONS(self):
+        p=urlparse(self.path)
+        if not self.bridge_api_path(p.path):
+            self.send_response(404)
+            self.end_headers()
+            return
+        origin=self.bridge_origin()
+        if not bridge_origin_allowed(origin):
+            self.send_response(403)
+            self.end_headers()
+            return
+        self.send_response(204)
+        self.send_bridge_cors()
+        self.send_header("Access-Control-Allow-Methods","GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers",f"Content-Type, {BRIDGE_TOKEN_HEADER}")
+        self.send_header("Access-Control-Max-Age","600")
+        if self.headers.get("Access-Control-Request-Private-Network","").lower()=="true":
+            self.send_header("Access-Control-Allow-Private-Network","true")
+        self.end_headers()
     def do_GET(self):
         p=urlparse(self.path)
         try:
+            if p.path=="/api/bridge/status":
+                if not self.require_bridge_origin():
+                    return
+                return self.json(bridge_status_payload(self.headers.get(BRIDGE_TOKEN_HEADER,"")))
             if p.path=="/api/notes":
                 return self.json({"notes":search_notes(parse_qs(p.query))})
             if p.path.startswith("/api/notes/"):
@@ -1222,8 +1399,12 @@ class Handler(SimpleHTTPRequestHandler):
             if p.path=="/api/flashcards":
                 return self.json({"flashcards":list(load_flashcards_meta().values())})
             if p.path=="/api/obsidian/status":
-                return self.json({"obsidian":obsidian_status_payload()})
+                if not self.require_bridge_origin():
+                    return
+                return self.json({"obsidian":obsidian_status_for_origin(self.bridge_origin())})
             if p.path=="/api/obsidian/conflicts":
+                if not self.require_bridge_origin():
+                    return
                 obs=obsidian_config()
                 return self.json({"conflicts":obs.get("conflicts") or []})
         except FileNotFoundError as e:
@@ -1247,6 +1428,13 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         p=urlparse(self.path)
         try:
+            if p.path.startswith("/api/obsidian"):
+                if not self.require_bridge_origin():
+                    return
+                if p.path=="/api/obsidian/connect" and not self.require_local_origin():
+                    return
+                if p.path in BRIDGE_WRITE_PATHS and not self.require_bridge_token():
+                    return
             if p.path=="/api/notes":
                 data=read_json_body(self)
                 note,dupes=save_note(data)
@@ -1262,23 +1450,25 @@ class Handler(SimpleHTTPRequestHandler):
                 vault_root=validate_vault_root(data.get("vaultPath") or data.get("path"))
                 auto_sync=data.get("autoSync") if data.get("autoSync") in OBSIDIAN_AUTO_SYNC else "manual"
                 obs=update_obsidian_config(connected=True,vaultPath=str(vault_root),vaultName=vault_root.name,lastSyncAt=obsidian_config().get("lastSyncAt"),autoSync=auto_sync)
-                return self.json({"obsidian":obsidian_status_payload(obs)},201)
+                return self.json({"obsidian":obsidian_status_for_origin(self.bridge_origin(),obs)},201)
             if p.path=="/api/obsidian/reindex-preview":
                 return self.json(obsidian_reindex_preview())
             if p.path=="/api/obsidian/sync":
                 data=read_json_body(self)
                 result=push_obsidian_vault(data.get("payload") or data)
+                result["obsidian"]=obsidian_status_for_origin(self.bridge_origin())
                 return self.json(result)
             if p.path=="/api/obsidian/pull":
                 return self.json({"error":"Obsidian -> Arcana não faz parte da Phase 1."},405)
             if p.path=="/api/obsidian/push":
                 data=read_json_body(self)
                 result=push_obsidian_vault(data.get("payload") or data)
+                result["obsidian"]=obsidian_status_for_origin(self.bridge_origin())
                 return self.json(result)
             if p.path=="/api/obsidian/disconnect":
                 current=obsidian_config()
                 obs=update_obsidian_config(connected=False,vaultPath="",vaultName="",tracked={},conflicts=[],lastSyncAt=current.get("lastSyncAt"),lastPush=current.get("lastPush") or {})
-                return self.json({"obsidian":obsidian_status_payload(obs)})
+                return self.json({"obsidian":obsidian_status_for_origin(self.bridge_origin(),obs)})
         except Exception as e:
             return self.json({"error":str(e)},400)
         if p.path=="/api/backup":
@@ -1334,9 +1524,17 @@ class Handler(SimpleHTTPRequestHandler):
         return self.json({"error":"not found"},404)
     def json(self,obj,status=200):
         b=json.dumps(obj,ensure_ascii=False).encode()
-        self.send_response(status);self.send_header("Content-Type","application/json; charset=utf-8");self.send_header("Cache-Control","no-store");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b)
+        self.send_response(status);self.send_header("Content-Type","application/json; charset=utf-8");self.send_header("Cache-Control","no-store");self.send_header("Content-Length",str(len(b)))
+        if self.bridge_api_path(urlparse(self.path).path):
+            self.send_bridge_cors()
+        self.end_headers();self.wfile.write(b)
 
 if __name__=="__main__":
     ensure_vault()
+    if "--pairing-code" in sys.argv:
+        print(ensure_bridge_token())
+        sys.exit(0)
+    ensure_bridge_token()
     print(f"Arcana v5 em http://{HOST}:{PORT}")
+    print("Arcana Obsidian Bridge ativo em /api/bridge/status. Pairing code: python3 server.py --pairing-code")
     ThreadingHTTPServer((HOST,PORT),Handler).serve_forever()

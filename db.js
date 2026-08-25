@@ -298,6 +298,13 @@ const ArcanaStorage=(()=>{
     sanitizeSecretContainer(copy.knowledgeExtraction);
     sanitizeSecretContainer(copy.knowledgeExtraction?.ai);
     sanitizeSecretContainer(copy.knowledgeExtraction?.ai?.headers);
+    if(copy.obsidian&&typeof copy.obsidian==="object"){
+      delete copy.obsidian.vaultPath;
+      delete copy.obsidian.bridgeToken;
+      delete copy.obsidian.pairingToken;
+      delete copy.obsidian.token;
+      sanitizeSecretContainer(copy.obsidian)
+    }
     return copy
   }
   function protectedSnapshot(reason){

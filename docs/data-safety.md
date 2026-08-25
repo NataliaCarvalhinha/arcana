@@ -21,6 +21,25 @@ replace, or silently reset IndexedDB data.
   IDs, and create a protected pre-migration snapshot before saving migrated
   state.
 - If static assets changed, bump the service-worker cache version.
+- Confirm portable exports exclude `.arcana-local.json` data, local Obsidian
+  vault paths, bridge pairing tokens, and other credentials.
+- Confirm the service worker does not cache `/api/bridge/*` or `/api/obsidian/*`
+  responses.
+
+## Obsidian Bridge
+
+IndexedDB remains Arcana's source of truth. The local Obsidian bridge is a
+machine-local writer for the normalized Arcana Markdown export payload; it does
+not store Arcana application state.
+
+Production Arcana may pair with an already configured loopback bridge, but it
+must not set an arbitrary vault path from GitHub Pages. Bridge writes require the
+pairing token in `X-Arcana-Bridge-Token`, strict origin checks, and vault path
+validation. The token must never be sent in a query string.
+
+Full backups may keep Obsidian sync status, pending counts, and last sync
+metadata, but they must exclude the absolute vault path, pairing token, bridge
+token, credentials, and private local config.
 
 ## Recovery
 

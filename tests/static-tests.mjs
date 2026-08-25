@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 
-for (const file of ["index.html", "app.js", "db.js", "data-safety.js", "routine-excel.js", "manifest.webmanifest", "service-worker.js", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", ".github/workflows/register-youtube-playlist.yml", ".github/ISSUE_TEMPLATE/arcana-playlist.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py", "tests/data-safety-tests.mjs", "tests/routine-excel-tests.mjs", "tests/knowledge-extraction-tests.mjs", "docs/data-safety.md", "docs/routine-excel.md", "docs/knowledge-extraction.md"]) {
+for (const file of ["index.html", "app.js", "db.js", "data-safety.js", "routine-excel.js", "manifest.webmanifest", "service-worker.js", "server.py", ".github/workflows/pages.yml", ".github/workflows/sync-youtube.yml", ".github/workflows/register-youtube-playlist.yml", ".github/ISSUE_TEMPLATE/arcana-playlist.yml", "data/youtube/playlists.json", "data/youtube/catalog.json", "scripts/sync-youtube.py", "tests/data-safety-tests.mjs", "tests/routine-excel-tests.mjs", "tests/knowledge-extraction-tests.mjs", "docs/data-safety.md", "docs/routine-excel.md", "docs/knowledge-extraction.md", "docs/obsidian-bridge.md"]) {
   assert.ok(existsSync(file), `${file} exists`);
 }
 
@@ -22,6 +22,7 @@ const db = readFileSync("db.js", "utf8");
 const dataSafety = readFileSync("data-safety.js", "utf8");
 const routineExcel = readFileSync("routine-excel.js", "utf8");
 const styles = readFileSync("styles.css", "utf8");
+const server = readFileSync("server.py", "utf8");
 const pagesWorkflow = readFileSync(".github/workflows/pages.yml", "utf8");
 const syncWorkflow = readFileSync(".github/workflows/sync-youtube.yml", "utf8");
 const registerWorkflow = readFileSync(".github/workflows/register-youtube-playlist.yml", "utf8");
@@ -52,7 +53,15 @@ assert.match(app, /const DEFAULT_OBSIDIAN_STATE=/, "obsidian state defaults are 
 assert.match(app, /async function refreshObsidianStatus/, "obsidian status refresh exists");
 assert.match(app, /function queueObsidianAutoSync/, "obsidian autosync hook exists");
 assert.match(app, /queueObsidianAutoSync\("after_session"\)/, "focus completion triggers obsidian autosync");
-assert.doesNotMatch(app, /queueObsidianAutoSync\("after_note_save"\)/, "note saves do not trigger direct obsidian sync in phase one");
+assert.match(app, /OBSIDIAN_BRIDGE_URL="http:\/\/127\.0\.0\.1:8765"/, "GitHub Pages targets the local bridge URL");
+assert.match(app, /function validBridgeStatus/, "frontend validates bridge identity");
+assert.match(app, /data\.bridge==="arcana-obsidian"/, "frontend requires the Arcana bridge name");
+assert.match(app, /Number\(data\.bridgeApiVersion\)===1/, "frontend requires bridge API version 1");
+assert.match(app, /X-Arcana-Bridge-Token/, "frontend sends the bridge token header");
+assert.match(app, /localStorage\.setItem\(OBSIDIAN_BRIDGE_TOKEN_KEY/, "pairing token stays in browser-local storage");
+assert.match(app, /markObsidianPending\("knowledge_extraction"\)/, "knowledge extraction marks Obsidian sync pending");
+assert.match(app, /ArcanaStorage\.saveState\(state\)/, "pending Obsidian sync status is persisted");
+assert.doesNotMatch(app, /queueObsidianAutoSync\("after_note_save"\)/, "note saves do not trigger legacy direct obsidian sync");
 assert.match(app, /ArcanaStorage\.downloadObsidianVault\(state\)/, "online vault export uses the obsidian zip exporter");
 assert.match(app, /function exportPlaylistFile/, "playlist JSON export is available");
 assert.match(index, /<form id="trackForm" class="modal" novalidate>/, "track form uses app validation");
@@ -138,6 +147,9 @@ assert.match(app, /course-fin-07/, "starter finance catalog is present");
 assert.match(app, /prepareState:preparePersistedState/, "IndexedDB startup delegates migrations to the guarded state preparer");
 assert.match(index, /id="obsidianConnectBtn"/, "settings exposes the obsidian connect action");
 assert.match(index, /id="obsidianSyncBtn"/, "settings exposes the obsidian sync action");
+assert.match(index, /id="obsidianSyncAllBtn"/, "settings exposes the full obsidian sync action");
+assert.match(index, /id="obsidianZipBtn"/, "settings exposes the obsidian ZIP fallback");
+assert.match(index, /id="obsidianBridgeRefreshBtn"/, "settings exposes bridge status refresh");
 assert.match(index, /id="obsidianAutoSync"/, "settings exposes autosync selection");
 assert.doesNotMatch(index, /id="obsidianPullBtn"|id="obsidianPushBtn"/, "phase one does not expose direct reverse sync controls");
 assert.match(app, /class ExternalCalendarProvider/, "external calendar provider abstraction is present");
@@ -187,6 +199,16 @@ assert.match(db, /README - Arcana\.md/, "obsidian vault export includes the Arca
 assert.match(db, /Courses\//, "obsidian vault export includes course notes");
 assert.match(db, /Tracks\//, "obsidian vault export includes track notes");
 assert.doesNotMatch(db, /Arcana Obsidian Vault/, "obsidian vault export does not nest files inside a legacy root folder");
+assert.match(server, /BRIDGE_ALLOWED_ORIGINS=\{"https:\/\/nataliacarvalhinha\.github\.io","http:\/\/127\.0\.0\.1:8765","http:\/\/localhost:8765"\}/, "bridge CORS allowlist is explicit");
+assert.match(server, /BRIDGE_TOKEN_HEADER="X-Arcana-Bridge-Token"/, "bridge writes require the token header");
+assert.match(server, /bridge_status_payload/, "bridge status endpoint payload exists");
+assert.match(server, /"bridge":BRIDGE_NAME/, "bridge status advertises the bridge identity");
+assert.match(server, /"bridgeApiVersion":BRIDGE_API_VERSION/, "bridge status advertises API version");
+assert.match(server, /capabilities":\["obsidian-push","obsidian-open"\]/, "bridge status advertises expected capabilities");
+assert.match(server, /def require_local_origin/, "vault path connect is local-origin only");
+assert.match(server, /def require_bridge_token/, "write endpoints require pairing");
+assert.match(server, /MAX_JSON_BODY_BYTES/, "bridge request size is bounded");
+assert.match(server, /obsidian_status_for_origin/, "bridge masks local vault paths for production origins");
 assert.equal(youtubePlaylists.playlists[0].id, "PLNur2Ccbfc5k");
 assert.equal(youtubePlaylists.playlists[0].enabled, true);
 assert.equal(youtubeCatalog.version, 1);
@@ -217,7 +239,8 @@ assert.match(youtubeSyncScript, /returned zero videos; keeping previous catalog/
 
 const worker = readFileSync("service-worker.js", "utf8");
 assert.match(worker, /caches\.open/, "service worker caches app shell");
-assert.match(worker, /arcana-shell-v22/, "service worker cache version invalidates old app shell");
+assert.match(worker, /arcana-shell-v23/, "service worker cache version invalidates old app shell");
+assert.match(worker, /url\.pathname\.startsWith\("\/api\/"\)/, "service worker bypasses bridge and API responses");
 assert.match(worker, /data-safety\.js/, "service worker caches the data safety module");
 assert.match(worker, /routine-excel\.js/, "service worker caches the routine Excel module");
 assert.match(worker, /YOUTUBE_CATALOG_RE/, "service worker special-cases the public YouTube catalog");
@@ -324,7 +347,7 @@ function makeSelect(id, values = []) {
 }
 
 const elements = new Map();
-const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "calendarConflictNotice", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "routineTemplateBtn", "routineImportInput", "routineExportBtn", "settingsRoutineTemplateBtn", "settingsRoutineImportInput", "settingsRoutineExportBtn", "routineImportDialog", "routineImportTitle", "routineImportFileName", "routineImportSummary", "routineImportErrors", "routineImportChanges", "cancelRoutineImportBtn", "applyRoutineImportBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "calendarIntegrationForm", "googleCalendarStatus", "googleCalendarList", "googleCalendarConnectBtn", "googleCalendarSyncBtn", "googleCalendarDisconnectBtn", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "calendarLegend", "externalCalendarSummary", "externalCalendarEvents", "syncCalendarBtn", "youtubeSettingsForm", "environmentStatus", "dataSafetyStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "exportRawStateBtn", "snapshotRecoveryInfo", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost", "registerBtn", "timeNowBtn", "timeNowDialog", "timeNowOptions", "timeNowSuggestion", "registerDialog", "registerForm", "registerQuickInput", "registerParseBtn", "registerPreview", "registerTypeSelect", "registerTrackSelect", "registerCourseSelect", "registerModuleSelect", "registerLessonSelect", "registerHobbySelect", "registerStatus", "journalDate", "journalPrevBtn", "journalNextBtn", "journalTimeline", "weeklyAnalytics"];
+const ids = ["pageTitle", "homeView", "tracksView", "youtubeView", "libraryView", "fichamentosView", "notesView", "reviewView", "knowledgeView", "knowledgeTabs", "knowledgeSearch", "knowledgeList", "calendarView", "routineView", "hobbiesView", "inboxView", "settingsView", "trackForm", "trackDialog", "trackDialogTitle", "trackFormError", "trackSaveBtn", "deleteTrackBtn", "trackTabs", "trackHero", "trackCourses", "trackProfile", "homeTracks", "homeKnowledge", "homeReviews", "homePriority", "homeYoutube", "nextRitual", "todayRows", "todayProgress", "dailyPlan", "dailyPlanDetails", "todayMinutes", "sanctuaryDate", "freeTimeSummary", "calendarConflictNotice", "routineViewMode", "routineChangeNotice", "routineTodayTimeline", "routineWeek", "routineList", "newRoutineBtn", "routineTemplateBtn", "routineImportInput", "routineExportBtn", "settingsRoutineTemplateBtn", "settingsRoutineImportInput", "settingsRoutineExportBtn", "routineImportDialog", "routineImportTitle", "routineImportFileName", "routineImportSummary", "routineImportErrors", "routineImportChanges", "cancelRoutineImportBtn", "applyRoutineImportBtn", "hobbyList", "newHobbyBtn", "planningSettingsForm", "planningStatus", "calendarIntegrationForm", "googleCalendarStatus", "googleCalendarList", "googleCalendarConnectBtn", "googleCalendarSyncBtn", "googleCalendarDisconnectBtn", "routineDialog", "routineForm", "routineDialogTitle", "routineFormError", "routineSaveBtn", "deleteRoutineBtn", "duplicateRoutineBtn", "hobbyDialog", "hobbyForm", "hobbyDialogTitle", "hobbyFormError", "hobbySaveBtn", "deleteHobbyBtn", "itemForm", "itemDialog", "moduleEditor", "moduleRows", "playlistForm", "playlistDialog", "playlistDialogTitle", "playlistFormError", "playlistSaveBtn", "deletePlaylistBtn", "playlistTabs", "activePlaylistName", "playlistSyncStatus", "syncPlaylistBtn", "requestCatalogBtn", "catalogOptionsBtn", "activePlaylistPanel", "youtubeBudget", "dailyVideos", "youtubeQueue", "calendarLegend", "externalCalendarSummary", "externalCalendarEvents", "syncCalendarBtn", "youtubeSettingsForm", "environmentStatus", "dataSafetyStatus", "youtubeCatalogStatus", "youtubePlaylistDiagnostics", "refreshCatalogBtn", "backupStatus", "exportRawStateBtn", "snapshotRecoveryInfo", "obsidianEnvironmentStatus", "obsidianVaultStatus", "obsidianStats", "obsidianAutoSync", "obsidianAutoSyncNote", "obsidianConnectBtn", "obsidianSyncBtn", "obsidianSyncAllBtn", "obsidianZipBtn", "obsidianBridgeRefreshBtn", "obsidianDisconnectBtn", "obsidianOpenBtn", "snapshotList", "catalogRequestDialog", "catalogRequestTitle", "catalogRequestHelp", "catalogRequestJson", "catalogRequestStatus", "copyCatalogRequestBtn", "vaultList", "vaultEditorPane", "fichamentoList", "fichamentoEditor", "reviewQueue", "reviewActive", "globalSearchBtn", "globalSearchDialog", "globalSearchInput", "globalSearchResults", "captureDialog", "captureQuickInput", "captureStatus", "toastHost", "registerBtn", "timeNowBtn", "timeNowDialog", "timeNowOptions", "timeNowSuggestion", "registerDialog", "registerForm", "registerQuickInput", "registerParseBtn", "registerPreview", "registerTypeSelect", "registerTrackSelect", "registerCourseSelect", "registerModuleSelect", "registerLessonSelect", "registerHobbySelect", "registerStatus", "journalDate", "journalPrevBtn", "journalNextBtn", "journalTimeline", "weeklyAnalytics"];
 for (const id of ids) {
   elements.set(id, makeElement(id));
 }

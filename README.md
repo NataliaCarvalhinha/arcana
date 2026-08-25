@@ -53,21 +53,25 @@ Approved candidates keep source references back to the session/resource and dedu
 
 See `docs/knowledge-extraction.md` for the extraction pipeline contract, provenance fields, and test coverage.
 
-Use `Importar Vault` to restore a ZIP produced by Arcana or to import generic Markdown. The static importer rejects unsafe paths. Direct Obsidian -> Arcana reverse sync is not part of Phase 1.
+Use `Importar Vault` to restore a ZIP produced by Arcana or to import generic Markdown. The static importer rejects unsafe paths. Direct Obsidian -> Arcana reverse sync is not part of this phase.
 
-When running through `server.py`, Settings -> Integracoes -> Obsidian exposes the Obsidian Bridge Phase 1:
+Settings -> Integracoes -> Obsidian can use the Arcana Local Obsidian Bridge when `server.py` is running on this computer:
 
-- `Conectar Vault` stores the local vault path in `.arcana-local.json`, which is ignored by git.
-- `Sincronizar para Obsidian` writes Arcana-managed Markdown directly into that vault.
+- In GitHub Pages, `Conectar bridge local` pairs with `http://127.0.0.1:8765` by pairing code. Pages never sets an arbitrary local vault path.
+- In local Arcana, `Conectar Vault` stores the vault path in `.arcana-local.json`, which is ignored by git.
+- `Sincronizar tudo para Obsidian` writes the same Arcana-managed Markdown projection used by the ZIP exporter.
+- If the bridge is unavailable or unpaired, direct sync is disabled and `Baixar Vault ZIP` remains the safe fallback.
 - Arcana creates the root folders expected by the bridge, including `10 Fichamentos/`, `60 Fontes/`, `80 Flashcards/`, `Tracks/`, `Courses/`, `Arcana Index.md`, and `README - Arcana.md`.
-- Arcana only updates files marked with `arcana_managed: true` and the matching stable `arcana_id`. Existing Obsidian files, `Welcome.md`, and `.obsidian/` are preserved.
-- No deletion sync runs in Phase 1. Archived Arcana notes are written under `90 Arquivo/`.
+- Arcana only updates files marked with `arcana_managed: true` and the matching stable `arcana_id`; manual text outside Arcana-managed generated regions is preserved when possible. Existing Obsidian files, `Welcome.md`, and `.obsidian/` are preserved.
+- No deletion sync runs in this phase. Archived Arcana notes are written under `90 Arquivo/`.
 
 Attachments are reserved in `Attachments/`; current browser/local note records do not expose binary attachment blobs for export yet.
 
+See `docs/obsidian-bridge.md` for bridge setup, pairing, CORS, and write-safety details.
+
 ## PWA And Offline
 
-The service worker caches the static app shell and keeps the latest successful `data/youtube/catalog.json` response available offline. It does not cache YouTube media or other external resources. IndexedDB data remains local to the browser/profile/device.
+The service worker caches the static app shell and keeps the latest successful `data/youtube/catalog.json` response available offline. It does not cache YouTube media, bridge API responses, or other external resources. IndexedDB data remains local to the browser/profile/device.
 
 ## YouTube
 
