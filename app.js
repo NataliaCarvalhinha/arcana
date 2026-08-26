@@ -2754,6 +2754,124 @@ function markLessonComplete(lesson,module,course,completedAt=new Date().toISOStr
     course.progress=itemProgress(course);course.status=statusFromProgress(course.progress);if(itemProgress(course)>=100&&!course.completedAt){course.completedAt=completedAt}
   }
 }
+function completionUndoLabel(scope){
+  return scope==="youtube"?"Marcar como não assistido":"Marcar como não concluída"
+}
+function completionUndoEligible(resource,scope){
+  if(!(scope==="youtube"||scope==="lesson")){
+    return false
+  }
+  const progress=scope==="lesson"?lessonProgress(resource):itemProgress(resource);
+  return progress>=100||resource?.status==="concluido"||resource?.done===true||!!resource?.completedAt
+}
+function completionUndoSnapshot(resource,scope){
+  const progress=scope==="lesson"?lessonProgress(resource):itemProgress(resource);
+  return {status:resource?.status||statusFromProgress(progress),progress,done:!!resource?.done,completedAt:resource?.completedAt||null}
+}
+function syncParentCompletionState(module,course){
+  if(module){
+    module.progress=moduleProgress(module);module.done=moduleDone(module);module.status=statusFromProgress(module.progress);
+    if(!module.done){
+      module.completedAt=null
+    }
+  }
+  if(course){
+    course.progress=itemProgress(course);course.done=itemProgress(course)>=100;course.status=statusFromProgress(course.progress);
+    if(!course.done){
+      course.completedAt=null
+    }
+  }
+}
+function markDailyPlanItemPending(id,type){
+  if(state.dailyPlan?.date!==dayKey()){
+    return null
+  }
+  const plan=findDailyPlanItem(id,type);
+  if(plan){
+    plan.status="pending";plan.completedAt=null
+  }
+  return plan
+}
+function recordCompletionUndoActivity(resource,scope,previous,next,context,at){
+  upsertActivityLogEntry({
+    type:scope==="youtube"?"youtube":"study",
+    subtype:scope==="youtube"?"youtube.completion.undo":"study.lesson.completion.undo",
+    title:completionUndoLabel(scope),
+    startedAt:at,
+    endedAt:at,
+    durationMinutes:0,
+    source:"completion-undo",
+    sourceRecordId:`completion-undo:${scope}:${resource.id}:${at}`,
+    sourceId:resource.id,
+    trackId:context.trackId,
+    courseId:context.courseId,
+    moduleId:context.moduleId,
+    lessonId:scope==="lesson"?resource.id:context.lessonId,
+    metadata:{action:"completion_undo",scope,resourceId:resource.id,previousStatus:previous.status,previousProgress:previous.progress,newStatus:next.status,newProgress:next.progress,timestamp:at}
+  })
+}
+function markStudyItemIncomplete(id,scope,options={}){
+  const resource=resourceByScope(id,scope);
+  if(!resource||!(scope==="youtube"||scope==="lesson")){
+    return {changed:false,resource:null,scope}
+  }
+  if(!completionUndoEligible(resource,scope)){
+    return {changed:false,resource,scope}
+  }
+  const at=options.at||new Date().toISOString(),previous=completionUndoSnapshot(resource,scope),context=studyContextForResource(resource,scope);
+  resource.progress=0;resource.done=false;resource.status="nao_iniciado";resource.completedAt=null;
+  if(scope==="lesson"){
+    const module=resourceByScope(resource.moduleId,"module"),course=state.items.find(item=>item.id===resource.courseId);
+    syncParentCompletionState(module,course);
+    markDailyPlanItemPending(resource.id,"lesson")
+  }else{
+    markDailyPlanItemPending(resource.id,"youtube")
+  }
+  const next=completionUndoSnapshot(resource,scope);
+  recordCompletionUndoActivity(resource,scope,previous,next,context,at);
+  return {changed:true,resource,scope,previous,next,context}
+}
+function updateFocusUndoButton(resource=null,scope=null){
+  const button=$("focusUndoBtn");
+  if(!button){
+    return
+  }
+  const eligible=completionUndoEligible(resource,scope);
+  button.classList.toggle("hidden",!eligible);
+  button.textContent=completionUndoLabel(scope);
+  button.disabled=!eligible
+}
+async function confirmUndoCompletion(id,scope){
+  const resource=resourceByScope(id,scope);
+  if(!resource){
+    missingTarget();
+    return
+  }
+  if(!completionUndoEligible(resource,scope)){
+    toast("Este item já está pendente.","info");
+    return
+  }
+  if(!confirm(`${completionUndoLabel(scope)}?\n\nIsso mantém sessões, notas, fichamentos, XP, sequência e histórico de tempo.`)){
+    return
+  }
+  const result=markStudyItemIncomplete(id,scope);
+  if(!result.changed){
+    toast("Este item já está pendente.","info");
+    return
+  }
+  markObsidianPending("completion_undo");
+  await save(true,"completion-undo");
+  if(focusRef?.id===id&&focusRef?.scope===scope){
+    updateFocusUndoButton(result.resource,scope)
+  }
+  toast(scope==="youtube"?"Vídeo marcado como não assistido.":"Aula marcada como não concluída.","success")
+}
+function undoFocusedCompletion(){
+  if(!focusRef){
+    return
+  }
+  return confirmUndoCompletion(focusRef.id,focusRef.scope)
+}
 function applyStudyRegistrationResult(payload){
   const result=payload.studyResult;
   if(!result||result==="session_only"){
@@ -3078,7 +3196,8 @@ function currentModuleLabel(course){
   return itemProgress(course)>=100?"Currículo concluído":"Pronto para começar"
 }
 function rowMenu(id,scope){
-  return `<details class="row-menu" onclick="event.stopPropagation()"><summary aria-label="Mais ações" aria-haspopup="menu">⋯</summary><div role="menu"><button class="mini-btn" role="menuitem" onclick="openFichamentoForSource(${jsArg(id)},${jsArg(scope)})">Fichamento</button><button class="mini-btn" role="menuitem" onclick="openNotes(${jsArg(id)},${jsArg(scope)})">Notas</button>${scope==="item"?`<button class="mini-btn" role="menuitem" onclick="editItem(${jsArg(id)})">Editar</button>`:""}</div></details>`
+  const resource=resourceByScope(id,scope),undo=completionUndoEligible(resource,scope)?`<button class="mini-btn" role="menuitem" onclick="confirmUndoCompletion(${jsArg(id)},${jsArg(scope)})">${completionUndoLabel(scope)}</button>`:"";
+  return `<details class="row-menu" onclick="event.stopPropagation()"><summary aria-label="Mais ações" aria-haspopup="menu">⋯</summary><div role="menu"><button class="mini-btn" role="menuitem" onclick="openFichamentoForSource(${jsArg(id)},${jsArg(scope)})">Fichamento</button><button class="mini-btn" role="menuitem" onclick="openNotes(${jsArg(id)},${jsArg(scope)})">Notas</button>${undo}${scope==="item"?`<button class="mini-btn" role="menuitem" onclick="editItem(${jsArg(id)})">Editar</button>`:""}</div></details>`
 }
 function lessonRow(course,module,lesson){
   const progress=lessonProgress(lesson),sequence=lessonSequenceState(course,module,lesson),done=sequence==="completed",locked=sequence==="locked";
@@ -3173,7 +3292,7 @@ function todaysYoutube(){
 }
 function videoRow(v,n,today){
   const dur=Number(v.estimatedMinutes||0)>0?fmtMin(v.estimatedMinutes):"duração desconhecida";
-  return `<div class="video-row clickable-row" role="button" tabindex="0" onclick="openFocus(${jsArg(v.id)},'youtube')" onkeydown="activateRow(event,this)">${v.thumbnail?`<img class="video-thumb" src="${esc(v.thumbnail)}">`:"<div class='num'>▶</div>"}<div class="grow"><strong>${esc(v.title)}</strong><span>${esc(v.channel||"YouTube")} · ${dur} ${today?`· vídeo ${n+1} de hoje`:""} · ${noteCount(v.id)} notas</span></div><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(v.id)},'youtube')">Assistir</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(v.id)},'youtube')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(v.id)},'youtube')">Notas</button></div>`
+  return `<div class="video-row clickable-row" role="button" tabindex="0" onclick="openFocus(${jsArg(v.id)},'youtube')" onkeydown="activateRow(event,this)">${v.thumbnail?`<img class="video-thumb" src="${esc(v.thumbnail)}">`:"<div class='num'>▶</div>"}<div class="grow"><strong>${esc(v.title)}</strong><span>${esc(v.channel||"YouTube")} · ${dur} ${today?`· vídeo ${n+1} de hoje`:""} · ${noteCount(v.id)} notas</span></div><button class="mini-btn" onclick="event.stopPropagation();openFocus(${jsArg(v.id)},'youtube')">Assistir</button><button class="mini-btn" onclick="event.stopPropagation();openFichamentoForSource(${jsArg(v.id)},'youtube')">Fichamento</button><button class="mini-btn" onclick="event.stopPropagation();openNotes(${jsArg(v.id)},'youtube')">Notas</button>${rowMenu(v.id,"youtube")}</div>`
 }
 function setPlaylist(id){if(!state.playlists.some(p=>p.id===id)){missingTarget();return}state.activePlaylist=id;save();renderYoutube()}
 function setPlaylistFormError(message=""){const el=$("playlistFormError");if(!el){return}el.textContent=message;el.classList.toggle("hidden",!message)}
@@ -3849,6 +3968,7 @@ async function openFocus(id,scope){
   $("focusTimestamp").value="";$("focusSaveState").textContent="Rascunho ainda não salvo.";
   if(focusNoteId){try{const data=await api(`/api/notes/${encodeURIComponent(focusNoteId)}`);$("focusNotesText").value=data.note.content||"";focusBlocks=normalizeFocusBlocks(data.note.blocks);$("focusSaveState").textContent="Rascunho recuperado do vault."}catch{$("focusNotesText").value="";focusBlocks=[]}}
   else{$("focusNotesText").value="";focusBlocks=[]}
+  updateFocusUndoButton(i,scope);
   renderFocusBlocks();
   $("focusDialog").showModal()
 }
@@ -5825,7 +5945,7 @@ $("newNoteBtn").onclick=()=>newVaultNote("permanent");$("newFichamentoBtn").oncl
 ["fichamentoSearch","fichamentoSourceType"].forEach(id=>{if($(id))$(id).oninput=renderFichamentos;if($(id))$(id).onchange=renderFichamentos});
 $("prevMonthBtn").onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};$("nextMonthBtn").onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);renderCalendar()};
 $("addBtn").onclick=openCaptureDialog;$("itemForm").onsubmit=saveItem;$("itemForm").kind.onchange=()=>renderModuleEditor();$("addModuleBtn").onclick=()=>$("moduleRows").insertAdjacentHTML("beforeend",moduleInput());
-$("saveNotesBtn").onclick=saveNotes;$("promoteDialogNoteBtn").onclick=promoteDialogNote;$("focusNotesText").oninput=queueFocusSave;document.querySelectorAll("[data-focus-block]").forEach(b=>b.onclick=()=>insertFocusBlock(b.dataset.focusBlock));$("timerStartBtn").onclick=startTimer;$("timerPauseBtn").onclick=pauseTimer;$("timerResetBtn").onclick=resetTimer;$("closeFocusBtn").onclick=closeFocus;$("focusDoneBtn").onclick=completeFocus;
+$("saveNotesBtn").onclick=saveNotes;$("promoteDialogNoteBtn").onclick=promoteDialogNote;$("focusNotesText").oninput=queueFocusSave;document.querySelectorAll("[data-focus-block]").forEach(b=>b.onclick=()=>insertFocusBlock(b.dataset.focusBlock));$("timerStartBtn").onclick=startTimer;$("timerPauseBtn").onclick=pauseTimer;$("timerResetBtn").onclick=resetTimer;$("closeFocusBtn").onclick=closeFocus;$("focusDoneBtn").onclick=completeFocus;$("focusUndoBtn").onclick=undoFocusedCompletion;
 if($("extractionCandidateList")){
   $("extractionCandidateList").oninput=handleExtractionCandidateEvent;
   $("extractionCandidateList").onchange=handleExtractionCandidateEvent;
