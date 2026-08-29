@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-28T16:38:48Z",
+  "generatedAt": "2026-08-29T11:05:43Z",
   "playlists": [
     {
       "id": "PLNur2Ccbfc5k",
@@ -4091,7 +4091,7 @@
           "channel": "PELEJA",
           "duration": 1109,
           "position": 454,
-          "thumbnail": "https://i.ytimg.com/vi_lc/LUyS_owuyck/hqdefault_en.jpg?sqp=CLTxxtQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBqLzl_8DMhIwaHR0cHM6Ly9pLnl0aW1nLmNvbS92aS9MVXlTX293dXljay9ocWRlZmF1bHQuanBn&rs=AOn4CLCFsBedmnfGCSfhA7rjBOzMLXm4vA"
+          "thumbnail": "https://i.ytimg.com/vi_lc/LUyS_owuyck/hqdefault_en.jpg?sqp=CNz5ytQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBqLzl_8DMhIwaHR0cHM6Ly9pLnl0aW1nLmNvbS92aS9MVXlTX293dXljay9ocWRlZmF1bHQuanBn&rs=AOn4CLBsCXZtBSTLmPzw_42vNPLOCkDscQ"
         },
         {
           "id": "oyuboXYhEAw",
@@ -4104,7 +4104,7 @@
         },
         {
           "id": "rifjR3tYEvs",
-          "title": "EDO - 01 - Método das variáveis separáveis",
+          "title": "ODE - 01 - Separable variables method",
           "url": "https://www.youtube.com/watch?v=rifjR3tYEvs",
           "channel": "Toda a Matemática",
           "duration": 700,
@@ -7677,7 +7677,7 @@
         },
         {
           "id": "eLdAfv6trOQ",
-          "title": "Eletromagnetismo - Ex 5: Circuito RLC - Aula 9.8",
+          "title": "Electromagnetism - Ex 5: RLC Circuit - Lesson 9.8",
           "url": "https://www.youtube.com/watch?v=eLdAfv6trOQ",
           "channel": "YouTube",
           "duration": 1214,
@@ -11448,7 +11448,7 @@
         },
         {
           "id": "AweDGJ0NILE",
-          "title": "SER DIFERE DE PARECER SER - Epíteto - Sabedoria Estoica - Lúcia Helena Galvão #3",
+          "title": "BEING IS DIFFERENT FROM SEEMING - Epictetus - Stoic Wisdom - Lúcia Helena Galvão #3",
           "url": "https://www.youtube.com/watch?v=AweDGJ0NILE",
           "channel": "NOVA ACRÓPOLE BRASIL - ESCOLA DE FILOSOFIA",
           "duration": 197,
@@ -13235,7 +13235,7 @@
           "channel": "Epifania Experiência",
           "duration": 4120,
           "position": 1470,
-          "thumbnail": "https://i.ytimg.com/vi/WEe6L5HVMwk/hqdefault_custom_1.jpg?sqp=CLTxxtQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCCGdEYyYIBI5y0pVXmiRWe8KKgQA"
+          "thumbnail": "https://i.ytimg.com/vi/WEe6L5HVMwk/hqdefault_custom_1.jpg?sqp=CNz5ytQG-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLB52Rfr62rNk-l-9CZL62Wr0Z4TwQ"
         },
         {
           "id": "3RKn26GVebw",
@@ -13317,6 +13317,15 @@
           "duration": 1317,
           "position": 1479,
           "thumbnail": "https://i.ytimg.com/vi/r0zHLYwJwNo/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAbEyGfd2OEoe_Q_smhDFJRhleCnw"
+        },
+        {
+          "id": "nWYkPsLtBms",
+          "title": "5 BOOKS that BUILT BRAZIL and ALMOST NO ONE talks about",
+          "url": "https://www.youtube.com/watch?v=nWYkPsLtBms",
+          "channel": "Anna Freire - Leitura e Literatura",
+          "duration": 1677,
+          "position": 1480,
+          "thumbnail": "https://i.ytimg.com/vi/nWYkPsLtBms/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCmD86Bci1g-wncQQ9ilKoB9T627Q"
         }
       ]
     },
